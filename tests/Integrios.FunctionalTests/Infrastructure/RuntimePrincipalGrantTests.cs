@@ -117,14 +117,45 @@ public sealed class RuntimePrincipalGrantTests : IAsyncLifetime
             return;
 
         await Apply((WorkerName, "control-plane", OldPassword));
-        await using (var owner = new SqlConnection(connectionString))
-        {
-            await owner.OpenAsync();
-            await owner.ExecuteAsync($"GRANT SELECT ON OBJECT::dbo.tenants TO [{WorkerName}] WITH GRANT OPTION;");
-        }
+        await ExecuteAsOwnerAsync($"GRANT SELECT ON OBJECT::dbo.tenants TO [{WorkerName}] WITH GRANT OPTION;");
 
         await Apply((WorkerName, "control-plane", null));
         await AssertCanUpdateAsync(WorkerName, OldPassword);
+        await using var owner = new SqlConnection(connectionString);
+        (await owner.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM sys.database_permissions WHERE grantee_principal_id = USER_ID(@Name) AND state = 'W'",
+            new { Name = WorkerName })).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task RuntimePrincipalGrant_BlocksImpersonationEscalation()
+    {
+        if (database.Provider != "sqlserver")
+            return;
+
+        await Apply((WorkerName, "data-plane", OldPassword));
+
+        // A direct grant on a user securable is revoked, so the runtime cannot become dbo.
+        await ExecuteAsOwnerAsync($"GRANT IMPERSONATE ON USER::dbo TO [{WorkerName}];");
+        await Apply((WorkerName, "data-plane", null));
+        await AssertDeniedAsync(WorkerName, OldPassword,
+            "EXECUTE AS USER = 'dbo'; CREATE TABLE dbo.runtime_impersonation_probe (id int);");
+
+        // The same authority inherited through a custom role is refused outright.
+        await ExecuteAsOwnerAsync(
+            "CREATE ROLE runtime_escalation;"
+            + " GRANT IMPERSONATE ON USER::dbo TO runtime_escalation;"
+            + " GRANT ALTER ANY USER TO runtime_escalation;"
+            + $" ALTER ROLE runtime_escalation ADD MEMBER [{WorkerName}];");
+        await Should.ThrowAsync<InvalidOperationException>(
+            () => Apply((WorkerName, "data-plane", null)));
+    }
+
+    private async Task ExecuteAsOwnerAsync(string sql)
+    {
+        await using var owner = new SqlConnection(connectionString);
+        await owner.OpenAsync();
+        await owner.ExecuteAsync(sql);
     }
 
     private async Task ApplyEntraClientId(string name, Guid clientId)

@@ -539,8 +539,7 @@ resource sqlServer 'Microsoft.Sql/servers@2023-08-01-preview' = if (useSqlServer
   name: 'sql-${take(namePrefix, 12)}-${take(uniqueString(resourceGroup().id), 8)}'
   location: location
   properties: {
-    // Entra-only servers take their administrator here at creation and carry no SQL login; the
-    // child administrator resources below keep an existing server converged.
+    // Entra-only servers take their administrator here and carry no SQL login.
     administrators: {
       administratorType: 'ActiveDirectory'
       azureADOnlyAuthentication: true
@@ -555,22 +554,12 @@ resource sqlServer 'Microsoft.Sql/servers@2023-08-01-preview' = if (useSqlServer
   }
 }
 
-resource sqlServerEntraAdministrator 'Microsoft.Sql/servers/administrators@2023-08-01-preview' = if (useSqlServer) {
-  parent: sqlServer
-  name: 'ActiveDirectory'
-  properties: {
-    administratorType: 'ActiveDirectory'
-    login: migrateIdentity.name
-    sid: migrateIdentity.properties.principalId
-    tenantId: subscription().tenantId
-  }
-}
-
+// The server's inline setting applies only at creation; this resource turns SQL logins back off
+// on every deployment if someone re-enabled them.
 resource sqlServerEntraOnlyAuthentication 'Microsoft.Sql/servers/azureADOnlyAuthentications@2023-08-01-preview' = if (useSqlServer) {
   parent: sqlServer
   name: 'Default'
   properties: { azureADOnlyAuthentication: true }
-  dependsOn: [sqlServerEntraAdministrator]
 }
 
 resource sqlDatabase 'Microsoft.Sql/servers/databases@2023-08-01-preview' = if (useSqlServer) {

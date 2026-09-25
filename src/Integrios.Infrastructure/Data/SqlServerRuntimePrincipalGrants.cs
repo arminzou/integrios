@@ -52,16 +52,19 @@ internal static class SqlServerRuntimePrincipalGrants
                                   )
                                   OR EXISTS
                                   (
+                                      -- Inherited authority only: the principal's own direct grants are
+                                      -- revoked by ConvergePermissionsAsync instead of refused here.
                                       SELECT 1
                                       FROM sys.database_permissions p
-                                      LEFT JOIN sys.schemas s ON p.class = 3 AND s.schema_id = p.major_id
-                                      LEFT JOIN sys.objects o ON p.class = 1 AND o.object_id = p.major_id
                                       WHERE (p.grantee_principal_id IN (SELECT role_principal_id FROM member_roles)
                                           OR p.grantee_principal_id = 0)
                                         AND p.state IN ('G', 'W')
-                                        AND ((p.class = 0 AND p.permission_name IN ('CREATE TABLE', 'ALTER ANY SCHEMA', 'CONTROL'))
-                                          OR (p.class = 3 AND s.name = 'dbo' AND p.permission_name IN ('ALTER', 'CONTROL', 'TAKE OWNERSHIP'))
-                                          OR (p.class = 1 AND o.schema_id = SCHEMA_ID('dbo') AND p.permission_name IN ('ALTER', 'CONTROL', 'TAKE OWNERSHIP')))
+                                        AND ((p.class = 0 AND p.permission_name IN (
+                                                'CREATE TABLE', 'ALTER ANY SCHEMA', 'CONTROL', 'ALTER',
+                                                'ALTER ANY USER', 'ALTER ANY ROLE', 'ALTER ANY APPLICATION ROLE',
+                                                'ALTER ANY DATABASE DDL TRIGGER'))
+                                          OR (p.class IN (1, 3, 4) AND p.permission_name IN ('ALTER', 'CONTROL', 'TAKE OWNERSHIP'))
+                                          OR (p.class = 4 AND p.permission_name = 'IMPERSONATE'))
                                   )
                             THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END AS IsPrivileged
                 FROM sys.database_principals dp
@@ -160,7 +163,6 @@ internal static class SqlServerRuntimePrincipalGrants
     {
         var parameters = new DynamicParameters();
         parameters.Add("Name", principal.Name);
-        parameters.Add("SchemaId", "dbo");
         string quotedPrincipal = QuoteIdentifier(principal.Name);
         IEnumerable<DirectPermission> permissions = await connection.QueryAsync<DirectPermission>(new CommandDefinition(
             $"""
@@ -169,14 +171,17 @@ internal static class SqlServerRuntimePrincipalGrants
                    p.class AS Class,
                    COALESCE(s.name, os.name) AS SchemaName,
                    o.name AS ObjectName,
-                   c.name AS ColumnName
+                   c.name AS ColumnName,
+                   tp.name AS PrincipalName,
+                   tp.type AS PrincipalType
             FROM sys.database_permissions p
             LEFT JOIN sys.schemas s ON p.class = 3 AND s.schema_id = p.major_id
             LEFT JOIN sys.objects o ON p.class = 1 AND o.object_id = p.major_id
             LEFT JOIN sys.schemas os ON o.schema_id = os.schema_id
-            LEFT JOIN sys.columns c ON c.object_id = p.major_id AND c.column_id = p.minor_id
+            LEFT JOIN sys.columns c ON p.class = 1 AND c.object_id = p.major_id AND c.column_id = p.minor_id
+            LEFT JOIN sys.database_principals tp ON p.class = 4 AND tp.principal_id = p.major_id
             WHERE p.grantee_principal_id = USER_ID(@Name)
-              AND (p.class = 0 OR (p.class = 3 AND s.name = @SchemaId) OR (p.class = 1 AND os.name = @SchemaId));
+              AND p.class IN (0, 1, 3, 4);
             """,
             parameters,
             transaction,
@@ -190,6 +195,12 @@ internal static class SqlServerRuntimePrincipalGrants
                 3 => $"SCHEMA::{QuoteIdentifier(permission.SchemaName!)}",
                 1 => $"OBJECT::{QuoteIdentifier(permission.SchemaName!)}.{QuoteIdentifier(permission.ObjectName!)}"
                     + (permission.ColumnName is null ? string.Empty : $" ({QuoteIdentifier(permission.ColumnName)})"),
+                4 => permission.PrincipalType switch
+                {
+                    "R" => "ROLE::",
+                    "A" => "APPLICATION ROLE::",
+                    _ => "USER::",
+                } + QuoteIdentifier(permission.PrincipalName!),
                 _ => throw new InvalidOperationException("A runtime principal permission has an unsupported securable class."),
             };
             await connection.ExecuteAsync(new CommandDefinition(
@@ -227,5 +238,7 @@ internal static class SqlServerRuntimePrincipalGrants
         byte Class,
         string? SchemaName,
         string? ObjectName,
-        string? ColumnName);
+        string? ColumnName,
+        string? PrincipalName,
+        string? PrincipalType);
 }
