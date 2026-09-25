@@ -114,20 +114,26 @@ function Grant-DeploymentSettingsReader([string] $VaultName) {
         --output none
 }
 
-# Returns the stored value, or $null when the secret does not exist. A denied read grants the
-# signed-in identity access once, then retries while the role assignment propagates.
+# Returns the stored value exactly, or $null when the secret does not exist. A denied read grants
+# the signed-in identity access once, then retries while the role assignment propagates.
 function Read-DeploymentSetting([string] $VaultName, [string] $SecretName) {
     for ($attempt = 1; $attempt -le 20; $attempt++) {
         $result = @(& az keyvault secret show `
                 --vault-name $VaultName `
                 --name $SecretName `
                 --query value `
-                --output tsv `
+                --output json `
                 --only-show-errors 2>&1)
         $failed = $LASTEXITCODE -ne 0
         $errors = ($result | Where-Object { $_ -is [Management.Automation.ErrorRecord] } | Out-String)
         if (-not $failed) {
-            return (($result | Where-Object { $_ -isnot [Management.Automation.ErrorRecord] }) -join '').Trim()
+            # A JSON string keeps leading and trailing whitespace and line breaks, which TSV output
+            # loses. System.Text.Json, unlike ConvertFrom-Json, never turns a date-like value into a
+            # DateTime.
+            $json = ($result | Where-Object { $_ -isnot [Management.Automation.ErrorRecord] }) -join "`n"
+            $document = [Text.Json.JsonDocument]::Parse($json)
+            try { return $document.RootElement.GetString() }
+            finally { $document.Dispose() }
         }
         if ($errors -match 'SecretNotFound') { return $null }
         if ($errors -notmatch 'Forbidden') { throw "Could not read $SecretName from ${VaultName}: $errors" }
