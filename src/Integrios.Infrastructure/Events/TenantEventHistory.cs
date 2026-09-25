@@ -1,7 +1,7 @@
 using System.Text.Json;
 using Dapper;
 using Integrios.Application.Common.Exceptions;
-using Integrios.Application.Ingestion;
+using Integrios.Application.EventMonitoring;
 using Integrios.Application.Telemetry;
 using Integrios.Domain.Enums;
 using Integrios.Infrastructure.Common.Pagination;

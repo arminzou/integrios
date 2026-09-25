@@ -1,4 +1,4 @@
-namespace Integrios.Application.Ingestion;
+namespace Integrios.Application.EventMonitoring;
 
 // Separate from ITenantEventHistory: monitoring answers tenant-wide counts the Operator reads at a
 // glance, never a page of Events, so it cannot turn the cursor-paginated ledger into a total-count API.

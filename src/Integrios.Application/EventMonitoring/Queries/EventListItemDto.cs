@@ -1,6 +1,6 @@
 using Integrios.Domain.Enums;
 
-namespace Integrios.Application.Ingestion;
+namespace Integrios.Application.EventMonitoring;
 
 public sealed record EventListItemDto
 {

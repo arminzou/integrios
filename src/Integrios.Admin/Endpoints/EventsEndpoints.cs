@@ -1,6 +1,5 @@
 using Integrios.Application.Common.Exceptions;
-using Integrios.Application.Delivery;
-using Integrios.Application.Ingestion;
+using Integrios.Application.EventMonitoring;
 using Integrios.Domain.Enums;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;

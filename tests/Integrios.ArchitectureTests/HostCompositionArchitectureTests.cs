@@ -9,6 +9,7 @@ using Integrios.Application.Authoring.TenantApiKeys;
 using Integrios.Application.Authoring.Tenants;
 using Integrios.Application.Authoring.Topics;
 using Integrios.Application.Delivery;
+using Integrios.Application.EventMonitoring;
 using Integrios.Application.Identity;
 using Integrios.Application.Ingestion;
 using Integrios.Application.Secrets;
@@ -120,6 +121,7 @@ public sealed class HostCompositionArchitectureTests
     {
         ["Integrios.Application.Authoring"] = Host.Admin,
         ["Integrios.Application.Identity"] = Host.Admin,
+        ["Integrios.Application.EventMonitoring"] = Host.Admin,
         ["Integrios.Application.Ingestion"] = Host.Ingestion,
         ["Integrios.Application.Delivery"] = Host.Worker
     };
@@ -130,11 +132,7 @@ public sealed class HostCompositionArchitectureTests
         new Dictionary<string, Host>
         {
             ["ReplayEventDeliveryCommandHandler"] = Host.Admin,
-            ["GetEventDeliveryRecoveryQueryHandler"] = Host.Admin,
-            ["ListTenantEventsQueryHandler"] = Host.Admin,
-            ["GetTenantEventActivityQueryHandler"] = Host.Admin,
-            ["GetTenantEventBacklogQueryHandler"] = Host.Admin,
-            ["CountNewerTenantEventsQueryHandler"] = Host.Admin
+            ["GetEventDeliveryRecoveryQueryHandler"] = Host.Admin
         };
 
     [Fact]
