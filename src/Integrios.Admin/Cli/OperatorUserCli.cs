@@ -8,7 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace Integrios.Admin.OperatorUsers;
+namespace Integrios.Admin.Cli;
 
 public static class OperatorUserCli
 {

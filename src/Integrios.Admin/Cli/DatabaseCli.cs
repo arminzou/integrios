@@ -2,9 +2,9 @@ using Integrios.Infrastructure;
 using Integrios.Infrastructure.Data;
 using Microsoft.Extensions.Hosting;
 
-namespace Integrios.Admin.Database;
+namespace Integrios.Admin.Cli;
 
-public static class DatabaseMigrationCli
+public static class DatabaseCli
 {
     public static async Task<int> RunAsync(string[] args)
     {

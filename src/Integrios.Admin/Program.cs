@@ -1,14 +1,11 @@
 using System.Text.Json;
 using Integrios.Admin;
 using Integrios.Admin.Auth;
-using Integrios.Admin.Bootstrap;
+using Integrios.Admin.Cli;
 using Integrios.Admin.Dashboard;
-using Integrios.Admin.Database;
 using Integrios.Admin.Endpoints;
 using Integrios.Admin.ErrorHandling;
 using Integrios.Admin.OpenApi;
-using Integrios.Admin.OperatorKeys;
-using Integrios.Admin.OperatorUsers;
 using Integrios.Application;
 using Integrios.Infrastructure;
 using Integrios.Infrastructure.Hosting;
@@ -21,7 +18,7 @@ if (args is ["operator-key", ..])
 if (args is ["operator-user", ..])
     return await OperatorUserCli.RunAsync(args);
 if (args is ["database", ..])
-    return await DatabaseMigrationCli.RunAsync(args);
+    return await DatabaseCli.RunAsync(args);
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Logging.AddOperationalConsoleLogging(builder.Environment.IsDevelopment());

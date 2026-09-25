@@ -5,7 +5,7 @@ using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
-namespace Integrios.Admin.OperatorKeys;
+namespace Integrios.Admin.Cli;
 
 public static class OperatorKeyCli
 {

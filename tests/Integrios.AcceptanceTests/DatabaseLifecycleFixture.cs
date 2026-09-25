@@ -93,7 +93,7 @@ public sealed class DatabaseLifecycleFixture : IAsyncLifetime
         string operation,
         IReadOnlyDictionary<string, string?>? environment = null)
     {
-        string adminAssembly = typeof(Integrios.Admin.Bootstrap.BootstrapCli).Assembly.Location;
+        string adminAssembly = typeof(Integrios.Admin.Cli.BootstrapCli).Assembly.Location;
         var startInfo = new ProcessStartInfo("dotnet")
         {
             RedirectStandardOutput = true,
