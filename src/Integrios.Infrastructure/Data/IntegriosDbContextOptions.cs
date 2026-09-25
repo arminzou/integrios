@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace Integrios.Infrastructure.Data;
 
@@ -22,4 +23,13 @@ internal static class IntegriosDbContextOptions
                 postgres => postgres
                     .MigrationsAssembly("Integrios.Migrations.Postgres")
                     .EnableRetryOnFailure());
+
+    public static DbContextOptionsBuilder UseIntegriosProvider(
+        this DbContextOptionsBuilder builder,
+        NpgsqlDataSource dataSource) =>
+        builder.UseNpgsql(
+            dataSource,
+            postgres => postgres
+                .MigrationsAssembly("Integrios.Migrations.Postgres")
+                .EnableRetryOnFailure());
 }

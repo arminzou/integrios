@@ -1,4 +1,7 @@
 using System.Diagnostics.Metrics;
+using System.Data.Common;
+using Azure.Core;
+using Azure.Identity;
 using Integrios.Application;
 using Integrios.Application.Authoring;
 using Integrios.Application.Authoring.Connectors;
@@ -63,6 +66,12 @@ public static class DependencyInjection
         string[] pending = (await context.Database.GetPendingMigrationsAsync(cancellationToken)).ToArray();
         return $"EF migrations: {applied.Length} applied, {pending.Length} pending.";
     }
+
+    public static Task GrantRuntimePrincipalsAsync(
+        this IServiceProvider services,
+        IConfiguration configuration,
+        CancellationToken cancellationToken = default) =>
+        RuntimePrincipalGrants.GrantAsync(services, configuration, cancellationToken);
 
     public static IServiceCollection AddAdminInfrastructureServices(
         this IServiceCollection services,
@@ -201,22 +210,65 @@ public static class DependencyInjection
         if (string.IsNullOrWhiteSpace(connectionString))
             throw new InvalidOperationException($"ConnectionStrings:{connectionName} is required.");
 
-        services.AddDbContextFactory<IntegriosDbContext>(
-            options => options.UseIntegriosProvider(databaseProvider, connectionString));
-
         if (databaseProvider == DatabaseProvider.SqlServer)
         {
+            if (configuration.AsEnumerable().Any(pair =>
+                    string.Equals(pair.Key, "Database:Postgres:Authentication", StringComparison.OrdinalIgnoreCase)))
+                throw new InvalidOperationException(
+                    "Database:Postgres:Authentication is only valid when Database:Provider is postgres.");
+
+            services.AddDbContextFactory<IntegriosDbContext>(
+                options => options.UseIntegriosProvider(databaseProvider, connectionString));
             services.AddSingleton<IDbConnectionFactory>(provider => new SqlServerConnectionFactory(
                 connectionString,
                 provider.GetRequiredService<IDbContextFactory<IntegriosDbContext>>()));
             return services;
         }
 
-        services.AddSingleton(_ =>
+        string authentication = configuration["Database:Postgres:Authentication"] switch
+        {
+            null or "Password" => "Password",
+            "AzureEntra" => "AzureEntra",
+            string value => throw new InvalidOperationException(
+                "Database:Postgres:Authentication must be 'Password' or 'AzureEntra'."),
+        };
+
+        if (authentication == "AzureEntra")
+        {
+            var connection = new NpgsqlConnectionStringBuilder(connectionString);
+            if (string.IsNullOrWhiteSpace(connection.Username))
+                throw new InvalidOperationException(
+                    "ConnectionStrings:Postgres:Username is required for AzureEntra authentication.");
+            var configuredConnection = new DbConnectionStringBuilder { ConnectionString = connectionString };
+            if (configuredConnection.ContainsKey("Password") || configuredConnection.ContainsKey("Pwd"))
+                throw new InvalidOperationException(
+                    "ConnectionStrings:Postgres must not contain Password when Database:Postgres:Authentication is AzureEntra.");
+            services.AddSingleton<DefaultAzureCredential>();
+        }
+
+        services.AddSingleton<NpgsqlDataSource>(provider =>
         {
             var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
+            if (authentication == "AzureEntra")
+            {
+                TokenCredential credential = provider.GetRequiredService<DefaultAzureCredential>();
+                dataSourceBuilder.UsePeriodicPasswordProvider(
+                    async (_, cancellationToken) =>
+                    {
+                        AccessToken token = await credential.GetTokenAsync(
+                            new TokenRequestContext(["https://ossrdbms-aad.database.windows.net/.default"]),
+                            cancellationToken);
+                        return token.Token;
+                    },
+                    successRefreshInterval: TimeSpan.FromMinutes(55),
+                    failureRefreshInterval: TimeSpan.FromMinutes(1));
+            }
             return dataSourceBuilder.Build();
         });
+
+        services.AddDbContextFactory<IntegriosDbContext>(
+            (provider, options) => options.UseIntegriosProvider(
+                provider.GetRequiredService<NpgsqlDataSource>()));
 
         services.AddSingleton<IDbConnectionFactory, NpgsqlConnectionFactory>();
 

@@ -22,6 +22,9 @@ services:
   migrate:
     image: ${INTEGRIOS_ADMIN_IMAGE}
 
+  grant-runtime:
+    image: ${INTEGRIOS_ADMIN_IMAGE}
+
   ingestion:
     image: ${INTEGRIOS_INGESTION_IMAGE}
     environment:

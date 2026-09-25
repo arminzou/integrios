@@ -12,15 +12,17 @@ from source and bundles a test sink and dashboards; it is not for deployment. Se
 
 ```bash
 cp .env.example .env
-# edit .env: set POSTGRES_PASSWORD, INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET, and INTEGRIOS_PUBLIC_INGESTION_BASE_URI
+# edit .env: set database owner/runtime passwords, INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET, and INTEGRIOS_PUBLIC_INGESTION_BASE_URI
 # The image version needs no edit: compose.yml defaults to the release this checkout ships.
 mkdir -p secrets/sources secrets/destinations
 docker compose up -d
 ```
 
-Startup order is enforced by `depends_on`: `postgres` becomes healthy, then `migrate` runs the
-EF Core migrations to completion, then `bootstrap` runs its one-shot, then `ingestion`, `admin`,
-and `worker` start.
+Set `INTEGRIOS_ADMIN_RUNTIME_PASSWORD` and `INTEGRIOS_DATA_RUNTIME_PASSWORD` in `.env` to strong,
+unique values. Startup order is enforced by `depends_on`: `postgres` becomes healthy, `migrate`
+runs EF Core migrations as the database owner, `grant-runtime` creates or updates the two runtime
+principals, `bootstrap` runs as the control-plane principal, then `ingestion`, `admin`, and `worker`
+start with their matching scope. Existing volumes are upgraded in place; no principal is dropped.
 
 ## Bootstrap semantics
 
@@ -33,6 +35,11 @@ non-empty Operator-supplied value and never prints the secret. The OperatorKey c
 ```text
 global_operator_key:<secret>
 ```
+
+Admin and Bootstrap use the `control-plane` database scope, which includes Operator-authentication
+tables. Ingestion and Worker use the `data-plane` scope, which excludes those tables. Both scopes
+allow ordinary row access to the other application tables; this is a database boundary, not a
+per-table Worker read-only grant.
 
 Every OperatorKey has deployment-wide Operator authority. Rotate it by supplying the replacement
 secret out of band to the one-shot Admin CLI:
@@ -182,17 +189,21 @@ docker compose pull
 docker compose up -d
 ```
 
-Migrations run automatically via the `migrate` one-shot on every `up`.
+`migrate`, `grant-runtime`, and `bootstrap` run automatically in that order on every `up` before
+the application services start.
 
 ## Using a managed Postgres
 
 Remove the `postgres` service from `compose.yml`, then point `ConnectionStrings__Postgres` in
-`migrate`, `bootstrap`, `ingestion`, `admin`, and `worker` at your database.
+`migrate`, `grant-runtime`, `bootstrap`, `ingestion`, `admin`, and `worker` at your database. Keep
+the migration connection on the schema owner. Configure both `Database__RuntimePrincipals` entries
+on `grant-runtime` with unique Password values or existing-principal grant-only mode; never put
+secret values in command-line configuration.
 
 ## Using SQL Server 2022+
 
-Use an externally managed SQL Server 2022 or later, remove the bundled `postgres` service, and adjust the
-`migrate` dependency. On `migrate`, `bootstrap`, `ingestion`, `admin`, and `worker`, replace the
+Use an externally managed SQL Server 2022 or later, remove the bundled `postgres` service. On
+`migrate`, `grant-runtime`, `bootstrap`, `ingestion`, `admin`, and `worker`, replace the
 PostgreSQL connection setting with:
 
 ```yaml
@@ -202,7 +213,9 @@ environment:
 ```
 
 Keep the same startup order and matched image version. The migration one-shot selects the SQL
-Server migration assembly automatically. Both `READ_COMMITTED_SNAPSHOT` settings are supported;
+Server migration assembly automatically. Set `Database__Provider: sqlserver` and give each
+`grant-runtime` principal the EntraClientId required by its identity or configure passwords.
+Both `READ_COMMITTED_SNAPSHOT` settings are supported;
 see [Database backends](../docs/database-backends.md) for the queue-locking policy.
 
 ## Ports

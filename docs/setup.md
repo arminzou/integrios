@@ -11,7 +11,7 @@ delivery.
 ## Start the stack
 
 ```bash
-make up   # builds images, starts Postgres, runs migrations, bootstrap, then the services
+make up   # builds images, starts Postgres, runs migrations, grants runtime scopes, bootstrap, then services
 ```
 
 No configuration is needed: the dev stack carries working defaults. To override any of them,
@@ -21,8 +21,10 @@ The checkout includes the `secrets/` mount directory used by the default file-ba
 provider. Secret files placed there are ignored by Git; the quickstart uses unauthenticated
 delivery, so no secret values need to be added to its tracked documentation files.
 
-`make up` runs a `bootstrap` one-shot (the `Integrios.Admin` image invoked with plain `bootstrap`)
-after migrations and before the services start. It creates only the first OperatorKey credential
+`make up` runs `database migrate`, then `database grant-runtime`, then a `bootstrap` one-shot (the
+`Integrios.Admin` image invoked with plain `bootstrap`) before the services start. Migration uses
+the database owner; Admin and Bootstrap use the control-plane principal; Ingestion and Worker use
+the data-plane principal. It creates only the first OperatorKey credential
 used below (bootstrap output, not migration-seeded data) and is idempotent, so re-running `make up`
 against an existing EF-managed database is safe. A fresh deployment contains zero Connectors until
 the Operator applies a manifest. The dev credential
@@ -206,6 +208,8 @@ defaults, and valid values across all three hosts, see the
 |-------------------------------------|--------------------------|-----------------------------|---------------------------------|
 | `POSTGRES_USER`                     | `integrios`              | compose, Makefile `db-*`    | Database username               |
 | `POSTGRES_PASSWORD`                 | `integrios_dev`          | compose, Makefile `db-*`    | Database password               |
+| `INTEGRIOS_ADMIN_RUNTIME_PASSWORD` | `admin_runtime_dev` | `grant-runtime`, Admin, Bootstrap | Local control-plane database password |
+| `INTEGRIOS_DATA_RUNTIME_PASSWORD` | `data_runtime_dev` | `grant-runtime`, Ingestion, Worker | Local data-plane database password |
 | `INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET`  | `operator_bootstrap_secret` | `bootstrap` service, Makefile bootstrap targets | Secret for the OperatorKey credential |
 | `DOTNET_ENVIRONMENT`                | `Development`            | Makefile bootstrap targets  | Selects `appsettings.Development.json` |
 | `INTEGRIOS_ADMIN_OIDC_AUTHORITY` | empty | Admin | OIDC issuer; setting it enables OIDC dashboard sign-in |

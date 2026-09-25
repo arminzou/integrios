@@ -26,15 +26,8 @@ param ingestionImage string
 @description('Full immutable ACR image reference ending in @sha256:<digest>.')
 param workerImage string
 
-// deploy.ps1 generates both values on the first deployment and passes back the stored values on
-// every later deployment, so an update never changes them.
-@secure()
-param databaseAdministratorPassword string
-
 @secure()
 param operatorKeySecret string
-
-param databaseAdministratorLogin string = 'integrios_admin'
 @minLength(1)
 param adminAllowedCidrs array
 param ingestionExternal bool = true
@@ -136,6 +129,7 @@ var appNames = {
 }
 var jobNames = {
   migrate: '${namePrefix}-migrate'
+  grantRuntime: '${namePrefix}-grant'
   bootstrap: '${namePrefix}-bootstrap'
   validateSecrets: '${namePrefix}-validate'
 }
@@ -145,19 +139,46 @@ var serviceBusEnabled = !empty(serviceBusNamespaceName) && !empty(serviceBusReso
 var adminDataProtectionPath = '/var/lib/integrios/data-protection'
 var adminOidcEnabled = !empty(adminOidcAuthority)
 var adminOidcSecretName = 'oidc-client-secret'
-var databaseConnection = useSqlServer
-  ? 'Server=tcp:${sqlServer!.properties.fullyQualifiedDomainName},1433;Initial Catalog=integrios;Persist Security Info=False;User ID=${databaseAdministratorLogin};Password=${databaseAdministratorPassword};MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;'
-  : 'Host=${postgres!.properties.fullyQualifiedDomainName};Port=5432;Database=integrios;Username=${databaseAdministratorLogin};Password=${databaseAdministratorPassword};SSL Mode=Require'
-var databaseSecretName = 'database-connection'
-var databaseEnvironment = [
+var databaseProviderEnvironment = [
   { name: 'DOTNET_ENVIRONMENT', value: 'Production' }
   { name: 'Database__Provider', value: databaseProvider }
-  { name: useSqlServer ? 'ConnectionStrings__SqlServer' : 'ConnectionStrings__Postgres', secretRef: databaseSecretName }
 ]
+var postgresAuthenticationEnvironment = useSqlServer ? [] : [
+  { name: 'Database__Postgres__Authentication', value: 'AzureEntra' }
+]
+var adminDatabaseEnvironment = concat(databaseProviderEnvironment, postgresAuthenticationEnvironment, [
+  { name: useSqlServer ? 'ConnectionStrings__SqlServer' : 'ConnectionStrings__Postgres', value: useSqlServer
+      ? 'Server=tcp:${sqlServer!.properties.fullyQualifiedDomainName},1433;Initial Catalog=integrios;Persist Security Info=False;Authentication=Active Directory Managed Identity;User Id=${adminIdentity.properties.clientId};MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;'
+      : 'Host=${postgres!.properties.fullyQualifiedDomainName};Port=5432;Database=integrios;Username=${adminIdentity.name};SSL Mode=Require' }
+  { name: 'AZURE_CLIENT_ID', value: adminIdentity.properties.clientId }
+])
+var ingestionDatabaseEnvironment = concat(databaseProviderEnvironment, postgresAuthenticationEnvironment, [
+  { name: useSqlServer ? 'ConnectionStrings__SqlServer' : 'ConnectionStrings__Postgres', value: useSqlServer
+      ? 'Server=tcp:${sqlServer!.properties.fullyQualifiedDomainName},1433;Initial Catalog=integrios;Persist Security Info=False;Authentication=Active Directory Managed Identity;User Id=${ingestionIdentity.properties.clientId};MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;'
+      : 'Host=${postgres!.properties.fullyQualifiedDomainName};Port=5432;Database=integrios;Username=${ingestionIdentity.name};SSL Mode=Require' }
+  { name: 'AZURE_CLIENT_ID', value: ingestionIdentity.properties.clientId }
+])
+var workerDatabaseEnvironment = concat(databaseProviderEnvironment, postgresAuthenticationEnvironment, [
+  { name: useSqlServer ? 'ConnectionStrings__SqlServer' : 'ConnectionStrings__Postgres', value: useSqlServer
+      ? 'Server=tcp:${sqlServer!.properties.fullyQualifiedDomainName},1433;Initial Catalog=integrios;Persist Security Info=False;Authentication=Active Directory Managed Identity;User Id=${workerIdentity.properties.clientId};MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;'
+      : 'Host=${postgres!.properties.fullyQualifiedDomainName};Port=5432;Database=integrios;Username=${workerIdentity.name};SSL Mode=Require' }
+  { name: 'AZURE_CLIENT_ID', value: workerIdentity.properties.clientId }
+])
+var migrateDatabaseEnvironment = concat(databaseProviderEnvironment, postgresAuthenticationEnvironment, [
+  { name: useSqlServer ? 'ConnectionStrings__SqlServer' : 'ConnectionStrings__Postgres', value: useSqlServer
+      ? 'Server=tcp:${sqlServer!.properties.fullyQualifiedDomainName},1433;Initial Catalog=integrios;Persist Security Info=False;Authentication=Active Directory Managed Identity;User Id=${migrateIdentity.properties.clientId};MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;'
+      : 'Host=${postgres!.properties.fullyQualifiedDomainName};Port=5432;Database=integrios;Username=${migrateIdentity.name};SSL Mode=Require' }
+  { name: 'AZURE_CLIENT_ID', value: migrateIdentity.properties.clientId }
+])
+var bootstrapDatabaseEnvironment = concat(databaseProviderEnvironment, postgresAuthenticationEnvironment, [
+  { name: useSqlServer ? 'ConnectionStrings__SqlServer' : 'ConnectionStrings__Postgres', value: useSqlServer
+      ? 'Server=tcp:${sqlServer!.properties.fullyQualifiedDomainName},1433;Initial Catalog=integrios;Persist Security Info=False;Authentication=Active Directory Managed Identity;User Id=${bootstrapIdentity.properties.clientId};MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;'
+      : 'Host=${postgres!.properties.fullyQualifiedDomainName};Port=5432;Database=integrios;Username=${bootstrapIdentity.name};SSL Mode=Require' }
+  { name: 'AZURE_CLIENT_ID', value: bootstrapIdentity.properties.clientId }
+])
 // Worker and the secret-validation job share Worker's identity and its Destination-secret vault.
 var destinationSecretsEnvironment = [
   { name: 'Integrios__KeyVault__Uri', value: destinationSecretsVault.properties.vaultUri }
-  { name: 'AZURE_CLIENT_ID', value: workerIdentity.properties.clientId }
 ]
 var keyVaultSecretsUserRoleId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')
 
@@ -475,12 +496,12 @@ resource postgres 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01' = if (!
     tier: 'Burstable'
   }
   properties: {
-    administratorLogin: databaseAdministratorLogin
-    administratorLoginPassword: databaseAdministratorPassword
+    administratorLogin: migrateIdentity.name
     version: '16'
     authConfig: {
-      activeDirectoryAuth: 'Disabled'
-      passwordAuth: 'Enabled'
+      activeDirectoryAuth: 'Enabled'
+      passwordAuth: 'Disabled'
+      tenantId: subscription().tenantId
     }
     backup: {
       backupRetentionDays: 7
@@ -505,7 +526,7 @@ resource postgresDatabase 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2
 }
 
 // V1 deliberately has no VNet. This Azure-only firewall rule is the small public-network bridge
-// between Container Apps and PostgreSQL; credentials and TLS still protect the database.
+// between Container Apps and PostgreSQL; Entra authentication and TLS protect database access.
 resource postgresAzureServicesFirewall 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2024-08-01' = if (!useSqlServer) {
   parent: postgres
   name: 'AllowAzureServices'
@@ -519,12 +540,29 @@ resource sqlServer 'Microsoft.Sql/servers@2023-08-01-preview' = if (useSqlServer
   name: 'sql-${take(namePrefix, 12)}-${take(uniqueString(resourceGroup().id), 8)}'
   location: location
   properties: {
-    administratorLogin: databaseAdministratorLogin
-    administratorLoginPassword: databaseAdministratorPassword
+    administratorLogin: migrateIdentity.name
     minimalTlsVersion: '1.2'
     publicNetworkAccess: 'Enabled'
     version: '12.0'
   }
+}
+
+resource sqlServerEntraAdministrator 'Microsoft.Sql/servers/administrators@2023-08-01-preview' = if (useSqlServer) {
+  parent: sqlServer
+  name: 'ActiveDirectory'
+  properties: {
+    administratorType: 'ActiveDirectory'
+    login: migrateIdentity.name
+    sid: migrateIdentity.properties.principalId
+    tenantId: subscription().tenantId
+  }
+}
+
+resource sqlServerEntraOnlyAuthentication 'Microsoft.Sql/servers/azureADOnlyAuthentications@2023-08-01-preview' = if (useSqlServer) {
+  parent: sqlServer
+  name: 'Default'
+  properties: { azureADOnlyAuthentication: true }
+  dependsOn: [sqlServerEntraAdministrator]
 }
 
 resource sqlDatabase 'Microsoft.Sql/servers/databases@2023-08-01-preview' = if (useSqlServer) {
@@ -545,7 +583,7 @@ resource sqlDatabase 'Microsoft.Sql/servers/databases@2023-08-01-preview' = if (
 }
 
 // V1 deliberately has no VNet. This Azure-only firewall rule is the small public-network bridge
-// between Container Apps and Azure SQL; credentials and TLS still protect the database.
+// between Container Apps and Azure SQL; Entra authentication and TLS protect database access.
 resource sqlAzureServicesFirewall 'Microsoft.Sql/servers/firewallRules@2023-08-01-preview' = if (useSqlServer) {
   parent: sqlServer
   name: 'AllowAzureServices'
@@ -553,20 +591,6 @@ resource sqlAzureServicesFirewall 'Microsoft.Sql/servers/firewallRules@2023-08-0
     startIpAddress: '0.0.0.0'
     endIpAddress: '0.0.0.0'
   }
-}
-
-resource databaseConnectionSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
-  parent: vault
-  name: databaseSecretName
-  properties: { value: databaseConnection }
-}
-
-// Only deploy.ps1 and the Operator read this: it lets a later deployment pass the same password back
-// instead of resetting it. The runtime reads the connection string above.
-resource databaseAdministratorPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
-  parent: vault
-  name: 'database-admin-password'
-  properties: { value: databaseAdministratorPassword }
 }
 
 resource operatorKeySecretResource 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
@@ -617,35 +641,10 @@ module acrPull 'acr-pull.bicep' = {
   }
 }
 
-resource adminDatabaseSecret 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  scope: databaseConnectionSecret
-  name: guid(databaseConnectionSecret.id, adminIdentity.id, keyVaultSecretsUserRoleId)
-  properties: { principalId: adminIdentity.properties.principalId, principalType: 'ServicePrincipal', roleDefinitionId: keyVaultSecretsUserRoleId }
-}
 resource adminOidcSecret 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (adminOidcEnabled) {
   scope: adminOidcClientSecretResource
   name: guid(adminOidcClientSecretResource.id, adminIdentity.id, keyVaultSecretsUserRoleId)
   properties: { principalId: adminIdentity.properties.principalId, principalType: 'ServicePrincipal', roleDefinitionId: keyVaultSecretsUserRoleId }
-}
-resource ingestionDatabaseSecret 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  scope: databaseConnectionSecret
-  name: guid(databaseConnectionSecret.id, ingestionIdentity.id, keyVaultSecretsUserRoleId)
-  properties: { principalId: ingestionIdentity.properties.principalId, principalType: 'ServicePrincipal', roleDefinitionId: keyVaultSecretsUserRoleId }
-}
-resource workerDatabaseSecret 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  scope: databaseConnectionSecret
-  name: guid(databaseConnectionSecret.id, workerIdentity.id, keyVaultSecretsUserRoleId)
-  properties: { principalId: workerIdentity.properties.principalId, principalType: 'ServicePrincipal', roleDefinitionId: keyVaultSecretsUserRoleId }
-}
-resource migrateDatabaseSecret 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  scope: databaseConnectionSecret
-  name: guid(databaseConnectionSecret.id, migrateIdentity.id, keyVaultSecretsUserRoleId)
-  properties: { principalId: migrateIdentity.properties.principalId, principalType: 'ServicePrincipal', roleDefinitionId: keyVaultSecretsUserRoleId }
-}
-resource bootstrapDatabaseSecret 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  scope: databaseConnectionSecret
-  name: guid(databaseConnectionSecret.id, bootstrapIdentity.id, keyVaultSecretsUserRoleId)
-  properties: { principalId: bootstrapIdentity.properties.principalId, principalType: 'ServicePrincipal', roleDefinitionId: keyVaultSecretsUserRoleId }
 }
 resource bootstrapOperatorSecret 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   scope: operatorKeySecretResource
@@ -684,17 +683,14 @@ resource ingestion 'Microsoft.App/containerApps@2025-07-01' = {
         allowInsecure: false
       }
       registries: [{ server: registryServer, identity: ingestionIdentity.id }]
-      secrets: [
-        { name: databaseSecretName, keyVaultUrl: databaseConnectionSecret.properties.secretUriWithVersion, identity: ingestionIdentity.id }
-      ]
+      secrets: []
     }
     template: {
       containers: [{
         name: 'ingestion'
         image: ingestionImage
-        env: concat(databaseEnvironment, [
+        env: concat(ingestionDatabaseEnvironment, [
           { name: 'Integrios__KeyVault__Uri', value: sourceSecretsVault.properties.vaultUri }
-          { name: 'AZURE_CLIENT_ID', value: ingestionIdentity.properties.clientId }
         ], telemetryEnvironment)
         resources: { cpu: json('0.5'), memory: '1Gi' }
         probes: [
@@ -705,7 +701,7 @@ resource ingestion 'Microsoft.App/containerApps@2025-07-01' = {
       scale: { minReplicas: runtimeReplicaCount, maxReplicas: max(runtimeReplicaCount, 1) }
     }
   }
-  dependsOn: [acrPull, ingestionDatabaseSecret, ingestionSourceSecrets]
+  dependsOn: [acrPull, ingestionSourceSecrets]
 }
 
 module serviceBusReceiver 'service-bus-receiver.bicep' = if (serviceBusEnabled) {
@@ -741,17 +737,15 @@ resource admin 'Microsoft.App/containerApps@2025-07-01' = {
         }]
       }
       registries: [{ server: registryServer, identity: adminIdentity.id }]
-      secrets: concat(
-        [{ name: databaseSecretName, keyVaultUrl: databaseConnectionSecret.properties.secretUriWithVersion, identity: adminIdentity.id }],
-        adminOidcEnabled
-          ? [{ name: adminOidcSecretName, keyVaultUrl: adminOidcClientSecretResource!.properties.secretUriWithVersion, identity: adminIdentity.id }]
-          : [])
+      secrets: adminOidcEnabled
+        ? [{ name: adminOidcSecretName, keyVaultUrl: adminOidcClientSecretResource!.properties.secretUriWithVersion, identity: adminIdentity.id }]
+        : []
     }
     template: {
       containers: [{
         name: 'admin'
         image: adminImage
-        env: concat(databaseEnvironment, [
+        env: concat(adminDatabaseEnvironment, [
           { name: 'Integrios__PublicIngestionBaseUri', value: 'https://${ingestion.properties.configuration.ingress.fqdn}' }
           { name: 'Integrios__Admin__DataProtection__KeyRingPath', value: adminDataProtectionPath }
           // Ingress terminates TLS, so Admin must read the original https scheme to build its
@@ -774,7 +768,7 @@ resource admin 'Microsoft.App/containerApps@2025-07-01' = {
       scale: { minReplicas: runtimeReplicaCount, maxReplicas: max(runtimeReplicaCount, 1) }
     }
   }
-  dependsOn: [acrPull, adminDatabaseSecret, adminOidcSecret]
+  dependsOn: [acrPull, adminOidcSecret]
 }
 
 resource worker 'Microsoft.App/containerApps@2025-07-01' = {
@@ -789,9 +783,7 @@ resource worker 'Microsoft.App/containerApps@2025-07-01' = {
     configuration: {
       activeRevisionsMode: 'Single'
       registries: [{ server: registryServer, identity: workerIdentity.id }]
-      secrets: [
-        { name: databaseSecretName, keyVaultUrl: databaseConnectionSecret.properties.secretUriWithVersion, identity: workerIdentity.id }
-      ]
+      secrets: []
     }
     template: {
       containers: [{
@@ -799,7 +791,7 @@ resource worker 'Microsoft.App/containerApps@2025-07-01' = {
         image: workerImage
         // Completed-history retention is intentionally absent. Add
         // Integrios__Worker__HistoryRetention__Period only after reviewing the rollout warning.
-        env: concat(databaseEnvironment, destinationSecretsEnvironment, telemetryEnvironment)
+        env: concat(workerDatabaseEnvironment, destinationSecretsEnvironment, telemetryEnvironment)
         resources: { cpu: json('0.5'), memory: '1Gi' }
         probes: [
           { type: 'Liveness', httpGet: { path: '/health', port: 5299, scheme: 'HTTP' }, initialDelaySeconds: 10, periodSeconds: 30 }
@@ -809,7 +801,7 @@ resource worker 'Microsoft.App/containerApps@2025-07-01' = {
       scale: { minReplicas: runtimeReplicaCount, maxReplicas: max(runtimeReplicaCount, 1) }
     }
   }
-  dependsOn: [acrPull, workerDatabaseSecret, workerDestinationSecrets]
+  dependsOn: [acrPull, workerDestinationSecrets]
 }
 
 resource migrateJob 'Microsoft.App/jobs@2025-07-01' = {
@@ -824,19 +816,63 @@ resource migrateJob 'Microsoft.App/jobs@2025-07-01' = {
       replicaRetryLimit: 1
       manualTriggerConfig: { parallelism: 1, replicaCompletionCount: 1 }
       registries: [{ server: registryServer, identity: migrateIdentity.id }]
-      secrets: [{ name: databaseSecretName, keyVaultUrl: databaseConnectionSecret.properties.secretUriWithVersion, identity: migrateIdentity.id }]
+      secrets: []
     }
     template: {
       containers: [{
         name: 'migrate'
         image: adminImage
         args: ['database', 'migrate']
-        env: databaseEnvironment
+        env: migrateDatabaseEnvironment
         resources: { cpu: json('0.5'), memory: '1Gi' }
       }]
     }
   }
-  dependsOn: [acrPull, migrateDatabaseSecret]
+  dependsOn: [acrPull, sqlServerEntraOnlyAuthentication]
+}
+
+resource grantRuntimeJob 'Microsoft.App/jobs@2025-07-01' = {
+  name: jobNames.grantRuntime
+  location: location
+  identity: { type: 'UserAssigned', userAssignedIdentities: { '${migrateIdentity.id}': {} } }
+  properties: {
+    environmentId: environment.id
+    configuration: {
+      triggerType: 'Manual'
+      replicaTimeout: 600
+      replicaRetryLimit: 1
+      manualTriggerConfig: { parallelism: 1, replicaCompletionCount: 1 }
+      registries: [{ server: registryServer, identity: migrateIdentity.id }]
+      secrets: []
+    }
+    template: {
+      containers: [{
+        name: 'grant-runtime'
+        image: adminImage
+        args: ['database', 'grant-runtime']
+        env: concat(migrateDatabaseEnvironment, [
+          { name: 'Database__RuntimePrincipals__0__Name', value: adminIdentity.name }
+          { name: 'Database__RuntimePrincipals__0__Scope', value: 'control-plane' }
+          { name: 'Database__RuntimePrincipals__0__EntraClientId', value: adminIdentity.properties.clientId }
+          { name: 'Database__RuntimePrincipals__0__EntraObjectId', value: adminIdentity.properties.principalId }
+          { name: 'Database__RuntimePrincipals__1__Name', value: bootstrapIdentity.name }
+          { name: 'Database__RuntimePrincipals__1__Scope', value: 'control-plane' }
+          { name: 'Database__RuntimePrincipals__1__EntraClientId', value: bootstrapIdentity.properties.clientId }
+          { name: 'Database__RuntimePrincipals__1__EntraObjectId', value: bootstrapIdentity.properties.principalId }
+          { name: 'Database__RuntimePrincipals__2__Name', value: ingestionIdentity.name }
+          { name: 'Database__RuntimePrincipals__2__Scope', value: 'data-plane' }
+          { name: 'Database__RuntimePrincipals__2__EntraClientId', value: ingestionIdentity.properties.clientId }
+          { name: 'Database__RuntimePrincipals__2__EntraObjectId', value: ingestionIdentity.properties.principalId }
+          { name: 'Database__RuntimePrincipals__3__Name', value: workerIdentity.name }
+          { name: 'Database__RuntimePrincipals__3__Scope', value: 'data-plane' }
+          { name: 'Database__RuntimePrincipals__3__EntraClientId', value: workerIdentity.properties.clientId }
+          { name: 'Database__RuntimePrincipals__3__EntraObjectId', value: workerIdentity.properties.principalId }
+        ])
+        resources: { cpu: json('0.5'), memory: '1Gi' }
+      }]
+    }
+  }
+  dependsOn: [acrPull, migrateJob]
 }
 
 resource bootstrapJob 'Microsoft.App/jobs@2025-07-01' = {
@@ -852,7 +888,6 @@ resource bootstrapJob 'Microsoft.App/jobs@2025-07-01' = {
       manualTriggerConfig: { parallelism: 1, replicaCompletionCount: 1 }
       registries: [{ server: registryServer, identity: bootstrapIdentity.id }]
       secrets: [
-        { name: databaseSecretName, keyVaultUrl: databaseConnectionSecret.properties.secretUriWithVersion, identity: bootstrapIdentity.id }
         { name: 'operator-key', keyVaultUrl: operatorKeySecretResource.properties.secretUriWithVersion, identity: bootstrapIdentity.id }
       ]
     }
@@ -861,14 +896,14 @@ resource bootstrapJob 'Microsoft.App/jobs@2025-07-01' = {
         name: 'bootstrap'
         image: adminImage
         args: ['bootstrap']
-        env: concat(databaseEnvironment, [
+        env: concat(bootstrapDatabaseEnvironment, [
           { name: 'INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET', secretRef: 'operator-key' }
         ])
         resources: { cpu: json('0.5'), memory: '1Gi' }
       }]
     }
   }
-  dependsOn: [acrPull, bootstrapDatabaseSecret, bootstrapOperatorSecret]
+  dependsOn: [acrPull, bootstrapOperatorSecret, grantRuntimeJob]
 }
 
 resource validateSecretsJob 'Microsoft.App/jobs@2025-07-01' = {
@@ -883,21 +918,19 @@ resource validateSecretsJob 'Microsoft.App/jobs@2025-07-01' = {
       replicaRetryLimit: 0
       manualTriggerConfig: { parallelism: 1, replicaCompletionCount: 1 }
       registries: [{ server: registryServer, identity: workerIdentity.id }]
-      secrets: [
-        { name: databaseSecretName, keyVaultUrl: databaseConnectionSecret.properties.secretUriWithVersion, identity: workerIdentity.id }
-      ]
+      secrets: []
     }
     template: {
       containers: [{
         name: 'validate'
         image: workerImage
         args: ['secrets', 'validate', '--all']
-        env: concat(databaseEnvironment, destinationSecretsEnvironment)
+        env: concat(workerDatabaseEnvironment, destinationSecretsEnvironment)
         resources: { cpu: json('0.5'), memory: '1Gi' }
       }]
     }
   }
-  dependsOn: [acrPull, workerDatabaseSecret, workerDestinationSecrets]
+  dependsOn: [acrPull, workerDestinationSecrets, grantRuntimeJob]
 }
 
 module telemetryPublisher 'telemetry-publisher.bicep' = {
@@ -913,6 +946,9 @@ module telemetryPublisher 'telemetry-publisher.bicep' = {
 }
 
 output adminFqdn string = admin.properties.configuration.ingress.fqdn
+output databaseServerName string = useSqlServer ? sqlServer!.name : postgres!.name
+output migrateIdentityName string = migrateIdentity.name
+output migrateIdentityPrincipalId string = migrateIdentity.properties.principalId
 output adminOidcRedirectUris object = {
   callback: 'https://${admin.properties.configuration.ingress.fqdn}/auth/callback'
   signedOut: 'https://${admin.properties.configuration.ingress.fqdn}/auth/signed-out'
