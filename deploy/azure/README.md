@@ -146,6 +146,25 @@ it against an existing `0.9.0` deployment yet. The manual upgrade procedure must
 against disposable Azure SQL and PostgreSQL copies. Keep the existing database and credentials until
 that procedure is documented and qualified; do not delete old principals or secrets.
 
+On Azure SQL, the template cannot switch an existing password-authenticated server to Entra-only:
+the deployment fails with `InvalidParameterValue` for `AzureADOnlyAuthentication`. Before the first
+`deploy.ps1` run against such a server, make the existing Migrate identity its Entra administrator
+and turn on Entra-only authentication:
+
+```powershell
+$migrate = "id-<namePrefix>-migrate"
+$principalId = az identity show --resource-group <resource-group> --name $migrate --query principalId --output tsv
+az sql server ad-admin create --resource-group <resource-group> --server <sql-server> --display-name $migrate --object-id $principalId
+az sql server ad-only-auth enable --resource-group <resource-group> --name <sql-server>
+```
+
+Turning on Entra-only authentication is the cutover: the old SQL login is refused from that moment,
+so the `0.9.0` runtime loses database access until `deploy.ps1` completes. The CLI records the
+administrator as a group; the next `deploy.ps1` run corrects it to an application. The old
+administrator login name stays on the server but can no longer sign in. These steps have been run
+once against a disposable copy, where existing data was preserved; they are not yet a qualified
+upgrade procedure. The PostgreSQL equivalent has not been exercised.
+
 A failed migration, grant, Bootstrap, or validation job leaves runtime stopped. After a schema
 migration, recover by rolling forward or restoring the database rather than starting an older image set.
 On a new deployment, Azure may report that a Container App or Job cannot fetch a Key Vault secret
