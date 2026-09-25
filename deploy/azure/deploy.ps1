@@ -86,11 +86,12 @@ function Grant-DeploymentSettingsReader([string] $VaultName) {
         --assignee $objectId `
         --role 'Key Vault Secrets User' `
         --scope $scope `
-        --query 'length(@)' `
+        --query '[0].id' `
         --output tsv `
         --only-show-errors
     if ($LASTEXITCODE -ne 0) { throw "Could not read role assignments on $VaultName." }
-    if ($assigned -ne '0') { return }
+    # The query avoids parentheses: az.cmd hands an unquoted argument to cmd.exe, which rejects them.
+    if (-not [string]::IsNullOrWhiteSpace($assigned)) { return }
 
     Write-Host "Granting the signed-in identity Key Vault Secrets User on $VaultName..."
     $null = Invoke-AzureCli role assignment create `
