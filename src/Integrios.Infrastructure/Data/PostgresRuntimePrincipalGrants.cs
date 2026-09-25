@@ -10,9 +10,13 @@ internal static class PostgresRuntimePrincipalGrants
 {
     public static async Task ApplyAsync(
         NpgsqlDataSource dataSource,
+        NpgsqlDataSource? entraDataSource,
         IReadOnlyList<RuntimePrincipal> principals,
         CancellationToken cancellationToken)
     {
+        if (entraDataSource is not null)
+            await EnsureEntraPrincipalsAsync(entraDataSource, principals, cancellationToken);
+
         await using NpgsqlConnection connection = await dataSource.OpenConnectionAsync(cancellationToken);
         await using NpgsqlTransaction transaction = await connection.BeginTransactionAsync(cancellationToken);
         CurrentIdentity identity = await connection.QuerySingleAsync<CurrentIdentity>(new CommandDefinition(
@@ -50,9 +54,9 @@ internal static class PostgresRuntimePrincipalGrants
 
             if (guard is null)
             {
-                if (principal.Password is null && principal.EntraObjectId is null)
+                if (principal.Password is null)
                     throw new InvalidOperationException(
-                        $"Database:RuntimePrincipals entry '{principal.Name}' has no credentials and requires an existing PostgreSQL role (grant-only mode).");
+                        $"Database:RuntimePrincipals entry '{principal.Name}' has no password and requires an existing PostgreSQL role (grant-only mode).");
                 existing.Add(principal.Name, false);
                 continue;
             }
@@ -60,20 +64,6 @@ internal static class PostgresRuntimePrincipalGrants
             if (guard.IsPrivileged)
                 throw new InvalidOperationException(
                     $"Database:RuntimePrincipals entry '{principal.Name}' targets a privileged or current PostgreSQL principal.");
-
-            if (principal.EntraObjectId is Guid expectedObjectId)
-            {
-                EntraPrincipal? entraPrincipal = await connection.QuerySingleOrDefaultAsync<EntraPrincipal>(new CommandDefinition(
-                    "SELECT rolename AS Name, objectid AS ObjectId FROM pg_catalog.pgaadauth_list_principals(false) WHERE rolename = @Name;",
-                    new { principal.Name },
-                    transaction,
-                    cancellationToken: cancellationToken));
-                if (entraPrincipal is null
-                    || !Guid.TryParse(entraPrincipal.ObjectId, out Guid actualObjectId)
-                    || actualObjectId != expectedObjectId)
-                    throw new InvalidOperationException(
-                        $"Database:RuntimePrincipals entry '{principal.Name}' targets a PostgreSQL role bound to a different identity.");
-            }
 
             existing.Add(principal.Name, true);
         }
@@ -98,28 +88,60 @@ internal static class PostgresRuntimePrincipalGrants
                         $"Database:RuntimePrincipals entry '{principal.Name}' could not create or update its PostgreSQL principal ({SqlState(exception)}). Create it externally and omit credential keys to use grant-only mode.");
                 }
             }
-            else if (principal.EntraObjectId is Guid objectId && !existing[principal.Name])
-            {
-                try
-                {
-                    await connection.ExecuteAsync(new CommandDefinition(
-                        "SELECT pgaadauth_create_principal_with_oid(@Name, @ObjectId, false, false);",
-                        new { principal.Name, ObjectId = objectId.ToString("D") },
-                        transaction,
-                        cancellationToken: cancellationToken));
-                }
-                catch (DbException exception)
-                {
-                    throw new InvalidOperationException(
-                        $"Database:RuntimePrincipals entry '{principal.Name}' could not create its PostgreSQL Entra principal ({SqlState(exception)}). Create it externally and omit credential keys to use grant-only mode.",
-                        exception);
-                }
-            }
 
             await ConvergePermissionsAsync(connection, transaction, identity, principal, cancellationToken);
         }
 
         await transaction.CommitAsync(cancellationToken);
+    }
+
+    // Entra principals are bound to an identity by object ID. An existing role must already carry the
+    // configured one; a missing role is created for it. Creation commits on its own: a later failure
+    // leaves a role with no grants, which the next run adopts.
+    private static async Task EnsureEntraPrincipalsAsync(
+        NpgsqlDataSource entraDataSource,
+        IReadOnlyList<RuntimePrincipal> principals,
+        CancellationToken cancellationToken)
+    {
+        await using NpgsqlConnection connection = await entraDataSource.OpenConnectionAsync(cancellationToken);
+        foreach (RuntimePrincipal principal in principals)
+        {
+            if (principal.EntraObjectId is not Guid expectedObjectId)
+                continue;
+
+            bool exists = await connection.QuerySingleAsync<bool>(new CommandDefinition(
+                "SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = @Name);",
+                new { principal.Name },
+                cancellationToken: cancellationToken));
+            if (exists)
+            {
+                EntraPrincipal? entraPrincipal = await connection.QuerySingleOrDefaultAsync<EntraPrincipal>(new CommandDefinition(
+                    "SELECT rolename AS Name, objectid AS ObjectId FROM pg_catalog.pgaadauth_list_principals(false) WHERE rolename = @Name;",
+                    new { principal.Name },
+                    cancellationToken: cancellationToken));
+                if (entraPrincipal is null
+                    || !Guid.TryParse(entraPrincipal.ObjectId, out Guid actualObjectId)
+                    || actualObjectId != expectedObjectId)
+                    throw new InvalidOperationException(
+                        $"Database:RuntimePrincipals entry '{principal.Name}' targets a PostgreSQL role bound to a different identity.");
+                continue;
+            }
+
+            try
+            {
+                // Managed identities are service principals; the object type selects that binding.
+                await connection.ExecuteAsync(new CommandDefinition(
+                    "SELECT pg_catalog.pgaadauth_create_principal_with_oid(@Name, @ObjectId, 'service', false, false);",
+                    new { principal.Name, ObjectId = expectedObjectId.ToString("D") },
+                    cancellationToken: cancellationToken));
+            }
+            catch (DbException exception)
+            {
+                throw new InvalidOperationException(
+                    $"Database:RuntimePrincipals entry '{principal.Name}' could not create its PostgreSQL Entra principal ({SqlState(exception)}). Create it externally and omit credential keys to use grant-only mode.",
+                    exception);
+            }
+        }
     }
 
     private static async Task ConvergePermissionsAsync(

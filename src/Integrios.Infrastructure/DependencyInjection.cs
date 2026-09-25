@@ -246,22 +246,9 @@ public static class DependencyInjection
             services.AddSingleton<DefaultAzureCredential>();
         }
 
-        services.AddSingleton<NpgsqlDataSource>(provider =>
-        {
-            var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
-            if (authentication == "AzureEntra")
-            {
-                TokenCredential credential = provider.GetRequiredService<DefaultAzureCredential>();
-                var tokenRequest = new TokenRequestContext(["https://ossrdbms-aad.database.windows.net/.default"]);
-                // Asked per physical connection: the credential caches the token and renews it
-                // ahead of expiry, so a fixed refresh interval cannot hand out an expired one.
-                dataSourceBuilder.UsePasswordProvider(
-                    _ => credential.GetToken(tokenRequest, CancellationToken.None).Token,
-                    async (_, cancellationToken) =>
-                        (await credential.GetTokenAsync(tokenRequest, cancellationToken)).Token);
-            }
-            return dataSourceBuilder.Build();
-        });
+        services.AddSingleton<NpgsqlDataSource>(provider => BuildPostgresDataSource(
+            connectionString,
+            authentication == "AzureEntra" ? provider.GetRequiredService<DefaultAzureCredential>() : null));
 
         services.AddDbContextFactory<IntegriosDbContext>(
             (provider, options) => options.UseIntegriosProvider(
@@ -270,6 +257,23 @@ public static class DependencyInjection
         services.AddSingleton<IDbConnectionFactory, NpgsqlConnectionFactory>();
 
         return services;
+    }
+
+    // With a credential, each new physical connection asks it for an Entra token: the credential
+    // caches the token and renews it ahead of expiry, so a fixed refresh interval cannot hand out
+    // an expired one. Without one, the connection string carries the password.
+    internal static NpgsqlDataSource BuildPostgresDataSource(string connectionString, TokenCredential? credential)
+    {
+        var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
+        if (credential is not null)
+        {
+            var tokenRequest = new TokenRequestContext(["https://ossrdbms-aad.database.windows.net/.default"]);
+            dataSourceBuilder.UsePasswordProvider(
+                _ => credential.GetToken(tokenRequest, CancellationToken.None).Token,
+                async (_, cancellationToken) =>
+                    (await credential.GetTokenAsync(tokenRequest, cancellationToken)).Token);
+        }
+        return dataSourceBuilder.Build();
     }
 
     private static IServiceCollection AddDestinationAuthenticationServices(

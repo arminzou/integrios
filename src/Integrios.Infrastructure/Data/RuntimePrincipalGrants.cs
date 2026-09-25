@@ -1,3 +1,4 @@
+using Azure.Identity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
@@ -21,7 +22,19 @@ internal static class RuntimePrincipalGrants
         if (provider == DatabaseProvider.Postgres)
         {
             NpgsqlDataSource dataSource = services.GetRequiredService<NpgsqlDataSource>();
-            await PostgresRuntimePrincipalGrants.ApplyAsync(dataSource, principals, cancellationToken);
+            if (!principals.Any(principal => principal.EntraObjectId is not null))
+            {
+                await PostgresRuntimePrincipalGrants.ApplyAsync(dataSource, null, principals, cancellationToken);
+                return;
+            }
+
+            // Azure installs the pgaadauth extension only in the postgres database, so Entra
+            // principals are listed and created there; roles are server-wide.
+            string entraAdministration = new NpgsqlConnectionStringBuilder(connectionString) { Database = "postgres" }.ConnectionString;
+            await using NpgsqlDataSource entraDataSource = DependencyInjection.BuildPostgresDataSource(
+                entraAdministration,
+                services.GetService<DefaultAzureCredential>());
+            await PostgresRuntimePrincipalGrants.ApplyAsync(dataSource, entraDataSource, principals, cancellationToken);
         }
         else
         {
