@@ -50,6 +50,24 @@ public sealed class RuntimePrincipalConfigurationTests
     }
 
     [Fact]
+    public void Read_RejectsSqlServerPasswordLongerThanTheServerAccepts()
+    {
+        string password = new('p', 129);
+        InvalidOperationException tooLong = Should.Throw<InvalidOperationException>(() => Read(
+            DatabaseProvider.SqlServer,
+            ("Database:RuntimePrincipals:0:Name", "worker"),
+            ("Database:RuntimePrincipals:0:Scope", "data-plane"),
+            ("Database:RuntimePrincipals:0:Password", password)));
+        tooLong.Message.ShouldContain("Database:RuntimePrincipals:0:Password");
+        tooLong.Message.ShouldNotContain(password);
+
+        Read(DatabaseProvider.Postgres,
+            ("Database:RuntimePrincipals:0:Name", "worker"),
+            ("Database:RuntimePrincipals:0:Scope", "data-plane"),
+            ("Database:RuntimePrincipals:0:Password", password)).Count.ShouldBe(1);
+    }
+
+    [Fact]
     public void Read_RejectsDuplicateNamesAndUnknownScopeWithoutEchoingValues()
     {
         InvalidOperationException duplicate = Should.Throw<InvalidOperationException>(() => Read(

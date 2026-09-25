@@ -252,16 +252,13 @@ public static class DependencyInjection
             if (authentication == "AzureEntra")
             {
                 TokenCredential credential = provider.GetRequiredService<DefaultAzureCredential>();
-                dataSourceBuilder.UsePeriodicPasswordProvider(
+                var tokenRequest = new TokenRequestContext(["https://ossrdbms-aad.database.windows.net/.default"]);
+                // Asked per physical connection: the credential caches the token and renews it
+                // ahead of expiry, so a fixed refresh interval cannot hand out an expired one.
+                dataSourceBuilder.UsePasswordProvider(
+                    _ => credential.GetToken(tokenRequest, CancellationToken.None).Token,
                     async (_, cancellationToken) =>
-                    {
-                        AccessToken token = await credential.GetTokenAsync(
-                            new TokenRequestContext(["https://ossrdbms-aad.database.windows.net/.default"]),
-                            cancellationToken);
-                        return token.Token;
-                    },
-                    successRefreshInterval: TimeSpan.FromMinutes(55),
-                    failureRefreshInterval: TimeSpan.FromMinutes(1));
+                        (await credential.GetTokenAsync(tokenRequest, cancellationToken)).Token);
             }
             return dataSourceBuilder.Build();
         });

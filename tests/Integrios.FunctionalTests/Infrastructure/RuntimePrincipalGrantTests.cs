@@ -110,6 +110,23 @@ public sealed class RuntimePrincipalGrantTests : IAsyncLifetime
         }
     }
 
+    [Fact]
+    public async Task RuntimePrincipalGrant_RevokesGrantablePermissions()
+    {
+        if (database.Provider != "sqlserver")
+            return;
+
+        await Apply((WorkerName, "control-plane", OldPassword));
+        await using (var owner = new SqlConnection(connectionString))
+        {
+            await owner.OpenAsync();
+            await owner.ExecuteAsync($"GRANT SELECT ON OBJECT::dbo.tenants TO [{WorkerName}] WITH GRANT OPTION;");
+        }
+
+        await Apply((WorkerName, "control-plane", null));
+        await AssertCanUpdateAsync(WorkerName, OldPassword);
+    }
+
     private async Task ApplyEntraClientId(string name, Guid clientId)
     {
         IConfiguration configuration = BuildConfiguration(

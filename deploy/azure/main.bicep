@@ -496,7 +496,6 @@ resource postgres 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01' = if (!
     tier: 'Burstable'
   }
   properties: {
-    administratorLogin: migrateIdentity.name
     version: '16'
     authConfig: {
       activeDirectoryAuth: 'Enabled'
@@ -540,7 +539,16 @@ resource sqlServer 'Microsoft.Sql/servers@2023-08-01-preview' = if (useSqlServer
   name: 'sql-${take(namePrefix, 12)}-${take(uniqueString(resourceGroup().id), 8)}'
   location: location
   properties: {
-    administratorLogin: migrateIdentity.name
+    // Entra-only servers take their administrator here at creation and carry no SQL login; the
+    // child administrator resources below keep an existing server converged.
+    administrators: {
+      administratorType: 'ActiveDirectory'
+      azureADOnlyAuthentication: true
+      login: migrateIdentity.name
+      sid: migrateIdentity.properties.principalId
+      tenantId: subscription().tenantId
+      principalType: 'Application'
+    }
     minimalTlsVersion: '1.2'
     publicNetworkAccess: 'Enabled'
     version: '12.0'

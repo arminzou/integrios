@@ -165,6 +165,7 @@ internal static class SqlServerRuntimePrincipalGrants
         IEnumerable<DirectPermission> permissions = await connection.QueryAsync<DirectPermission>(new CommandDefinition(
             $"""
             SELECT p.permission_name AS PermissionName,
+                   p.state AS State,
                    p.class AS Class,
                    COALESCE(s.name, os.name) AS SchemaName,
                    o.name AS ObjectName,
@@ -192,7 +193,8 @@ internal static class SqlServerRuntimePrincipalGrants
                 _ => throw new InvalidOperationException("A runtime principal permission has an unsupported securable class."),
             };
             await connection.ExecuteAsync(new CommandDefinition(
-                $"REVOKE {permission.PermissionName} ON {securable} FROM {quotedPrincipal};",
+                // A permission held WITH GRANT OPTION can only be revoked with CASCADE.
+                $"REVOKE {permission.PermissionName} ON {securable} FROM {quotedPrincipal}{(permission.State == "W" ? " CASCADE" : string.Empty)};",
                 transaction: transaction,
                 cancellationToken: cancellationToken));
         }
@@ -221,6 +223,7 @@ internal static class SqlServerRuntimePrincipalGrants
 
     private sealed record DirectPermission(
         string PermissionName,
+        string State,
         byte Class,
         string? SchemaName,
         string? ObjectName,
