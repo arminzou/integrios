@@ -401,8 +401,7 @@ foreach ($app in $outputs.appNames.value.PSObject.Properties.Value) {
         --query '[?properties.active].name' --output tsv --only-show-errors)
     if ($LASTEXITCODE -ne 0) { throw "Could not read active revisions for $app." }
     foreach ($revision in $revisions) {
-        Invoke-AzureCli containerapp revision deactivate --resource-group $ResourceGroup --name $app `
-            --revision $revision --output none --only-show-errors
+        Set-RevisionState deactivate $app $revision
     }
 }
 
@@ -443,8 +442,7 @@ foreach ($app in $outputs.appNames.value.PSObject.Properties.Value) {
     $revision = & az containerapp show --resource-group $ResourceGroup --name $app `
         --query properties.latestRevisionName --output tsv --only-show-errors
     if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($revision)) { throw "Could not read latest revision for $app." }
-    Invoke-AzureCli containerapp revision activate --resource-group $ResourceGroup --name $app `
-        --revision $revision --output none --only-show-errors
+    Set-RevisionState activate $app $revision
     Wait-HealthyRevision -AppName $app
 }
 

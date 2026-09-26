@@ -15,6 +15,10 @@ function az {
     if (($args[0..2] -join ' ') -eq 'containerapp job show') {
         return $script:jobJson
     }
+    if (($args[0..1] -join ' ') -eq 'containerapp revision') {
+        $global:LASTEXITCODE = $script:revisionExit
+        return $script:revisionOutput
+    }
     throw "Unexpected Azure command in test: $($args -join ' ')"
 }
 function Invoke-Job([string] $JobName, [switch] $ReturnExecution) {
@@ -88,4 +92,12 @@ try {
     }
 }
 finally { if (Test-Path -LiteralPath $file) { Remove-Item -LiteralPath $file -Force } }
+$script:revisionExit = 1
+$script:revisionOutput = 'ERROR: (RevisionAlreadyInRequestedState) Revision app--1 is already deactivated!.'
+Set-RevisionState deactivate 'app' 'app--1'
+$script:revisionOutput = 'ERROR: (AuthorizationFailed) denied'
+$rejected = $false
+try { Set-RevisionState deactivate 'app' 'app--1' } catch { $rejected = $true }
+Assert $rejected 'Other revision errors must still fail.'
+
 Write-Host 'PASS: first-Operator setup contracts and protected secret-file permissions.'
