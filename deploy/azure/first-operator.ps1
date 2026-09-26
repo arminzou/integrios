@@ -1,5 +1,14 @@
 # Helpers used by deploy.ps1. No password is passed to az in an argument, printed, or retained
 # in the normal job template. Source this file only; it performs no deployment on its own.
+# Azure can report a revision as active and then reject its deactivation because it is already
+# inactive (and the reverse). Either way the revision is in the requested state.
+function Set-RevisionState([ValidateSet('activate', 'deactivate')] [string] $Action, [string] $App, [string] $Revision) {
+    $output = & az containerapp revision $Action --resource-group $ResourceGroup --name $App --revision $Revision --output none --only-show-errors 2>&1
+    if ($LASTEXITCODE -ne 0 -and "$output" -notmatch 'RevisionAlreadyInRequestedState') {
+        throw "Could not $Action revision $Revision of ${App}: $output"
+    }
+}
+
 function Write-ProtectedJson([string] $Path, [object] $Value) {
     # Restrict access before writing any bytes, including on Windows where temp inherits ACLs.
     if ($IsWindows) {
