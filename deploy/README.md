@@ -15,6 +15,9 @@ cp .env.example .env
 # edit .env: set database owner/runtime passwords, INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET, and INTEGRIOS_PUBLIC_INGESTION_BASE_URI
 # The image version needs no edit: compose.yml defaults to the release this checkout ships.
 mkdir -p secrets/sources secrets/destinations
+docker compose up -d postgres migrate grant-runtime bootstrap
+docker compose run --rm admin operator-user bootstrap \
+  --display-name "Deployment operator" --email "operator@example.com"
 docker compose up -d
 ```
 
@@ -23,6 +26,11 @@ unique values. Startup order is enforced by `depends_on`: `postgres` becomes hea
 runs EF Core migrations as the database owner, `grant-runtime` creates or updates the two runtime
 principals, `bootstrap` runs as the control-plane principal, then `ingestion`, `admin`, and `worker`
 start with their matching scope. Existing volumes are upgraded in place; no principal is dropped.
+
+Complete the interactive first-Operator command successfully before starting runtime. It prompts
+for a password only when the database has no Users; repeated runs preserve all existing credentials.
+For an OIDC-only or API-only deployment, explicitly set `INTEGRIOS_ADMIN_PASSWORD_ENABLED=false`
+and omit this human-account setup command. OIDC provisions its User at first successful sign-in.
 
 ## Bootstrap semantics
 
@@ -56,9 +64,11 @@ only the replacement public identifier; it never generates or outputs the replac
 ## Operator dashboard
 
 The Admin service serves a browser dashboard over the same origin as its API, for the same
-capabilities the Admin API already exposes. Configure OpenID Connect, Integrios-managed email and
-password, or both. With neither enabled, Admin stays machine-only on OperatorKey and serves no
-browser surface. See [Operator dashboard access](../docs/operator-dashboard.md) for provider
+capabilities the Admin API already exposes. Email and password are enabled by default; OpenID
+Connect is optional and independent. Set `INTEGRIOS_ADMIN_PASSWORD_ENABLED=false` explicitly to
+disable password login, including on upgrades where the setting was previously omitted. With both
+methods disabled, the dashboard shell reports that no sign-in method is configured and the API
+continues to accept OperatorKey. See [Operator dashboard access](../docs/operator-dashboard.md) for provider
 settings, interactive credential provisioning, and recovery.
 
 Serve Admin over HTTPS when the dashboard is on. The session cookie is secure-only, so a browser

@@ -98,7 +98,7 @@ services:
       Integrios__Admin__Oidc__ClientId: ${INTEGRIOS_ADMIN_OIDC_CLIENT_ID:-}
       Integrios__Admin__Oidc__ClientSecret: ${INTEGRIOS_ADMIN_OIDC_CLIENT_SECRET:-}
       Integrios__Admin__Oidc__DisplayName: ${INTEGRIOS_ADMIN_OIDC_DISPLAY_NAME:-OpenID Connect}
-      Integrios__Admin__Password__Enabled: ${INTEGRIOS_ADMIN_PASSWORD_ENABLED:-false}
+      Integrios__Admin__Password__Enabled: ${INTEGRIOS_ADMIN_PASSWORD_ENABLED:-true}
       Integrios__Admin__DataProtection__KeyRingPath: /var/lib/integrios/data-protection
     volumes:
       - admin_data_protection:/var/lib/integrios/data-protection

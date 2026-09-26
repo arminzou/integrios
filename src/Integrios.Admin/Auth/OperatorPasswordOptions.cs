@@ -9,6 +9,6 @@ public sealed record OperatorPasswordOptions
 
     public static OperatorPasswordOptions FromConfiguration(IConfiguration configuration) => new()
     {
-        Enabled = configuration.GetValue<bool?>(EnabledKey) ?? false,
+        Enabled = configuration.GetValue<bool?>(EnabledKey) ?? true,
     };
 }

@@ -31,8 +31,9 @@ param operatorKeySecret string
 @minLength(1)
 param adminAllowedCidrs array
 param ingestionExternal bool = true
+param adminPasswordEnabled bool = true
 
-@description('OpenID Connect issuer for Operator dashboard sign-in, for example https://login.microsoftonline.com/<tenant-id>/v2.0. Leave empty to deploy without dashboard sign-in.')
+@description('Optional OpenID Connect issuer for Operator dashboard sign-in, for example https://login.microsoftonline.com/<tenant-id>/v2.0.')
 param adminOidcAuthority string = ''
 param adminOidcClientId string = ''
 param adminOidcDisplayName string = ''
@@ -733,6 +734,7 @@ resource admin 'Microsoft.App/containerApps@2025-07-01' = {
         name: 'admin'
         image: adminImage
         env: concat(adminDatabaseEnvironment, [
+          { name: 'Integrios__Admin__Password__Enabled', value: string(adminPasswordEnabled) }
           { name: 'Integrios__PublicIngestionBaseUri', value: 'https://${ingestion.properties.configuration.ingress.fqdn}' }
           { name: 'Integrios__Admin__DataProtection__KeyRingPath', value: adminDataProtectionPath }
           // Ingress terminates TLS, so Admin must read the original https scheme to build its

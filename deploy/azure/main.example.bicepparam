@@ -17,6 +17,9 @@ param adminAllowedCidrs = [
   '203.0.113.10/32'
 ]
 param ingestionExternal = true
+// Password login is enabled by default. First deployment securely provisions the first Operator.
+// Set false for an explicitly OIDC-only or API-only installation.
+param adminPasswordEnabled = true
 
 // Supply both values to grant Ingestion receiver access on an existing namespace.
 // The reference never provisions a namespace, queue, topic, or subscription.

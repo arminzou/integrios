@@ -3,6 +3,7 @@ using Dapper;
 using Integrios.Application;
 using Integrios.Application.Identity;
 using Integrios.Infrastructure;
+using Integrios.Domain.Entities;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -33,6 +34,59 @@ public sealed class OperatorUserLifecycleTests : IClassFixture<AdminApiFixture>,
     {
         provider.Dispose();
         return Task.CompletedTask;
+    }
+
+    [Fact]
+    public async Task Bootstrap_PersistenceFailureRollsBackUserAndCredential()
+    {
+        await using var scope = provider.CreateAsyncScope();
+        var lifecycle = scope.ServiceProvider.GetRequiredService<IPasswordCredentialLifecycle>();
+        var user = new User { Id = Guid.NewGuid(), DisplayName = "First Operator", CreatedAt = DateTimeOffset.UtcNow };
+        var credential = new PasswordCredential
+        {
+            Id = Guid.NewGuid(), UserId = user.Id, Email = "first@example.com",
+            NormalizedEmail = "FIRST@EXAMPLE.COM", PasswordHash = "hash",
+            SessionRevision = -1, CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow,
+        };
+
+        await Should.ThrowAsync<Microsoft.EntityFrameworkCore.DbUpdateException>(() =>
+            lifecycle.CreateFirstAsync(user, credential, CancellationToken.None));
+
+        (await CountUsersAsync()).ShouldBe(0);
+        (await sender.Send(new ListOperatorUsersQuery())).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Bootstrap_ConcurrentDistinctEmailsCreateExactlyOneOperator_AndPreserveDisabledCredential()
+    {
+        async Task<bool> BootstrapAsync(string email)
+        {
+            await using var scope = provider.CreateAsyncScope();
+            return await scope.ServiceProvider.GetRequiredService<ISender>().Send(
+                new BootstrapOperatorUserCommand("First Operator", email, "initial-hash"));
+        }
+
+        bool[] results = await Task.WhenAll(BootstrapAsync("one@example.com"), BootstrapAsync("two@example.com"));
+        results.Count(created => created).ShouldBe(1);
+        (await CountUsersAsync()).ShouldBe(1);
+        var user = (await sender.Send(new ListOperatorUsersQuery())).Single();
+        await sender.Send(new DisableOperatorUserPasswordCommand(user.UserId));
+        var before = await ReadCredentialAsync(user.UserId);
+        (await sender.Send(new BootstrapOperatorUserCommand(null, null, null))).ShouldBeFalse();
+        (await sender.Send(new BootstrapOperatorUserCommand("Changed", "changed@example.com", "changed-hash"))).ShouldBeFalse();
+        (await ReadCredentialAsync(user.UserId)).ShouldBe(before);
+        (await sender.Send(new OperatorUserInitializedQuery())).ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Bootstrap_InvalidFreshInputsLeaveNoUser_AndExistingOidcUserNeedsNoInputs()
+    {
+        (await sender.Send(new OperatorUserInitializedQuery())).ShouldBeFalse();
+        await Should.ThrowAsync<ArgumentException>(() => sender.Send(new BootstrapOperatorUserCommand(null, null, null)));
+        (await CountUsersAsync()).ShouldBe(0);
+        await InsertUserAsync(Guid.NewGuid(), "OIDC Operator", "oidc@example.com");
+        (await sender.Send(new BootstrapOperatorUserCommand(null, null, null))).ShouldBeFalse();
+        (await sender.Send(new ListOperatorUsersQuery())).Single().PasswordCredentialId.ShouldBeNull();
     }
 
     [Fact]
