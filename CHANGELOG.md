@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.10.0](https://github.com/arminzou/integrios/compare/v0.9.0...v0.10.0) (2026-09-26)
+
+
+### Features
+
+* **infra:** deploy an Azure release by version instead of digests ([50df178](https://github.com/arminzou/integrios/commit/50df178da753822d019dc7717fcdbde0cba5aadb))
+* **infra:** generate and reuse Azure deployment secrets ([5a97f74](https://github.com/arminzou/integrios/commit/5a97f749d83f41cbbe58d1e011ede7f1ba3bad37))
+
+
+### Bug Fixes
+
+* **infra:** preserve stored deployment secrets exactly ([ae094a8](https://github.com/arminzou/integrios/commit/ae094a8cbacacfbcd3d19b964718796a4a1ea139))
+
 ## [0.9.0](https://github.com/arminzou/integrios/compare/v0.8.0...v0.9.0) (2026-09-24)
 
 
