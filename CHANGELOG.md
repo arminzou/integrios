@@ -3,8 +3,14 @@
 ## [0.10.0](https://github.com/arminzou/integrios/compare/v0.9.0...v0.10.0) (2026-09-26)
 
 
+### ⚠ BREAKING CHANGES
+
+* **db:** Packaged Compose runs services as separate runtime database users. Set INTEGRIOS_ADMIN_RUNTIME_PASSWORD and INTEGRIOS_DATA_RUNTIME_PASSWORD before upgrading.
+* **infra:** Azure database access is Entra-only through managed identities. Before redeploying a 0.9.0 deployment on Azure SQL, make the Migrate identity the server's Entra administrator (az sql server ad-admin create) and enable Entra-only authentication (az sql server ad-only-auth enable). On PostgreSQL, enable Entra beside password authentication, make the Migrate identity an Entra administrator, then as integrios_admin run REASSIGN OWNED BY integrios_admin TO "id-<namePrefix>-migrate".
+
 ### Features
 
+* **db:** separate runtime database privileges and remove Azure database passwords ([#44](https://github.com/arminzou/integrios/pull/44)) ([e2df441](https://github.com/arminzou/integrios/commit/e2df44152faa7d802fd81e73b5cc673c48d3a5c7))
 * **infra:** deploy an Azure release by version instead of digests ([50df178](https://github.com/arminzou/integrios/commit/50df178da753822d019dc7717fcdbde0cba5aadb))
 * **infra:** generate and reuse Azure deployment secrets ([5a97f74](https://github.com/arminzou/integrios/commit/5a97f749d83f41cbbe58d1e011ede7f1ba3bad37))
 
