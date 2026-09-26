@@ -4,7 +4,11 @@ param(
     [Parameter(Mandatory)] [string] $Location,
     [Parameter(Mandatory)] [ValidateScript({ Test-Path -LiteralPath $_ -PathType Leaf })] [string] $ParametersFile,
     [securestring] $OperatorKeySecret,
-    [securestring] $AdminOidcClientSecret
+    [securestring] $AdminOidcClientSecret,
+    [string] $InitialOperatorDisplayName,
+    [string] $InitialOperatorEmail,
+    [securestring] $InitialOperatorPassword,
+    [switch] $InteractiveSetup
 )
 
 $ErrorActionPreference = 'Stop'
@@ -12,6 +16,7 @@ $template = Join-Path $PSScriptRoot 'main.bicep'
 $releaseImageSource = 'ghcr.io/arminzou/integrios'
 $imageParameters = [ordered]@{ adminImage = 'admin'; ingestionImage = 'ingestion'; workerImage = 'worker' }
 $resolvedParametersFile = (Resolve-Path -LiteralPath $ParametersFile).Path
+. (Join-Path $PSScriptRoot 'first-operator.ps1')
 
 function Invoke-AzureCli {
     & az @args
@@ -147,16 +152,7 @@ function Invoke-Deployment([int] $RuntimeReplicaCount) {
             $deploymentParameters.parameters.Remove('release')
             foreach ($name in $releaseImages.Keys) { $deploymentParameters.parameters[$name] = @{ value = $releaseImages[$name] } }
         }
-        $json = $deploymentParameters | ConvertTo-Json -Depth 8
-        $stream = [IO.FileStream]::new($deploymentParameterFile, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
-        try {
-            $writer = [IO.StreamWriter]::new($stream, [Text.UTF8Encoding]::new($false))
-            try { $writer.Write($json) } finally { $writer.Dispose() }
-        }
-        finally { $stream.Dispose() }
-        if (-not $IsWindows) {
-            [IO.File]::SetUnixFileMode($deploymentParameterFile, [IO.UnixFileMode]::UserRead -bor [IO.UnixFileMode]::UserWrite)
-        }
+        Write-ProtectedJson $deploymentParameterFile $deploymentParameters
 
         for ($attempt = 1; $attempt -le 20; $attempt++) {
             $deploymentOutput = & az deployment group create `
@@ -208,7 +204,7 @@ function Get-DeploymentOutputs {
     $json | ConvertFrom-Json
 }
 
-function Invoke-Job([string] $JobName) {
+function Invoke-Job([string] $JobName, [switch] $ReturnExecution) {
     $execution = & az containerapp job start `
         --resource-group $ResourceGroup `
         --name $JobName `
@@ -228,7 +224,10 @@ function Invoke-Job([string] $JobName) {
             --output tsv `
             --only-show-errors
         if ($LASTEXITCODE -ne 0) { throw "Could not read execution status for $JobName." }
-        if ($status -eq 'Succeeded') { return }
+        if ($status -eq 'Succeeded') {
+            if ($ReturnExecution) { return $execution }
+            return
+        }
         if ($status -in @('Failed', 'Stopped', 'Degraded')) {
             throw "Container Apps Job $JobName execution $execution ended with status $status."
         }
@@ -292,7 +291,7 @@ if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($compiled.parametersJso
 }
 $parameters = ($compiled.parametersJson | ConvertFrom-Json).parameters
 
-foreach ($scriptOwnedName in @('operatorKeySecret', 'adminOidcClientSecret', 'runtimeReplicaCount')) {
+foreach ($scriptOwnedName in @('operatorKeySecret', 'adminOidcClientSecret', 'runtimeReplicaCount', 'initialOperatorPassword')) {
     if ($null -ne $parameters.PSObject.Properties[$scriptOwnedName]) {
         throw "Remove '$scriptOwnedName' from the nonsecret Bicep parameter file; deploy.ps1 owns it."
     }
@@ -311,6 +310,7 @@ $serviceBusResourceGroup = [string]$parameters.PSObject.Properties['serviceBusRe
 $adminOidcAuthority = [string]$parameters.PSObject.Properties['adminOidcAuthority']?.Value.value
 $adminOidcClientId = [string]$parameters.PSObject.Properties['adminOidcClientId']?.Value.value
 $adminOidcEnabled = -not [string]::IsNullOrWhiteSpace($adminOidcAuthority)
+$adminPasswordEnabled = $parameters.PSObject.Properties['adminPasswordEnabled']?.Value.value -ne $false
 
 if ($parameterLocation -ne $Location) { throw "Parameter location '$parameterLocation' must match -Location '$Location'." }
 # Azure accepts an allow-all restriction, and the template silently disables Service Bus access
@@ -394,6 +394,18 @@ Write-Host 'Scaling runtime to zero and reconciling infrastructure...'
 Invoke-Deployment -RuntimeReplicaCount 0
 $outputs = Get-DeploymentOutputs
 
+# minReplicas=0 still permits HTTP activation. Deactivate revisions during setup so a request
+# cannot race first-Operator creation through OIDC or run against an incompletely migrated schema.
+foreach ($app in $outputs.appNames.value.PSObject.Properties.Value) {
+    $revisions = @(& az containerapp revision list --resource-group $ResourceGroup --name $app `
+        --query '[?properties.active].name' --output tsv --only-show-errors)
+    if ($LASTEXITCODE -ne 0) { throw "Could not read active revisions for $app." }
+    foreach ($revision in $revisions) {
+        Invoke-AzureCli containerapp revision deactivate --resource-group $ResourceGroup --name $app `
+            --revision $revision --output none --only-show-errors
+    }
+}
+
 if ($databaseProvider -eq 'postgres') {
     Write-Host 'Assigning the Migrate identity as the PostgreSQL Entra administrator...'
     Invoke-AzureCli postgres flexible-server microsoft-entra-admin create `
@@ -415,6 +427,11 @@ Invoke-Job -JobName $outputs.jobNames.value.grantRuntime
 Write-Host 'Running idempotent Bootstrap...'
 Invoke-Job -JobName $outputs.jobNames.value.bootstrap
 
+if ($adminPasswordEnabled) {
+    Write-Host 'Checking first-Operator initialization through the trusted setup job...'
+    Invoke-FirstOperatorSetup -JobName $outputs.jobNames.value.bootstrap
+}
+
 Write-Host 'Validating configured destination secret references without printing values...'
 Invoke-Job -JobName $outputs.jobNames.value.validateSecrets
 
@@ -423,6 +440,11 @@ Invoke-Deployment -RuntimeReplicaCount 1
 $outputs = Get-DeploymentOutputs
 
 foreach ($app in $outputs.appNames.value.PSObject.Properties.Value) {
+    $revision = & az containerapp show --resource-group $ResourceGroup --name $app `
+        --query properties.latestRevisionName --output tsv --only-show-errors
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($revision)) { throw "Could not read latest revision for $app." }
+    Invoke-AzureCli containerapp revision activate --resource-group $ResourceGroup --name $app `
+        --revision $revision --output none --only-show-errors
     Wait-HealthyRevision -AppName $app
 }
 
@@ -431,6 +453,7 @@ try { $null = Grant-DeploymentSettingsReader $settingsVault }
 catch { Write-Warning "Grant yourself Key Vault Secrets User on $settingsVault to read its stored values: $_" }
 
 Write-Host "Ready: https://$($outputs.adminFqdn.value)"
+if ($adminPasswordEnabled) { Write-Host 'Dashboard password login is enabled; use your provisioned Operator credential.' }
 Write-Host "Ingestion: https://$($outputs.ingestionFqdn.value)"
 Write-Host "Source-secret vault: $($outputs.secretVaults.value.source)"
 Write-Host "Destination-secret vault: $($outputs.secretVaults.value.destination)"

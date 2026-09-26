@@ -84,22 +84,20 @@ public sealed class DashboardPackagingTests(PackagedDeploymentFixture fixture)
         using HttpResponseMessage session = await fixture.AdminClient.GetAsync("/auth/session");
         session.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
 
-        // An unauthenticated API call answers 401 rather than redirecting an XHR to the provider,
-        // even though a browser sign-in path is configured in this deployment.
+        // An unauthenticated API call answers 401 while the browser sign-in surface is enabled.
         using HttpResponseMessage api = await fixture.AdminClient.GetAsync("/admin/tenants");
         api.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
-    public async Task AuthenticationOptions_ReportBothPackagedSignInMethods()
+    public async Task AuthenticationOptions_DefaultToPasswordWithoutAnIdentityProvider()
     {
         using HttpResponseMessage response = await fixture.AdminClient.GetAsync("/auth/options");
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         using JsonDocument document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         JsonElement options = document.RootElement;
-        options.GetProperty("oidc_enabled").GetBoolean().ShouldBeTrue();
+        options.GetProperty("oidc_enabled").GetBoolean().ShouldBeFalse();
         options.GetProperty("password_enabled").GetBoolean().ShouldBeTrue();
-        options.GetProperty("oidc_display_name").GetString().ShouldBe("Acceptance SSO");
         options.GetProperty("antiforgery_token").GetString().ShouldNotBeNullOrWhiteSpace();
     }
 

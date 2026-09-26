@@ -16,7 +16,7 @@ provisions Service Bus topology.
 | Area | Supplied reference |
 |---|---|
 | Runtime | One Admin, Ingestion, and Worker replica; no autoscaling or zone redundancy |
-| Admin | External HTTPS restricted to explicit Operator CIDRs; optional Microsoft Entra ID dashboard sign-in; durable Data Protection keys shared through storage-encrypted Azure Files |
+| Admin | External HTTPS restricted to explicit Operator CIDRs; password sign-in enabled by default and optional Microsoft Entra ID; durable Data Protection keys shared through storage-encrypted Azure Files |
 | Ingestion | External HTTPS by default; may be internal independently of Service Bus access |
 | Network | Public Container Apps environment, Key Vault, telemetry endpoints, and database firewall rules; no VNet or private endpoints. The Data Protection share is reachable from public networks with its storage account key, because Container Apps mounts it with that key and only a VNet could restrict it; treat the key as a credential that can forge Operator sessions |
 | Azure SQL | General Purpose serverless, one vCore maximum, 0.5 minimum capacity, 60-minute auto-pause, local backup redundancy |
@@ -70,9 +70,10 @@ Admin; the namespace role alone does not create or select a broker entity.
 
 ## Deploy or update
 
-Use the supplied command for both initial deployment and updates. It needs no secret input
-unless dashboard sign-in is enabled, when it prompts for the OpenID Connect client secret without
-echoing it:
+Use the supplied command for both initial deployment and updates. On fresh password-enabled
+deployments, `-InteractiveSetup` prompts for the first Operator's display name, email and a masked,
+confirmed password. Existing accounts are detected through the setup job and require no initial
+password on redeployment. Optional OpenID Connect configuration also prompts for its client secret:
 
 ```powershell
 Copy-Item ./main.example.bicepparam ./main.bicepparam
@@ -81,7 +82,8 @@ Copy-Item ./main.example.bicepparam ./main.bicepparam
 ./deploy.ps1 `
   -ResourceGroup 'rg-integrios-reference' `
   -Location 'canadacentral' `
-  -ParametersFile ./main.bicepparam
+  -ParametersFile ./main.bicepparam `
+  -InteractiveSetup
 ```
 
 ### What the command does
@@ -91,12 +93,40 @@ Copy-Item ./main.example.bicepparam ./main.bicepparam
    Service Bus and sign-in settings.
 2. For a `release`, imports any missing images and resolves each to its digest.
 3. Reads the stored initial OperatorKey secret, or generates it on the first deployment.
-4. Reconciles infrastructure with all runtime replicas at zero.
+4. Reconciles infrastructure with all runtime replicas at zero and deactivates revisions to prevent
+   HTTP requests from waking them during setup.
 5. Runs migrations as the Migrate identity, the schema owner and database Entra administrator.
 6. Grants control-plane scope to Admin and Bootstrap, and data-plane scope to Ingestion, Worker,
    and secret validation.
-7. Runs idempotent Bootstrap and destination-secret validation.
-8. Starts one replica of each app and waits for healthy revisions.
+7. Runs idempotent OperatorKey Bootstrap, checks first-Operator state, provisions only when empty
+   and password login is enabled, cleans up the temporary credential, then validates destination secrets.
+8. Starts one replica of each app, activates the latest revisions and waits for healthy revisions.
+
+### First Operator and safe redeployment
+
+Password login defaults to enabled. Set `adminPasswordEnabled = false` to explicitly select
+OIDC-only or API-only operation; this skips password provisioning and preserves existing credentials.
+An existing User, including an OIDC User or one with a disabled password, makes first-Operator setup
+a no-op. Changing setup inputs never changes an account or resets its password. Use the interactive
+`operator-user set-password` CLI for explicit credential management.
+
+Automation supplies `-InitialOperatorDisplayName`, `-InitialOperatorEmail`, and
+`-InitialOperatorPassword` as a `SecureString` obtained from its secret store. Without complete inputs
+or `-InteractiveSetup`, an empty database fails clearly before runtime starts. Do not put passwords
+in the parameter file, command-line literals, shell history, or environment files.
+
+The existing Bootstrap job temporarily receives a Container Apps secret mounted as a file. Only
+that job sees the initial password; Admin does not receive it. The command restores the job template,
+removing the secret and mount before the final Bicep reconciliation. Its local request file is
+restricted to the current user before writing and deleted in `finally`. No initial password enters
+ARM deployment parameters or deployment history. Completed job executions may retain the secret
+reference and setup email, but not the secret value.
+
+If cleanup fails or the command is interrupted, keep runtime stopped and rerun the deployment.
+The initial reconciliation restores the normal credential-free first-Operator setup state, and the
+database guard preserves any account already created. After a forced interruption, remove any
+`integrios-setup-*.json` temporary files owned by the interrupted process. Do not run overlapping
+deployments against the same resource group: they share the Bootstrap job template.
 
 A failed migration, grant, Bootstrap, or validation job leaves runtime stopped. After a schema
 migration, recover by rolling forward or restoring the database rather than starting an older image
@@ -178,9 +208,8 @@ take a few minutes to apply.
 
 ## Dashboard sign-in with Microsoft Entra ID
 
-The reference deploys Admin without dashboard sign-in until you configure it; the dashboard loads
-and OperatorKey automation works either way. Admin's address exists only after the first
-deployment, so enabling sign-in takes two runs:
+Password sign-in works without an identity provider. Microsoft Entra ID is optional and can be
+added later. Admin's address exists only after the first deployment, so enabling OIDC takes two runs:
 
 1. Deploy with `adminOidcAuthority` and `adminOidcClientId` empty. The command prints the OpenID
    Connect redirect and sign-out redirect URIs; the `adminOidcRedirectUris` deployment output holds

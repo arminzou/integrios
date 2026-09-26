@@ -3,6 +3,8 @@ using Integrios.Domain.Entities;
 using Integrios.Infrastructure.Data;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
+using Dapper;
 using Npgsql;
 
 namespace Integrios.Infrastructure.Identity;
@@ -10,6 +12,36 @@ namespace Integrios.Infrastructure.Identity;
 internal sealed class PasswordCredentialStore(IntegriosDbContext context)
     : IPasswordCredentialLifecycle, IOperatorUserQueries, IPasswordAuthenticationStore
 {
+    public Task<bool> IsInitializedAsync(CancellationToken cancellationToken) =>
+        context.Users.AsNoTracking().AnyAsync(cancellationToken);
+
+    public Task<bool> CreateFirstAsync(User user, PasswordCredential credential, CancellationToken cancellationToken) =>
+        context.Database.CreateExecutionStrategy().ExecuteAsync(async ct =>
+        {
+            context.ChangeTracker.Clear();
+            await using var transaction = await context.Database.BeginTransactionAsync(ct);
+            // Serialize the empty-table decision, including attempts with different emails.
+            if (DatabaseProviders.FromContext(context.Database) == DatabaseProvider.Postgres)
+            {
+                await context.Database.ExecuteSqlRawAsync("LOCK TABLE users IN EXCLUSIVE MODE", ct);
+            }
+            else
+            {
+                await context.Database.GetDbConnection().ExecuteScalarAsync<int>(new CommandDefinition(
+                    "SELECT COUNT(*) FROM users WITH (TABLOCKX, HOLDLOCK)",
+                    transaction: transaction.GetDbTransaction(), cancellationToken: ct));
+            }
+
+            if (await IsInitializedAsync(ct))
+                return false;
+
+            context.Users.Add(user);
+            context.PasswordCredentials.Add(credential);
+            await context.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+            return true;
+        }, cancellationToken);
+
     public Task<PasswordAuthenticationCredential?> FindEnabledAsync(
         string normalizedEmail,
         CancellationToken cancellationToken) =>

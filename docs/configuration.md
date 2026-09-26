@@ -47,7 +47,7 @@ With both disabled, Admin still accepts OperatorKey automation.
 
 | Configuration key | Environment variable | Default or required value | Valid values and effect |
 |---|---|---|---|
-| `Integrios:Admin:Password:Enabled` | `Integrios__Admin__Password__Enabled` | `false` | Boolean; shows the managed-password sign-in path when enabled. |
+| `Integrios:Admin:Password:Enabled` | `Integrios__Admin__Password__Enabled` | `true` | Boolean; shows the managed-password sign-in path. Set `false` explicitly for OIDC-only or API-only deployments. |
 | `Integrios:Admin:Session:Lifetime` | `Integrios__Admin__Session__Lifetime` | `08:00:00` | Positive `TimeSpan`; non-sliding browser session lifetime. |
 | `Integrios:Admin:Oidc:Authority` | `Integrios__Admin__Oidc__Authority` | Unset: OIDC disabled | Non-empty issuer when OIDC is enabled. |
 | `Integrios:Admin:Oidc:ClientId` | `Integrios__Admin__Oidc__ClientId` | Required when OIDC is enabled | Non-blank client ID. |

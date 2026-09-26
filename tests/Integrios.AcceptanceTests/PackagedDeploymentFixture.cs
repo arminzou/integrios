@@ -70,13 +70,11 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
             ["INTEGRIOS_DATA_RUNTIME_PASSWORD"] = "acceptance_data_runtime",
             ["INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET"] = "acceptance-admin-secret",
             ["INTEGRIOS_PUBLIC_INGESTION_BASE_URI"] = "https://acceptance.example.test",
-            // Exercise the packaged dashboard with both human methods configured. No OIDC sign-in
-            // happens here and this authority is never reached: the real provider round trip and
-            // password lifecycle are Functional gates.
-            ["INTEGRIOS_ADMIN_OIDC_AUTHORITY"] = "https://oidc.invalid/",
-            ["INTEGRIOS_ADMIN_OIDC_CLIENT_ID"] = "integrios-acceptance",
-            ["INTEGRIOS_ADMIN_OIDC_DISPLAY_NAME"] = "Acceptance SSO",
-            ["INTEGRIOS_ADMIN_PASSWORD_ENABLED"] = "true",
+            // Prove the password default without an identity provider. Empty overrides also
+            // prevent a contributor's environment from supplying OIDC configuration.
+            ["INTEGRIOS_ADMIN_OIDC_AUTHORITY"] = "",
+            ["INTEGRIOS_ADMIN_OIDC_CLIENT_ID"] = "",
+            ["INTEGRIOS_ADMIN_PASSWORD_ENABLED"] = "",
             ["INTEGRIOS_BOOTSTRAP_IMAGE"] = $"{projectName}-bootstrap",
             ["INTEGRIOS_ADMIN_IMAGE"] = $"{projectName}-admin",
             ["INTEGRIOS_INGESTION_IMAGE"] = $"{projectName}-ingestion",
@@ -278,6 +276,19 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
         composeArguments.Add("worker");
         composeArguments.AddRange(arguments);
         return await RunComposeAsync(TimeSpan.FromMinutes(2), composeArguments.ToArray());
+    }
+
+    public async Task<ComposeResult> RunOperatorBootstrapAsync(string? passwordFile = null)
+    {
+        var arguments = new List<string> { "run", "--rm", "--no-deps" };
+        if (passwordFile is not null)
+            arguments.AddRange(["--volume", $"{passwordFile}:/run/initial-operator-password:ro"]);
+        arguments.AddRange(["admin", "operator-user", "bootstrap"]);
+        if (passwordFile is not null)
+            arguments.AddRange([
+                "--display-name", "Acceptance Operator", "--email", "operator@example.test",
+                "--password-file", "/run/initial-operator-password"]);
+        return await RunComposeAsync(TimeSpan.FromMinutes(2), arguments.ToArray());
     }
 
     // Revokes the bootstrap OperatorKey deployment-wide. Every later control-plane call in this

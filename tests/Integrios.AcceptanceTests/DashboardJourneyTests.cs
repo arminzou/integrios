@@ -16,7 +16,42 @@ public sealed class DashboardJourneyTests(PackagedDeploymentFixture fixture)
     private static readonly TimeSpan JourneyTimeout = TimeSpan.FromMinutes(8);
 
     [Fact]
-    public async Task GoldenAuthoringJourney_IsAcceptedByThePackagedAdminApi()
+    public Task GoldenAuthoringJourney_IsAcceptedByThePackagedAdminApi() =>
+        RunBrowserJourneyAsync("journey.browser.test.ts");
+
+    [Fact]
+    public async Task FirstOperatorBootstrap_AllowsPackagedPasswordLoginAndPreservesCredentialsOnRepeat()
+    {
+        (await fixture.ScalarAsync<long>("SELECT COUNT(*) FROM users")).ShouldBe(0);
+        string passwordFile = Path.Combine(Path.GetTempPath(), $"integrios-initial-password-{Guid.NewGuid():N}");
+        await File.WriteAllTextAsync(passwordFile, $"Acceptance-{Guid.NewGuid():N}!", new System.Text.UTF8Encoding(false));
+        try
+        {
+            // The disposable test credential is mounted read-only, never supplied in argv/env.
+            ComposeResult created = await fixture.RunOperatorBootstrapAsync(passwordFile);
+            created.ExitCode.ShouldBe(0, created.Output);
+            (await fixture.ScalarAsync<long>("SELECT COUNT(*) FROM users")).ShouldBe(1);
+            (await fixture.ScalarAsync<long>("SELECT COUNT(*) FROM password_credentials")).ShouldBe(1);
+            const string snapshotSql = "SELECT json_build_object('user', row_to_json(u), 'credential', row_to_json(p))::text FROM users u JOIN password_credentials p ON p.user_id = u.id";
+            await RunBrowserJourneyAsync("password-login.browser.test.ts", passwordFile);
+            string before = await fixture.ScalarAsync<string>(snapshotSql);
+
+            ComposeResult repeated = await fixture.RunOperatorBootstrapAsync();
+            repeated.ExitCode.ShouldBe(0, repeated.Output);
+            (await fixture.ScalarAsync<long>("SELECT COUNT(*) FROM users")).ShouldBe(1);
+            (await fixture.ScalarAsync<long>("SELECT COUNT(*) FROM password_credentials")).ShouldBe(1);
+            string after = await fixture.ScalarAsync<string>(snapshotSql);
+            // Do not let assertion output include the stored hash on failure.
+            string.Equals(before, after, StringComparison.Ordinal).ShouldBeTrue("Repeated bootstrap changed the User or credential.");
+            await RunBrowserJourneyAsync("password-login.browser.test.ts", passwordFile);
+        }
+        finally
+        {
+            File.Delete(passwordFile);
+        }
+    }
+
+    private async Task RunBrowserJourneyAsync(string testFile, string? passwordFile = null)
     {
         string frontend = Path.Combine(fixture.RepoRoot, "src", "Integrios.Admin", "frontend");
         string vitest = Path.Combine(frontend, "node_modules", "vitest", "vitest.mjs");
@@ -35,13 +70,15 @@ public sealed class DashboardJourneyTests(PackagedDeploymentFixture fixture)
         foreach (string argument in (string[])[
             vitest,
             "run",
-            "tests/e2e/journey.browser.test.ts",
+            $"tests/e2e/{testFile}",
             "--reporter=default",
             "--reporter=json",
             $"--outputFile.json={report}"])
             startInfo.ArgumentList.Add(argument);
         startInfo.Environment["INTEGRIOS_JOURNEY_ORIGIN"] = fixture.AdminClient.BaseAddress!.GetLeftPart(UriPartial.Authority);
         startInfo.Environment["INTEGRIOS_JOURNEY_OPERATOR_KEY"] = fixture.AdminAuthorization;
+        if (passwordFile is not null)
+            startInfo.Environment["INTEGRIOS_JOURNEY_PASSWORD_FILE"] = passwordFile;
         startInfo.Environment["NO_COLOR"] = "1";
 
         Process process;

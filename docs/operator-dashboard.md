@@ -74,30 +74,46 @@ HTTPS validation enabled outside local development.
 
 ## Email and password
 
-Password sign-in is disabled by default. First create a credential through the interactive Admin
-CLI connected to the deployment database:
+Password sign-in is enabled by default. After database migration and runtime grants, provision the
+first OperatorUser through the interactive Admin CLI connected to the deployment database:
 
 ```bash
-docker compose run --rm admin operator-user create \
+docker compose run --rm admin operator-user bootstrap \
   --display-name "Deployment operator" \
   --email "operator@example.com"
 ```
 
-The CLI prompts for the password twice without echoing it. It refuses redirected input and never
-accepts a password in arguments, environment variables, or configuration.
+On an empty deployment, the CLI prompts for the password twice using masked input. The User and
+Password credential are created atomically. If any User already exists, including an OIDC User,
+the command reports that setup is already complete and changes nothing. Repeating setup never
+resets a password, changes an email, or re-enables a disabled credential.
 
-Then set and apply:
+To explicitly disable password login, set and apply:
 
 ```dotenv
-INTEGRIOS_ADMIN_PASSWORD_ENABLED=true
+INTEGRIOS_ADMIN_PASSWORD_ENABLED=false
 ```
 
 ```bash
 docker compose up -d admin
 ```
 
-Password sign-in can enable the dashboard by itself. If OIDC is also configured, the dashboard
+Upgrades also use the enabled default when the setting was omitted. Set it to `false` explicitly
+before upgrading an OIDC-only or API-only installation. Enabling the form grants nobody access
+until a Password credential exists. If OIDC is also configured, the dashboard
 shows **Continue with _provider_** before the email-and-password form.
+
+For automated initial setup only, `operator-user bootstrap` accepts `--password-file <path>`
+pointing to a protected UTF-8 secret file. Its contents are read exactly: do not append a newline.
+Mount the file only into the setup process and remove it afterwards. Never supply the password
+itself as an argument, environment variable, or ordinary configuration value. An existing User
+makes bootstrap a no-op even when that file is absent. `operator-user bootstrap-status` reports
+an `initialized` JSON boolean through the trusted CLI without exposing credentials.
+
+Additional accounts use `operator-user create` with the same display-name and email arguments.
+Ordinary credential-management commands retain masked interactive password confirmation and
+refuse redirected password input. Configuring OIDC later does not automatically link the initial
+password account by email; attaching a Password credential to an existing OIDC User uses User.Id.
 
 To run the same commands from a source checkout, replace `docker compose run --rm admin` with:
 

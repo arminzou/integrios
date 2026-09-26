@@ -70,7 +70,7 @@ public sealed class DashboardShellTests(AdminApiFixture fixture)
             // reads, so it reports "no sign-in method is configured" rather than a bare 404 or a
             // dead API.
             using WebApplicationFactory<Program> withoutOidc = fixture.WebFactory.WithWebHostBuilder(
-                builder => builder.UseWebRoot(webRoot));
+                builder => builder.UseWebRoot(webRoot).UseSetting(OperatorPasswordOptions.EnabledKey, "false"));
             using HttpClient unavailable = withoutOidc.CreateClient();
             using HttpResponseMessage unavailableRoot = await unavailable.GetAsync("/");
             unavailableRoot.StatusCode.ShouldBe(HttpStatusCode.OK);

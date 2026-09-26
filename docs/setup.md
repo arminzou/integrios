@@ -11,10 +11,19 @@ delivery.
 ## Start the stack
 
 ```bash
-make up   # builds images, starts Postgres, runs migrations, grants runtime scopes, bootstrap, then services
+docker compose build
+docker compose up -d postgres migrate grant-runtime bootstrap
+docker compose run --rm admin operator-user bootstrap \
+  --display-name "Deployment operator" --email "operator@example.com"
+make up
 ```
 
-No configuration is needed: the dev stack carries working defaults. To override any of them,
+The first-Operator command prompts for your password on an empty database. Complete it successfully
+before starting runtime. On later starts use `make up`; repeated first-Operator setup preserves
+existing accounts. For machine-only development, explicitly set `INTEGRIOS_ADMIN_PASSWORD_ENABLED=false`
+and omit human-account setup.
+
+The dev stack carries working infrastructure defaults. To override any of them,
 create a `.env` file (see the environment variables table below).
 
 The checkout includes the `secrets/` mount directory used by the default file-based secret
@@ -30,9 +39,9 @@ against an existing EF-managed database is safe. A fresh deployment contains zer
 the Operator applies a manifest. The dev credential
 `global_operator_key:operator_bootstrap_secret` comes from `INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET` in `.env`.
 
-To use the browser dashboard, configure either supported human sign-in method and create any needed
-Password credential by following [Operator dashboard access](operator-dashboard.md). The dashboard
-is intentionally absent while both OIDC and password sign-in are disabled.
+Password login is enabled by default, and OIDC can be configured independently. See
+[Operator dashboard access](operator-dashboard.md) for credential management and recovery.
+When both methods are disabled, the dashboard reports that no sign-in method is configured.
 
 The EF Core cutover does not upgrade databases created by the former Flyway migration path. Delete
 the old local database volume before starting this version; this permanently removes its data:
@@ -214,7 +223,7 @@ defaults, and valid values across all three hosts, see the
 | `DOTNET_ENVIRONMENT`                | `Development`            | Makefile bootstrap targets  | Selects `appsettings.Development.json` |
 | `INTEGRIOS_ADMIN_OIDC_AUTHORITY` | empty | Admin | OIDC issuer; setting it enables OIDC dashboard sign-in |
 | `INTEGRIOS_ADMIN_OIDC_DISPLAY_NAME` | `OpenID Connect` | Admin | Provider label shown on the sign-in gate |
-| `INTEGRIOS_ADMIN_PASSWORD_ENABLED` | `false` | Admin | Enables Integrios-managed password sign-in |
+| `INTEGRIOS_ADMIN_PASSWORD_ENABLED` | `true` | Admin | Enables Integrios-managed password sign-in; set false explicitly to disable |
 | `INTEGRIOS_DESTINATION_SECRETS_DIR` | `./secrets/destinations` | Worker | Host key-per-file directory mounted read-only at `/run/secrets/integrios` |
 | `INTEGRIOS_SOURCE_SECRETS_DIR` | `./secrets/sources` | Ingestion | Host key-per-file directory mounted read-only at `/run/secrets/integrios` |
 
