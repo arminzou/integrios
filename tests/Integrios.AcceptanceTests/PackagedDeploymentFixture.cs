@@ -66,6 +66,8 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
             ["INTEGRIOS_DESTINATION_SECRETS_DIR"] = destinationSecretsDirectory,
             ["POSTGRES_USER"] = "integrios",
             ["POSTGRES_PASSWORD"] = "acceptance_postgres",
+            ["INTEGRIOS_ADMIN_RUNTIME_PASSWORD"] = "acceptance_admin_runtime",
+            ["INTEGRIOS_DATA_RUNTIME_PASSWORD"] = "acceptance_data_runtime",
             ["INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET"] = "acceptance-admin-secret",
             ["INTEGRIOS_PUBLIC_INGESTION_BASE_URI"] = "https://acceptance.example.test",
             // Exercise the packaged dashboard with both human methods configured. No OIDC sign-in
@@ -131,6 +133,7 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
                 Path.Combine(repoRoot, "tests", "Integrios.AcceptanceTests", "compose.acceptance.yml"),
             ];
             await StartDeploymentAsync(buildImages: false);
+            await AssertGrantRuntimeRejectsEmptyPasswordAsync();
             await AssertServerEnvironmentsAsync("Production");
             await AssertBootstrapStateAsync();
             HttpConnectorId = await ApplyExampleManifestAsync("http");
@@ -471,6 +474,7 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
             "--remove-orphans",
             "postgres",
             "migrate",
+            "grant-runtime",
             "bootstrap",
             "ingestion",
             "admin",
@@ -497,6 +501,21 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
         WireMockSink = new WireMockSink(wireMockClient);
         WorkerOperationalClient = CreateClient(workerMetricsPort);
         await WaitUntilReadyAsync(expectCollector: !buildImages);
+    }
+
+    private async Task AssertGrantRuntimeRejectsEmptyPasswordAsync()
+    {
+        ComposeResult result = await RunComposeAsync(
+            TimeSpan.FromMinutes(1),
+            "run",
+            "--rm",
+            "--no-deps",
+            "-e",
+            "Database__RuntimePrincipals__0__Password=",
+            "grant-runtime");
+        string output = result.StandardOutput + result.StandardError;
+        result.ExitCode.ShouldNotBe(0);
+        output.ShouldContain("Database:RuntimePrincipals:0:Password is present but empty.");
     }
 
     private async Task StopDeploymentAsync()

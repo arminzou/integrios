@@ -15,7 +15,7 @@ public sealed record AcceptVerifiedWebhookCommand(
     string? ContentType,
     IReadOnlyDictionary<string, string> Headers,
     ReadOnlyMemory<byte> RawBody)
-    : IRequest<IngestEventResult>;
+    : IRequest<IngestEventResult>, IStartsEventTrace;
 
 internal sealed class AcceptVerifiedWebhookCommandHandler(
     ISourceEndpointResolver endpointResolver,

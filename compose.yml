@@ -30,11 +30,7 @@ services:
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER:-integrios};Password=${POSTGRES_PASSWORD:-integrios_dev}
     command: ["database", "migrate"]
 
-  bootstrap:
-    # Same command as production. What makes this stack dev-only is the well-known dev secret
-    # defaulted below (override via .env / INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET), plus the bundled
-    # WireMock/Grafana. Never deploy this compose file unchanged to a public/prod environment;
-    # see deploy/ for the production reference.
+  grant-runtime:
     build:
       context: .
       dockerfile: Dockerfile
@@ -46,6 +42,28 @@ services:
         condition: service_completed_successfully
     environment:
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER:-integrios};Password=${POSTGRES_PASSWORD:-integrios_dev}
+      Database__RuntimePrincipals__0__Name: admin_runtime
+      Database__RuntimePrincipals__0__Scope: control-plane
+      Database__RuntimePrincipals__0__Password: ${INTEGRIOS_ADMIN_RUNTIME_PASSWORD:-admin_runtime_dev}
+      Database__RuntimePrincipals__1__Name: data_runtime
+      Database__RuntimePrincipals__1__Scope: data-plane
+      Database__RuntimePrincipals__1__Password: ${INTEGRIOS_DATA_RUNTIME_PASSWORD:-data_runtime_dev}
+    command: ["database", "grant-runtime"]
+
+  bootstrap:
+    # Same command as production. The runtime grant job precedes Bootstrap; the bundled
+    # WireMock/Grafana and disposable credential defaults make this stack dev-only.
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        PROJECT: Integrios.Admin
+    image: ${INTEGRIOS_BOOTSTRAP_IMAGE:-integrios-bootstrap:dev}
+    depends_on:
+      grant-runtime:
+        condition: service_completed_successfully
+    environment:
+      ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=admin_runtime;Password=${INTEGRIOS_ADMIN_RUNTIME_PASSWORD:-admin_runtime_dev}
       DOTNET_ENVIRONMENT: Development
       INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET: ${INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET:-operator_bootstrap_secret}
     command: ["bootstrap"]
@@ -61,7 +79,7 @@ services:
       bootstrap:
         condition: service_completed_successfully
     environment:
-      ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER:-integrios};Password=${POSTGRES_PASSWORD:-integrios_dev}
+      ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=data_runtime;Password=${INTEGRIOS_DATA_RUNTIME_PASSWORD:-data_runtime_dev}
       DOTNET_ENVIRONMENT: Development
     # Key-per-file configuration: each file name is a configuration key with "__" as the section
     # separator, e.g. SourceSecrets__<tenant-slug>__<secret-reference>. Read once at startup.
@@ -84,7 +102,7 @@ services:
       bootstrap:
         condition: service_completed_successfully
     environment:
-      ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER:-integrios};Password=${POSTGRES_PASSWORD:-integrios_dev}
+      ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=admin_runtime;Password=${INTEGRIOS_ADMIN_RUNTIME_PASSWORD:-admin_runtime_dev}
       DOTNET_ENVIRONMENT: Development
       Integrios__PublicIngestionBaseUri: ${INTEGRIOS_PUBLIC_INGESTION_BASE_URI:-http://localhost:5231}
       # Either OIDC or password sign-in serves the dashboard. With both unset/disabled, Admin stays
@@ -113,7 +131,7 @@ services:
       bootstrap:
         condition: service_completed_successfully
     environment:
-      ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER:-integrios};Password=${POSTGRES_PASSWORD:-integrios_dev}
+      ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=data_runtime;Password=${INTEGRIOS_DATA_RUNTIME_PASSWORD:-data_runtime_dev}
       DOTNET_ENVIRONMENT: Development
       # Completed-history retention is destructive and disabled by absence. To opt in, set a
       # period of at least seven days, then uncomment the mapping below.

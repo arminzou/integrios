@@ -2,7 +2,7 @@ using System.Data.Common;
 using System.Net;
 using System.Text.Json;
 using Dapper;
-using Integrios.Application.Ingestion;
+using Integrios.Application.EventMonitoring;
 using Integrios.Infrastructure.Data;
 using Integrios.Infrastructure.Events;
 using Integrios.Tests.Shared;

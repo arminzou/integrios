@@ -3,8 +3,6 @@ param(
     [Parameter(Mandatory)] [string] $ResourceGroup,
     [Parameter(Mandatory)] [string] $Location,
     [Parameter(Mandatory)] [ValidateScript({ Test-Path -LiteralPath $_ -PathType Leaf })] [string] $ParametersFile,
-    [securestring] $DatabaseAdministratorPassword,
-    [switch] $RotateDatabasePassword,
     [securestring] $OperatorKeySecret,
     [securestring] $AdminOidcClientSecret
 )
@@ -34,16 +32,6 @@ function Get-ParameterValue([object] $Parameters, [string] $Name) {
     $property = $Parameters.PSObject.Properties[$Name]
     if ($null -eq $property) { throw "The parameter file must define '$Name'." }
     $property.Value.value
-}
-
-# Letters and digits only, with at least one of each class: meets the Azure SQL and PostgreSQL
-# complexity rules and needs no escaping inside a connection string.
-function New-DatabasePassword {
-    $alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
-    do {
-        $password = -join (1..32 | ForEach-Object { $alphabet[[Security.Cryptography.RandomNumberGenerator]::GetInt32($alphabet.Length)] })
-    } while ($password -cnotmatch '[A-Z]' -or $password -cnotmatch '[a-z]' -or $password -notmatch '[0-9]')
-    $password
 }
 
 # The same shape Bootstrap generates when it creates a key itself: 32 random bytes as lowercase hex.
@@ -98,11 +86,12 @@ function Grant-DeploymentSettingsReader([string] $VaultName) {
         --assignee $objectId `
         --role 'Key Vault Secrets User' `
         --scope $scope `
-        --query 'length(@)' `
+        --query '[0].id' `
         --output tsv `
         --only-show-errors
     if ($LASTEXITCODE -ne 0) { throw "Could not read role assignments on $VaultName." }
-    if ($assigned -ne '0') { return }
+    # The query avoids parentheses: az.cmd hands an unquoted argument to cmd.exe, which rejects them.
+    if (-not [string]::IsNullOrWhiteSpace($assigned)) { return }
 
     Write-Host "Granting the signed-in identity Key Vault Secrets User on $VaultName..."
     $null = Invoke-AzureCli role assignment create `
@@ -149,7 +138,6 @@ function Invoke-Deployment([int] $RuntimeReplicaCount) {
     $deploymentParameterFile = Join-Path ([IO.Path]::GetTempPath()) "integrios-azure-$([guid]::NewGuid().ToString('N')).json"
     try {
         $deploymentParameters = $compiled.parametersJson | ConvertFrom-Json -AsHashtable
-        $deploymentParameters.parameters.databaseAdministratorPassword = @{ value = ConvertFrom-SecureValue $DatabaseAdministratorPassword }
         $deploymentParameters.parameters.operatorKeySecret = @{ value = ConvertFrom-SecureValue $OperatorKeySecret }
         if ($adminOidcEnabled) {
             $deploymentParameters.parameters.adminOidcClientSecret = @{ value = ConvertFrom-SecureValue $AdminOidcClientSecret }
@@ -304,7 +292,7 @@ if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($compiled.parametersJso
 }
 $parameters = ($compiled.parametersJson | ConvertFrom-Json).parameters
 
-foreach ($scriptOwnedName in @('databaseAdministratorPassword', 'operatorKeySecret', 'adminOidcClientSecret', 'runtimeReplicaCount')) {
+foreach ($scriptOwnedName in @('operatorKeySecret', 'adminOidcClientSecret', 'runtimeReplicaCount')) {
     if ($null -ne $parameters.PSObject.Properties[$scriptOwnedName]) {
         throw "Remove '$scriptOwnedName' from the nonsecret Bicep parameter file; deploy.ps1 owns it."
     }
@@ -324,9 +312,6 @@ $adminOidcAuthority = [string]$parameters.PSObject.Properties['adminOidcAuthorit
 $adminOidcClientId = [string]$parameters.PSObject.Properties['adminOidcClientId']?.Value.value
 $adminOidcEnabled = -not [string]::IsNullOrWhiteSpace($adminOidcAuthority)
 
-if ($RotateDatabasePassword -and $null -ne $DatabaseAdministratorPassword) {
-    throw 'Use either -RotateDatabasePassword or -DatabaseAdministratorPassword, not both.'
-}
 if ($parameterLocation -ne $Location) { throw "Parameter location '$parameterLocation' must match -Location '$Location'." }
 # Azure accepts an allow-all restriction, and the template silently disables Service Bus access
 # when only one of its two names is set, so neither mistake would fail a deployment.
@@ -382,28 +367,10 @@ if (-not [string]::IsNullOrWhiteSpace($release)) {
     }
 }
 
-# The database administrator password and the initial OperatorKey are generated on the first
-# deployment, stored by the template in the deployment-settings vault, and passed back unchanged on
-# every later deployment, so an update never resets them. Explicit parameters take precedence.
+# The initial OperatorKey is stored by the template in the deployment-settings vault; database
+# access uses each workload's managed identity and carries no database password.
 $settingsVault = Find-DeploymentSettingsVault
 $generatedOperatorKey = $false
-if ($null -eq $DatabaseAdministratorPassword -and $settingsVault -and -not $RotateDatabasePassword) {
-    $storedPassword = Read-DeploymentSetting $settingsVault 'database-admin-password'
-    if ($storedPassword) {
-        $DatabaseAdministratorPassword = ConvertTo-SecureValue $storedPassword
-    }
-    else {
-        # Deployed before the password was stored: keep the current one, or leave the prompt empty
-        # to generate a new one.
-        $DatabaseAdministratorPassword = Read-Host 'Current database administrator password (leave empty to generate a new one)' -AsSecureString
-        if ($DatabaseAdministratorPassword.Length -eq 0) { $DatabaseAdministratorPassword = $null }
-    }
-    Remove-Variable storedPassword
-}
-if ($null -eq $DatabaseAdministratorPassword) {
-    Write-Host ($RotateDatabasePassword ? 'Rotating the database administrator password...' : 'Generating a new database administrator password...')
-    $DatabaseAdministratorPassword = ConvertTo-SecureValue (New-DatabasePassword)
-}
 if ($null -eq $OperatorKeySecret) {
     $storedOperatorKey = if ($settingsVault) { Read-DeploymentSetting $settingsVault 'operator-key-bootstrap' }
     if ($storedOperatorKey) {
@@ -427,8 +394,23 @@ Write-Host 'Scaling runtime to zero and reconciling infrastructure...'
 Invoke-Deployment -RuntimeReplicaCount 0
 $outputs = Get-DeploymentOutputs
 
+if ($databaseProvider -eq 'postgres') {
+    Write-Host 'Assigning the Migrate identity as the PostgreSQL Entra administrator...'
+    Invoke-AzureCli postgres flexible-server microsoft-entra-admin create `
+        --resource-group $ResourceGroup `
+        --server-name $outputs.databaseServerName.value `
+        --display-name $outputs.migrateIdentityName.value `
+        --object-id $outputs.migrateIdentityPrincipalId.value `
+        --type ServicePrincipal `
+        --only-show-errors `
+        --output none
+}
+
 Write-Host "Applying $databaseProvider migrations..."
 Invoke-Job -JobName $outputs.jobNames.value.migrate
+
+Write-Host 'Granting scoped access to runtime identities...'
+Invoke-Job -JobName $outputs.jobNames.value.grantRuntime
 
 Write-Host 'Running idempotent Bootstrap...'
 Invoke-Job -JobName $outputs.jobNames.value.bootstrap
@@ -454,7 +436,7 @@ Write-Host "Source-secret vault: $($outputs.secretVaults.value.source)"
 Write-Host "Destination-secret vault: $($outputs.secretVaults.value.destination)"
 Write-Host "OpenID Connect redirect URI: $($outputs.adminOidcRedirectUris.value.callback)"
 Write-Host "OpenID Connect sign-out redirect URI: $($outputs.adminOidcRedirectUris.value.signedOut)"
-Write-Host "Deployment-settings vault: $settingsVault (database-admin-password, operator-key-bootstrap)"
+Write-Host "Deployment-settings vault: $settingsVault (operator-key-bootstrap)"
 if ($generatedOperatorKey) {
     Write-Host "Read the initial OperatorKey secret with: az keyvault secret show --vault-name $settingsVault --name operator-key-bootstrap --query value --output tsv"
 }

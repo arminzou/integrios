@@ -92,11 +92,23 @@ defaults only. Do not put deployment credentials in `secrets/sources` or
 |---|---|---|---|
 | `ConnectionStrings:Postgres` | `ConnectionStrings__Postgres` | All three and Admin setup commands | Non-blank when `Database:Provider=postgres`. |
 | `ConnectionStrings:SqlServer` | `ConnectionStrings__SqlServer` | All three and Admin setup commands | Non-blank when `Database:Provider=sqlserver`. |
+| `Database:Postgres:Authentication` | `Database__Postgres__Authentication` | All three and Admin setup commands | `Password` (default) or `AzureEntra`; AzureEntra requires a username and a password-free connection string. |
+| `Database:RuntimePrincipals:<index>:Name` | `Database__RuntimePrincipals__<index>__Name` | Admin `database grant-runtime` | Required principal name. |
+| `Database:RuntimePrincipals:<index>:Scope` | `Database__RuntimePrincipals__<index>__Scope` | Admin `database grant-runtime` | `control-plane` or `data-plane`. |
+| `Database:RuntimePrincipals:<index>:Password` | `Database__RuntimePrincipals__<index>__Password` | Admin `database grant-runtime` | Optional; sets or replaces the password on every run. Printable ASCII without spaces, `;`, or quotes; at most 128 characters on SQL Server. Omit credential keys for grant-only mode. |
+| `Database:RuntimePrincipals:<index>:EntraClientId` | `Database__RuntimePrincipals__<index>__EntraClientId` | Admin `database grant-runtime` | Optional Azure SQL Entra client ID. |
+| `Database:RuntimePrincipals:<index>:EntraObjectId` | `Database__RuntimePrincipals__<index>__EntraObjectId` | Admin `database grant-runtime` | Optional Azure PostgreSQL Entra object ID. |
 | `INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET` | same | Admin `bootstrap` command | Non-empty in Production for the initial OperatorKey; supplied out of band. |
 | `INTEGRIOS_OPERATOR_KEY_ROTATION_SECRET` | same | Admin `operator-key rotate` command | Non-empty for a rotation. |
 | `Integrios:KeyVault:Uri` | `Integrios__KeyVault__Uri` | Ingestion, Worker | Optional. If set, the owning process loads its direction-specific vault at startup; an invalid or unreachable vault stops startup. |
 | `SourceSecrets:<tenant-slug>:<secret-reference>` | `SourceSecrets__<tenant-slug>__<secret-reference>` | Ingestion | Open-ended Tenant secret namespace; see [file and vault naming](../secrets/README.md). |
 | `DestinationSecrets:<tenant-slug>:<secret-reference>` | `DestinationSecrets__<tenant-slug>__<secret-reference>` | Worker | Open-ended Tenant secret namespace; see [file and vault naming](../secrets/README.md). |
+
+`database grant-runtime` requires a non-empty list with unique principal names and a `control-plane`
+or `data-plane` scope on every entry. Credential keys may be omitted for grant-only mode; if a key
+is present but empty, including an unset Compose variable, validation fails before SQL runs. A
+supplied Password is applied on every run. Entra IDs must be GUIDs, and the selected provider
+requires its matching ID. Do not pass secret values as command-line configuration.
 
 For Compose, `INTEGRIOS_SOURCE_SECRETS_DIR` defaults to `./secrets/sources` and
 `INTEGRIOS_DESTINATION_SECRETS_DIR` defaults to `./secrets/destinations` relative to the Compose

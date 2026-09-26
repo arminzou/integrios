@@ -1,6 +1,6 @@
-using Integrios.Admin.OperatorUsers;
+using Integrios.Admin.Cli;
 
-namespace Integrios.Admin.UnitTests.OperatorUsers;
+namespace Integrios.Admin.UnitTests.Cli;
 
 public sealed class OperatorUserCliTests
 {

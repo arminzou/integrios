@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 
-namespace Integrios.Application.Bootstrap;
+namespace Integrios.Application.Authoring.OperatorKeys;
 
 internal static class OperatorKeySecrets
 {

@@ -26,15 +26,31 @@ services:
       DOTNET_ENVIRONMENT: Production
     command: ["database", "migrate"]
 
-  # Idempotent one-shot: creates the first deployment-wide OperatorKey only when none is live.
-  # Production fails closed unless the Operator supplies a secret.
-  bootstrap:
+  grant-runtime:
     image: ghcr.io/arminzou/integrios/admin:${INTEGRIOS_VERSION:-0.9.0} # x-release-please-version
     depends_on:
       migrate:
         condition: service_completed_successfully
     environment:
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      DOTNET_ENVIRONMENT: Production
+      Database__RuntimePrincipals__0__Name: admin_runtime
+      Database__RuntimePrincipals__0__Scope: control-plane
+      Database__RuntimePrincipals__0__Password: ${INTEGRIOS_ADMIN_RUNTIME_PASSWORD}
+      Database__RuntimePrincipals__1__Name: data_runtime
+      Database__RuntimePrincipals__1__Scope: data-plane
+      Database__RuntimePrincipals__1__Password: ${INTEGRIOS_DATA_RUNTIME_PASSWORD}
+    command: ["database", "grant-runtime"]
+
+  # Idempotent one-shot: creates the first deployment-wide OperatorKey only when none is live.
+  # Production fails closed unless the Operator supplies a secret.
+  bootstrap:
+    image: ghcr.io/arminzou/integrios/admin:${INTEGRIOS_VERSION:-0.9.0} # x-release-please-version
+    depends_on:
+      grant-runtime:
+        condition: service_completed_successfully
+    environment:
+      ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=admin_runtime;Password=${INTEGRIOS_ADMIN_RUNTIME_PASSWORD}
       DOTNET_ENVIRONMENT: Production
       INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET: ${INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET:-}
     command: ["bootstrap"]
@@ -46,7 +62,7 @@ services:
       bootstrap:
         condition: service_completed_successfully
     environment:
-      ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=data_runtime;Password=${INTEGRIOS_DATA_RUNTIME_PASSWORD}
       DOTNET_ENVIRONMENT: Production
       # Broker Sources using azure_identity draw an ambient credential through
       # DefaultAzureCredential. Nothing below is set by default, so the working scheme out of the
@@ -73,7 +89,7 @@ services:
       bootstrap:
         condition: service_completed_successfully
     environment:
-      ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=admin_runtime;Password=${INTEGRIOS_ADMIN_RUNTIME_PASSWORD}
       DOTNET_ENVIRONMENT: Production
       Integrios__PublicIngestionBaseUri: ${INTEGRIOS_PUBLIC_INGESTION_BASE_URI}
       # Either OIDC or password sign-in serves the dashboard. With both unset/disabled, Admin stays
@@ -97,7 +113,7 @@ services:
       bootstrap:
         condition: service_completed_successfully
     environment:
-      ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=data_runtime;Password=${INTEGRIOS_DATA_RUNTIME_PASSWORD}
       DOTNET_ENVIRONMENT: Production
       # Completed-history retention is destructive and disabled by absence. To opt in, set a
       # period of at least seven days, then uncomment the mapping below.

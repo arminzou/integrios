@@ -1,5 +1,5 @@
 using Dapper;
-using Integrios.Application.Ingestion;
+using Integrios.Application.EventMonitoring;
 using Integrios.Infrastructure.Data;
 
 namespace Integrios.Infrastructure.Events;

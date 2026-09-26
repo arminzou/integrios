@@ -1,4 +1,7 @@
 using System.Diagnostics.Metrics;
+using System.Data.Common;
+using Azure.Core;
+using Azure.Identity;
 using Integrios.Application;
 using Integrios.Application.Authoring;
 using Integrios.Application.Authoring.Connectors;
@@ -10,6 +13,7 @@ using Integrios.Application.Authoring.TenantApiKeys;
 using Integrios.Application.Authoring.Tenants;
 using Integrios.Application.Authoring.Topics;
 using Integrios.Application.Delivery;
+using Integrios.Application.EventMonitoring;
 using Integrios.Application.Identity;
 using Integrios.Application.Ingestion;
 using Integrios.Application.Secrets;
@@ -63,6 +67,12 @@ public static class DependencyInjection
         string[] pending = (await context.Database.GetPendingMigrationsAsync(cancellationToken)).ToArray();
         return $"EF migrations: {applied.Length} applied, {pending.Length} pending.";
     }
+
+    public static Task GrantRuntimePrincipalsAsync(
+        this IServiceProvider services,
+        IConfiguration configuration,
+        CancellationToken cancellationToken = default) =>
+        RuntimePrincipalGrants.GrantAsync(services, configuration, cancellationToken);
 
     public static IServiceCollection AddAdminInfrastructureServices(
         this IServiceCollection services,
@@ -201,26 +211,70 @@ public static class DependencyInjection
         if (string.IsNullOrWhiteSpace(connectionString))
             throw new InvalidOperationException($"ConnectionStrings:{connectionName} is required.");
 
-        services.AddDbContextFactory<IntegriosDbContext>(
-            options => options.UseIntegriosProvider(databaseProvider, connectionString));
-
         if (databaseProvider == DatabaseProvider.SqlServer)
         {
+            if (configuration.AsEnumerable().Any(pair =>
+                    string.Equals(pair.Key, "Database:Postgres:Authentication", StringComparison.OrdinalIgnoreCase)))
+                throw new InvalidOperationException(
+                    "Database:Postgres:Authentication is only valid when Database:Provider is postgres.");
+
+            services.AddDbContextFactory<IntegriosDbContext>(
+                options => options.UseIntegriosProvider(databaseProvider, connectionString));
             services.AddSingleton<IDbConnectionFactory>(provider => new SqlServerConnectionFactory(
                 connectionString,
                 provider.GetRequiredService<IDbContextFactory<IntegriosDbContext>>()));
             return services;
         }
 
-        services.AddSingleton(_ =>
+        string authentication = configuration["Database:Postgres:Authentication"] switch
         {
-            var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
-            return dataSourceBuilder.Build();
-        });
+            null or "Password" => "Password",
+            "AzureEntra" => "AzureEntra",
+            string value => throw new InvalidOperationException(
+                "Database:Postgres:Authentication must be 'Password' or 'AzureEntra'."),
+        };
+
+        if (authentication == "AzureEntra")
+        {
+            var connection = new NpgsqlConnectionStringBuilder(connectionString);
+            if (string.IsNullOrWhiteSpace(connection.Username))
+                throw new InvalidOperationException(
+                    "ConnectionStrings:Postgres:Username is required for AzureEntra authentication.");
+            var configuredConnection = new DbConnectionStringBuilder { ConnectionString = connectionString };
+            if (configuredConnection.ContainsKey("Password") || configuredConnection.ContainsKey("Pwd"))
+                throw new InvalidOperationException(
+                    "ConnectionStrings:Postgres must not contain Password when Database:Postgres:Authentication is AzureEntra.");
+            services.AddSingleton<DefaultAzureCredential>();
+        }
+
+        services.AddSingleton<NpgsqlDataSource>(provider => BuildPostgresDataSource(
+            connectionString,
+            authentication == "AzureEntra" ? provider.GetRequiredService<DefaultAzureCredential>() : null));
+
+        services.AddDbContextFactory<IntegriosDbContext>(
+            (provider, options) => options.UseIntegriosProvider(
+                provider.GetRequiredService<NpgsqlDataSource>()));
 
         services.AddSingleton<IDbConnectionFactory, NpgsqlConnectionFactory>();
 
         return services;
+    }
+
+    // With a credential, each new physical connection asks it for an Entra token: the credential
+    // caches the token and renews it ahead of expiry, so a fixed refresh interval cannot hand out
+    // an expired one. Without one, the connection string carries the password.
+    internal static NpgsqlDataSource BuildPostgresDataSource(string connectionString, TokenCredential? credential)
+    {
+        var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
+        if (credential is not null)
+        {
+            var tokenRequest = new TokenRequestContext(["https://ossrdbms-aad.database.windows.net/.default"]);
+            dataSourceBuilder.UsePasswordProvider(
+                _ => credential.GetToken(tokenRequest, CancellationToken.None).Token,
+                async (_, cancellationToken) =>
+                    (await credential.GetTokenAsync(tokenRequest, cancellationToken)).Token);
+        }
+        return dataSourceBuilder.Build();
     }
 
     private static IServiceCollection AddDestinationAuthenticationServices(

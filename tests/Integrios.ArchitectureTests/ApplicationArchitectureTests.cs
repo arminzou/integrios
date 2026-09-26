@@ -13,6 +13,7 @@ public sealed class ApplicationArchitectureTests
     [
         "Integrios.Application.Authoring",
         "Integrios.Application.Identity",
+        "Integrios.Application.EventMonitoring",
         "Integrios.Application.Ingestion",
         "Integrios.Application.Delivery",
         "Integrios.Application.Secrets",

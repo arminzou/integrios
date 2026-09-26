@@ -1,7 +1,6 @@
-using Integrios.Application.Ingestion;
 using MediatR;
 
-namespace Integrios.Application.Delivery;
+namespace Integrios.Application.EventMonitoring;
 
 public sealed record GetTenantEventBacklogQuery(Guid TenantId) : IRequest<EventBacklogDto>;
 

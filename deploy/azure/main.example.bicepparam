@@ -12,7 +12,6 @@ param registryResourceGroupName = 'rg-container-images'
 param release = '0.9.0' // x-release-please-version
 
 param databaseProvider = 'sqlserver'
-param databaseAdministratorLogin = 'integrios_admin'
 
 param adminAllowedCidrs = [
   '203.0.113.10/32'

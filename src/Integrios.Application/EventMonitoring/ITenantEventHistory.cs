@@ -1,6 +1,6 @@
 using Integrios.Domain.Enums;
 
-namespace Integrios.Application.Ingestion;
+namespace Integrios.Application.EventMonitoring;
 
 // Separate from ITenantEventLookup: Ingestion resolves one Event by id, while only the Operator
 // control plane browses Tenant Event history behind a protected cursor.

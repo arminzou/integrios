@@ -42,10 +42,7 @@ The supplied OpenTelemetry Collector Contrib image is pinned by digest. Treat th
 trusted runtime code: Container Apps identities are app-scoped, so it shares each app's identity
 boundary while exporting that replica's traces and Prometheus metrics.
 
-Every app and job runs as exactly one user-assigned identity, and no app has a system-assigned
-identity. Each app's processes, including the Collector sidecar, select that identity through
-`AZURE_CLIENT_ID`. A deployment created before this change keeps role assignments that name the
-removed system-assigned identities; Azure shows them as unknown principals, and you can delete them.
+Every app and job runs as exactly one user-assigned identity, selected through `AZURE_CLIENT_ID`.
 
 ## Select a release
 
@@ -87,69 +84,41 @@ Copy-Item ./main.example.bicepparam ./main.bicepparam
   -ParametersFile ./main.bicepparam
 ```
 
-### Generated deployment secrets
+### What the command does
 
-The first deployment generates the database administrator password (32 letters and digits) and the
-initial OperatorKey secret (64 hexadecimal characters). The template stores them in the
-deployment-settings vault as `database-admin-password` and `operator-key-bootstrap`, and every later
-run reads them back and passes the same values, so an update never resets either one. The command
-grants the signed-in identity `Key Vault Secrets User` on that vault so it can read them; when that
-role is new, the next read waits for it to apply. Read the initial OperatorKey secret with:
+1. Checks what Azure cannot: no secret values in the parameter file, a release or digest-pinned
+   images from the configured registry, a matching location, no allow-all Admin CIDR, and paired
+   Service Bus and sign-in settings.
+2. For a `release`, imports any missing images and resolves each to its digest.
+3. Reads the stored initial OperatorKey secret, or generates it on the first deployment.
+4. Reconciles infrastructure with all runtime replicas at zero.
+5. Runs migrations as the Migrate identity, the schema owner and database Entra administrator.
+6. Grants control-plane scope to Admin and Bootstrap, and data-plane scope to Ingestion, Worker,
+   and secret validation.
+7. Runs idempotent Bootstrap and destination-secret validation.
+8. Starts one replica of each app and waits for healthy revisions.
+
+A failed migration, grant, Bootstrap, or validation job leaves runtime stopped. After a schema
+migration, recover by rolling forward or restoring the database rather than starting an older image
+set. Validation checks every Destination secret reference, so store a new Destination's secret
+before the next deployment.
+
+### Deployment secrets
+
+Database access uses managed identities, so there is no database password. The first deployment
+generates the initial OperatorKey secret and stores it in the deployment-settings vault as
+`operator-key-bootstrap`; later runs reuse it. The command grants you read access to that vault and
+prints its name. Read the secret with:
 
 ```powershell
 az keyvault secret show --vault-name <deployment-settings-vault> --name operator-key-bootstrap `
   --query value --output tsv
 ```
 
-The command prints the vault name at the end of each run; the `deploymentSettingsVault`
-deployment output holds it too. `operator-key-bootstrap` is only the secret Bootstrap used to create
-the first key. After `operator-key rotate`, it no longer authenticates.
-
-To rotate the database administrator password, run the command with `-RotateDatabasePassword`. It
-generates a new password and updates the server, the stored password, and the connection string in
-one deployment. Anything outside Integrios that connects with this login needs the new value.
-
-A deployment created before the password was stored prompts once for the current password and
-stores it. Leave the prompt empty to generate a new password instead, which rotates it.
-
-Automation may still pass `SecureString` values through `-DatabaseAdministratorPassword` and
-`-OperatorKeySecret`; an explicit value replaces the stored one. An explicit OperatorKey secret
-takes effect only while no key exists, because Bootstrap never replaces a live key. Pass
-`-AdminOidcClientSecret` when dashboard sign-in is enabled. Tenant secrets are never deployment
-inputs. The command rejects secret values in the `.bicepparam` file. For each ARM deployment it
-creates a randomly named temporary parameter file containing those plaintext values because Azure
-CLI requires materialized deployment parameters, opens it without file sharing, and deletes it
-immediately in `finally`. A forced process or machine
-termination can prevent that cleanup; inspect the current user's temporary directory before retrying
-after an interruption.
-
-The command always:
-
-1. checks locally only what Azure cannot: no secret values in the parameter file, either a
-   release version or digest-pinned images from the configured registry, a parameter location
-   matching `-Location`, no allow-all Admin CIDR, and paired Service Bus and dashboard sign-in
-   settings. Template parameter names and Azure naming rules are left to ARM validation, which runs
-   before any resource in the deployment changes;
-2. for a `release`, imports any of its images missing from the registry and resolves each to its
-   current digest;
-3. reads the stored database administrator password and initial OperatorKey secret from the
-   deployment-settings vault, or generates them on the first deployment;
-4. creates or resolves the resource group;
-5. reconciles infrastructure with all runtime replicas at zero;
-6. runs the selected provider's migrations;
-7. runs idempotent Bootstrap and destination-secret validation;
-8. reconciles the same images at one replica and waits for healthy active revisions.
-
-A failed migration, Bootstrap, or validation job leaves runtime stopped. After a schema migration,
-recover by rolling forward or restoring the database rather than starting an older image set.
-On a new deployment, Azure may report that a Container App or Job cannot fetch a Key Vault secret
-immediately after its managed identity receives access. The command retries only that error, with
-up to 20 attempts 30 seconds apart while the role assignment propagates. Other failures stop
-immediately.
-
-The validation job checks every Destination secret reference in the database against the
-Destination-secret vault. Store a new Destination's secret before the next deployment, or the
-deployment stops at validation with runtime stopped for every Tenant.
+It only seeds the first key: after `operator-key rotate` it no longer authenticates. Automation may
+pass `-OperatorKeySecret` and `-AdminOidcClientSecret` as `SecureString` values; secret values in the
+`.bicepparam` file are rejected. The command writes them to a temporary parameter file for Azure CLI
+and deletes it; after a forced interruption, check your temporary directory.
 
 ## Tenant secrets
 
@@ -163,15 +132,14 @@ can be added without editing or redeploying the template:
 | `destination` | Worker and the secret-validation job | `DestinationSecrets--<tenant-slug>--<secret-reference>` |
 
 Each identity holds `Key Vault Secrets User` on its own vault only, so neither runtime process can
-read the other direction's secrets. The deployment-settings vault is separate and unchanged. Keep
-anything else out of these two vaults: every secret in a vault becomes a configuration key of the
-process that reads it.
+read the other direction's secrets. The separate deployment-settings vault holds the bootstrap
+OperatorKey and optional dashboard OIDC secret. Keep anything else out of the Tenant-secret vaults:
+every secret in a vault becomes a configuration key of the process that reads it.
 
 The Key Vault configuration source maps `--` to the configuration separator, so
 `DestinationSecrets--acme--erp-api-key` resolves as `DestinationSecrets:acme:erp-api-key`. Key
-Vault secret names are at most 127 characters, which leaves 105 characters for the Tenant slug plus
-the secret reference in the Destination vault and 110 in the Source vault. Integrios does not
-enforce that limit; a longer pair cannot be stored in these vaults.
+Vault secret names are at most 127 characters, so keep each Tenant slug and secret reference pair
+short enough to fit behind the prefix.
 
 Once, after the first deployment, grant yourself write access to both vaults:
 
@@ -266,11 +234,11 @@ Observability failures do not participate in liveness or readiness.
 ## Troubleshooting
 
 - Inspect `main` under the resource group's deployments for an ARM failure.
-- Inspect migration, Bootstrap, and validation job executions before restarting runtime.
+- Inspect migration, grant, Bootstrap, and validation job executions before restarting runtime.
 - Inspect the active Container App revision and its application and Collector logs when readiness
   does not become healthy.
-- Confirm the selected database accepts Azure-service traffic and the credentials in Key Vault are
-  current.
+- Confirm the selected database accepts Azure-service traffic and the Migrate identity remains its
+  Entra administrator and schema owner.
 - Confirm each resolved image digest exists in the configured ACR and each user-assigned identity
   has `AcrPull`. The command prints the digests it resolved, and the `main` deployment records them
   as the `adminImage`, `ingestionImage`, and `workerImage` parameters.
@@ -287,6 +255,40 @@ Observability failures do not participate in liveness or readiness.
 `/health` is dependency-free liveness. `/ready` checks only the selected database. Service Bus,
 individual Sources, destinations, Key Vault after startup, and observability backends deliberately
 do not change either probe.
+
+## Emergency database access
+
+No person holds standing database access. In an emergency, an Azure administrator of the resource
+group grants it to themself temporarily from a workstation and removes it afterward. Objects created
+during the session are owned by that person; hand any new object to the Migrate identity before
+leaving.
+
+### PostgreSQL
+
+PostgreSQL allows several Entra administrators, so add yourself beside the Migrate identity:
+
+```powershell
+$me = az ad signed-in-user show --output json | ConvertFrom-Json
+az postgres flexible-server firewall-rule create --resource-group <resource-group> --server-name <postgres-server> --name break-glass --start-ip-address <your-ip> --end-ip-address <your-ip>
+az postgres flexible-server microsoft-entra-admin create --resource-group <resource-group> --server-name <postgres-server> --display-name $me.userPrincipalName --object-id $me.id --type User
+$env:PGPASSWORD = az account get-access-token --resource-type oss-rdbms --query accessToken --output tsv
+psql "host=<postgres-server>.postgres.database.azure.com dbname=integrios user=$($me.userPrincipalName) sslmode=require"
+```
+
+After the repair:
+
+```powershell
+az postgres flexible-server microsoft-entra-admin delete --resource-group <resource-group> --server-name <postgres-server> --object-id $me.id --yes
+az postgres flexible-server firewall-rule delete --resource-group <resource-group> --server-name <postgres-server> --name break-glass --yes
+```
+
+### Azure SQL
+
+Azure SQL has one Entra administrator. Add a temporary firewall rule for your address, replace the
+Migrate identity with yourself using `az sql server ad-admin create`, and connect with Entra
+authentication. Do not run `deploy.ps1` while you hold the role. Afterward, restore the Migrate
+identity with the same command and remove the firewall rule; the next `deploy.ps1` run also restores
+the administrator.
 
 ## Customize your copy
 

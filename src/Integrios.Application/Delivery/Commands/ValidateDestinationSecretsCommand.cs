@@ -7,36 +7,36 @@ using MediatR;
 
 namespace Integrios.Application.Delivery;
 
-public sealed record ValidateSecretsCommand(
+public sealed record ValidateDestinationSecretsCommand(
     string? TenantSlug,
     Guid? DestinationId,
-    bool All) : IRequest<SecretValidationReport>;
+    bool All) : IRequest<DestinationSecretValidationReport>;
 
-public sealed record SecretValidationResult(
+public sealed record DestinationSecretValidationResult(
     string TenantSlug,
     Guid DestinationId,
     string SecretReference,
     bool Resolvable);
 
-public sealed record SecretValidationReport(IReadOnlyList<SecretValidationResult> Results)
+public sealed record DestinationSecretValidationReport(IReadOnlyList<DestinationSecretValidationResult> Results)
 {
     public bool Succeeded => Results.All(result => result.Resolvable);
 }
 
-public sealed class SecretValidationSelectionException(string message) : Exception(message);
+public sealed class DestinationSecretValidationSelectionException(string message) : Exception(message);
 
-internal sealed class ValidateSecretsCommandHandler(
+internal sealed class ValidateDestinationSecretsCommandHandler(
     ISecretValidationReader reader,
-    IDestinationAuthenticationSecretResolver secretResolver) : IRequestHandler<ValidateSecretsCommand, SecretValidationReport>
+    IDestinationAuthenticationSecretResolver secretResolver) : IRequestHandler<ValidateDestinationSecretsCommand, DestinationSecretValidationReport>
 {
-    public async Task<SecretValidationReport> Handle(
-        ValidateSecretsCommand command,
+    public async Task<DestinationSecretValidationReport> Handle(
+        ValidateDestinationSecretsCommand command,
         CancellationToken cancellationToken)
     {
         ValidateSelection(command);
 
         IReadOnlyList<Tenant> tenants = await SelectTenantsAsync(command, cancellationToken);
-        List<SecretValidationResult> results = [];
+        List<DestinationSecretValidationResult> results = [];
 
         foreach (Tenant tenant in tenants)
         {
@@ -76,33 +76,33 @@ internal sealed class ValidateSecretsCommandHandler(
             }
         }
 
-        return new SecretValidationReport(results);
+        return new DestinationSecretValidationReport(results);
     }
 
-    private static void ValidateSelection(ValidateSecretsCommand command)
+    private static void ValidateSelection(ValidateDestinationSecretsCommand command)
     {
         if (command.All == (command.TenantSlug is not null)
             || (command.DestinationId is not null && command.TenantSlug is null))
         {
-            throw new SecretValidationSelectionException(
+            throw new DestinationSecretValidationSelectionException(
                 "Select --all or --tenant <slug>; --destination requires --tenant.");
         }
 
         if (command.TenantSlug is not null && !TenantSlug.IsValid(command.TenantSlug))
-            throw new SecretValidationSelectionException("The selected Tenant slug is invalid.");
+            throw new DestinationSecretValidationSelectionException("The selected Tenant slug is invalid.");
     }
 
     private async Task<IReadOnlyList<Tenant>> SelectTenantsAsync(
-        ValidateSecretsCommand command,
+        ValidateDestinationSecretsCommand command,
         CancellationToken cancellationToken)
     {
         if (command.TenantSlug is not null)
         {
             Tenant? tenant = await reader.FindTenantBySlugAsync(command.TenantSlug, cancellationToken);
             if (tenant is null)
-                throw new SecretValidationSelectionException("The selected Tenant does not exist.");
+                throw new DestinationSecretValidationSelectionException("The selected Tenant does not exist.");
             if (tenant.Status != OperationalStatus.Active)
-                throw new SecretValidationSelectionException("The selected Tenant is not active.");
+                throw new DestinationSecretValidationSelectionException("The selected Tenant is not active.");
             return [tenant];
         }
 
@@ -121,7 +121,7 @@ internal sealed class ValidateSecretsCommandHandler(
                 destinationId.Value,
                 cancellationToken);
             return destination is null
-                ? throw new SecretValidationSelectionException("The selected Destination does not exist for this Tenant.")
+                ? throw new DestinationSecretValidationSelectionException("The selected Destination does not exist for this Tenant.")
                 : [destination];
         }
 

@@ -1,4 +1,4 @@
-namespace Integrios.Admin.OperatorUsers;
+namespace Integrios.Admin.Cli;
 
 internal interface IOperatorUserConsole
 {

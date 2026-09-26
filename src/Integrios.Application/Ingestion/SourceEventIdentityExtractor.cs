@@ -39,11 +39,8 @@ internal static class SourceEventIdentityExtractor
     public static string IdempotencyKey(Guid sourceId, string sourceEventId) =>
         $"{sourceId:N}:{Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(sourceEventId)))}";
 
-    // A rule that permits a missing value yields none, and the caller then falls through to whatever
-    // identity the Source contract's mapping produced. That is the one asymmetry between the two
-    // identity paths: the rule is immutable and read before the mapping, so only through the mapping
-    // could an identity be absent without refusing the request. Permitting it here closes that gap
-    // without moving the rule.
+    // A rule that permits a missing value yields none. The rule runs before the Source contract's
+    // mapping, so the caller can then use an identity produced by the mapping, if any.
     private static string? Extracted(SourceEventIdentityRule rule, string? value)
     {
         if (!string.IsNullOrWhiteSpace(value))
