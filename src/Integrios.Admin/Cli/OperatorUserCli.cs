@@ -142,6 +142,12 @@ public static class OperatorUserCli
         }
 
         options.TryGetValue("--email", out string? email);
+        // Reject a wrong option combination before asking for the password; the store rechecks.
+        PasswordCredentialMutationStatus? invalid = CheckSetPasswordOptions(
+            await SendAsync(new ListOperatorUsersQuery()), userId, email);
+        if (invalid is { } status)
+            return WriteResult("set-password", new PasswordCredentialMutationResult(status, userId));
+
         if (!TryReadConfirmedPassword(SystemConsole, out string? password))
             return 1;
 
@@ -198,6 +204,19 @@ public static class OperatorUserCli
         PasswordCredentialMutationResult result = await SendAsync(
             new DisableOperatorUserPasswordCommand(userId));
         return WriteResult("disable-password", result);
+    }
+
+    internal static PasswordCredentialMutationStatus? CheckSetPasswordOptions(
+        IReadOnlyList<OperatorUserCredentialDto> users,
+        Guid userId,
+        string? email)
+    {
+        OperatorUserCredentialDto? user = users.FirstOrDefault(candidate => candidate.UserId == userId);
+        if (user is null)
+            return PasswordCredentialMutationStatus.UserNotFound;
+        if (user.PasswordCredentialId is null)
+            return email is null ? PasswordCredentialMutationStatus.EmailRequired : null;
+        return email is null ? null : PasswordCredentialMutationStatus.EmailNotAllowed;
     }
 
     internal static bool TryReadOptions(
