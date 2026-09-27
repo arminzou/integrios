@@ -1,4 +1,5 @@
-# Helpers used by deploy.ps1. No password is passed to az in an argument, printed, or retained
+# Helpers used by deploy.ps1 for setup: revision state, protected request files, and first-Operator
+# provisioning. No password is passed to az in an argument, printed, or retained
 # in the normal job template. Source this file only; it performs no deployment on its own.
 # Azure can report a revision as active and then reject its deactivation because it is already
 # inactive (and the reverse). Either way the revision is in the requested state.

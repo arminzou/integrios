@@ -1,6 +1,6 @@
-# Container-free contract checks. Run: pwsh -NoProfile -File deploy/azure/tests/first-operator.Tests.ps1
+# Container-free contract checks. Run: pwsh -NoProfile -File deploy/azure/tests/setup-helpers.Tests.ps1
 $ErrorActionPreference = 'Stop'
-. (Join-Path $PSScriptRoot '../first-operator.ps1')
+. (Join-Path $PSScriptRoot '../setup-helpers.ps1')
 $realStatusReader = ${function:Get-FirstOperatorInitialized}
 
 function Assert([bool] $Condition, [string] $Message) {
