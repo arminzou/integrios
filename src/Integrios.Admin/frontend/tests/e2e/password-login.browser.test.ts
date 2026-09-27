@@ -14,8 +14,11 @@ describe.skipIf(!origin || !passwordFile)("Packaged first-Operator password logi
     const browser = await chromium.launch();
     try {
       const page = await browser.newPage();
+      // Read the dashboard's own options response. A second request here would race it without a
+      // cookie, receive a different antiforgery cookie, and break the token pairing on slow links.
+      const optionsResponse = page.waitForResponse((response) => new URL(response.url()).pathname === "/auth/options");
       await page.goto(origin!);
-      const options = await page.request.get(`${origin}/auth/options`);
+      const options = await optionsResponse;
       expect(options.status()).toBe(200);
       expect(await options.json()).toMatchObject({ password_enabled: true, oidc_enabled: false });
       await page.getByLabel("Email", { exact: true }).fill("operator@example.test");
