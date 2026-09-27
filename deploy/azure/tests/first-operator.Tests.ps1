@@ -1,6 +1,7 @@
 # Container-free contract checks. Run: pwsh -NoProfile -File deploy/azure/tests/first-operator.Tests.ps1
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot '../first-operator.ps1')
+$realStatusReader = ${function:Get-FirstOperatorInitialized}
 
 function Assert([bool] $Condition, [string] $Message) {
     if (-not $Condition) { throw $Message }
@@ -14,6 +15,11 @@ function az {
     $global:LASTEXITCODE = 0
     if (($args[0..2] -join ' ') -eq 'containerapp job show') {
         return $script:jobJson
+    }
+    if (($args[0..2] -join ' ') -eq 'monitor log-analytics workspace') { return 'workspace-guid' }
+    if (($args[0..2] -join ' ') -eq 'monitor log-analytics query') {
+        $script:statusQuery = $args[($args.IndexOf('--analytics-query') + 1)]
+        return $script:statusRows
     }
     if (($args[0..1] -join ' ') -eq 'containerapp revision') {
         $global:LASTEXITCODE = $script:revisionExit
@@ -61,7 +67,7 @@ foreach ($scenario in @('fresh', 'existing', 'missing-input', 'provision-failure
     $savedPassword = $InitialOperatorPassword
     if ($scenario -in @('existing', 'missing-input')) { $InitialOperatorPassword = $null }
     $errorMessage = $null
-    try { Invoke-FirstOperatorSetup 'bootstrap' }
+    try { Invoke-FirstOperatorSetup 'bootstrap' '/workspaces/test' }
     catch { $errorMessage = $_.Exception.Message }
     finally { $InitialOperatorPassword = $savedPassword }
     $restored = $script:requests[-1]
@@ -92,6 +98,13 @@ try {
     }
 }
 finally { if (Test-Path -LiteralPath $file) { Remove-Item -LiteralPath $file -Force } }
+# The status reader must find a completed execution's result in Log Analytics, scoped to it.
+$script:statusRows = '[{"Log_s":"{\"initialized\":false}"}]'
+Assert ((& $realStatusReader 'bootstrap' 'bootstrap-abc123' '/workspaces/test') -eq $false) 'Status reader must parse Log Analytics output.'
+Assert ($script:statusQuery -match "startswith 'bootstrap-abc123-'") 'Status reader must scope to the execution.'
+$script:statusRows = '[{"Log_s":"{\"initialized\":true}"}]'
+Assert ((& $realStatusReader 'bootstrap' 'bootstrap-abc123' '/workspaces/test') -eq $true) 'Status reader must report initialized.'
+
 $script:revisionExit = 1
 $script:revisionOutput = 'ERROR: (RevisionAlreadyInRequestedState) Revision app--1 is already deactivated!.'
 Set-RevisionState deactivate 'app' 'app--1'

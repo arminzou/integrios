@@ -56,22 +56,29 @@ function Set-SetupJob([string] $Url, [object] $Body) {
     }
 }
 
-function Get-FirstOperatorInitialized([string] $JobName, [string] $Execution) {
-    # Read only the execution we started, never a previous run or arbitrary infrastructure state.
-    for ($attempt = 0; $attempt -lt 12; $attempt++) {
-        $lines = @(& az containerapp job logs show --resource-group $ResourceGroup --name $JobName `
-            --execution $Execution --container bootstrap --tail 100 --format text --only-show-errors 2>$null)
+function Get-FirstOperatorInitialized([string] $JobName, [string] $Execution, [string] $WorkspaceId) {
+    # A completed execution has no live replica to stream from, so read its console output from
+    # Log Analytics. Scope to this execution only, never a previous run or infrastructure state.
+    $customerId = & az monitor log-analytics workspace show --ids $WorkspaceId --query customerId --output tsv --only-show-errors
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($customerId)) { throw 'Could not read the Log Analytics workspace.' }
+    $query = "ContainerAppConsoleLogs_CL | where TimeGenerated > ago(1h) | where ContainerJobName_s == '$JobName' " +
+        "| where ContainerGroupName_s startswith '$Execution-' | where Log_s has 'initialized' | project Log_s"
+    # Ingestion commonly lags a few minutes; allow up to 15.
+    $deadline = [DateTimeOffset]::UtcNow.AddMinutes(15)
+    while ($true) {
+        $rows = & az monitor log-analytics query --workspace $customerId.Trim() --analytics-query $query --output json --only-show-errors
         if ($LASTEXITCODE -eq 0) {
-            foreach ($line in $lines) {
-                if ([string]$line -match '\{"initialized":(true|false)\}') { return $Matches[1] -eq 'true' }
+            foreach ($row in @($rows | ConvertFrom-Json)) {
+                if ([string]$row.Log_s -match '\{"initialized":(true|false)\}') { return $Matches[1] -eq 'true' }
             }
         }
-        Start-Sleep -Seconds 5
+        if ([DateTimeOffset]::UtcNow -ge $deadline) { break }
+        Start-Sleep -Seconds 20
     }
-    throw 'The setup status execution completed but its initialized-state result could not be read. Runtime remains stopped; retry deployment.'
+    throw 'The setup status execution completed but its initialized-state result did not reach Log Analytics within 15 minutes. Runtime remains stopped; retry deployment.'
 }
 
-function Invoke-FirstOperatorSetup([string] $JobName) {
+function Invoke-FirstOperatorSetup([string] $JobName, [string] $WorkspaceId) {
     $job = & az containerapp job show --resource-group $ResourceGroup --name $JobName --output json --only-show-errors | ConvertFrom-Json -AsHashtable
     if ($LASTEXITCODE -ne 0 -or -not $job.id) { throw 'Could not read the setup job.' }
     $url = "https://management.azure.com$($job.id)?api-version=2025-07-01"
@@ -93,7 +100,7 @@ function Invoke-FirstOperatorSetup([string] $JobName) {
     try {
         Set-SetupJob $url $working
         $execution = Invoke-Job -JobName $JobName -ReturnExecution
-        if (Get-FirstOperatorInitialized $JobName $execution) {
+        if (Get-FirstOperatorInitialized $JobName $execution $WorkspaceId) {
             Write-Host 'First Operator already initialized; preserving all accounts and credentials.'
             return
         }
