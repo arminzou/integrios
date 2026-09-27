@@ -1,9 +1,31 @@
 using Integrios.Admin.Cli;
+using Integrios.Application.Identity;
 
 namespace Integrios.Admin.UnitTests.Cli;
 
 public sealed class OperatorUserCliTests
 {
+    [Fact]
+    public void SetPasswordOptions_AreRejectedBeforeThePasswordPrompt()
+    {
+        Guid withPassword = Guid.NewGuid();
+        Guid withoutPassword = Guid.NewGuid();
+        OperatorUserCredentialDto[] users =
+        [
+            new(withPassword, "Password User", null, Guid.NewGuid(), "one@example.com", 0, true),
+            new(withoutPassword, "OIDC User", "two@example.com", null, null, null, false),
+        ];
+
+        OperatorUserCli.CheckSetPasswordOptions(users, withPassword, null).ShouldBeNull();
+        OperatorUserCli.CheckSetPasswordOptions(users, withPassword, "new@example.com")
+            .ShouldBe(PasswordCredentialMutationStatus.EmailNotAllowed);
+        OperatorUserCli.CheckSetPasswordOptions(users, withoutPassword, "two@example.com").ShouldBeNull();
+        OperatorUserCli.CheckSetPasswordOptions(users, withoutPassword, null)
+            .ShouldBe(PasswordCredentialMutationStatus.EmailRequired);
+        OperatorUserCli.CheckSetPasswordOptions(users, Guid.NewGuid(), null)
+            .ShouldBe(PasswordCredentialMutationStatus.UserNotFound);
+    }
+
     [Fact]
     public void PasswordPrompt_FailsClosedWithoutInteractiveTerminal()
     {
