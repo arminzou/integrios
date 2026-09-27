@@ -76,8 +76,8 @@ HTTPS validation enabled outside local development.
 
 Password sign-in is enabled by default. After database migration and runtime grants, provision the
 first OperatorUser through the interactive Admin CLI connected to the deployment database (see
-[Run the Operator CLI](#run-the-operator-cli)). The Azure reference runs this step inside its
-deployment command instead:
+[Run the Operator CLI](#run-the-operator-cli)). On Azure Container Apps, run it after the deployment
+command finishes, through a shell in the running Admin app:
 
 ```bash
 operator-user bootstrap \
@@ -109,8 +109,7 @@ For automated initial setup only, `operator-user bootstrap` accepts `--password-
 pointing to a protected UTF-8 secret file. Its contents are read exactly: do not append a newline.
 Mount the file only into the setup process and remove it afterwards. Never supply the password
 itself as an argument, environment variable, or ordinary configuration value. An existing User
-makes bootstrap a no-op even when that file is absent. `operator-user bootstrap-status` reports
-an `initialized` JSON boolean through the trusted CLI without exposing credentials.
+makes bootstrap a no-op even when that file is absent.
 
 Additional accounts use `operator-user create` with the same display-name and email arguments.
 Ordinary credential-management commands retain masked interactive password confirmation and

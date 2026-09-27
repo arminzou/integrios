@@ -4,11 +4,7 @@ param(
     [Parameter(Mandatory)] [string] $Location,
     [Parameter(Mandatory)] [ValidateScript({ Test-Path -LiteralPath $_ -PathType Leaf })] [string] $ParametersFile,
     [securestring] $OperatorKeySecret,
-    [securestring] $AdminOidcClientSecret,
-    [string] $InitialOperatorDisplayName,
-    [string] $InitialOperatorEmail,
-    [securestring] $InitialOperatorPassword,
-    [switch] $InteractiveSetup
+    [securestring] $AdminOidcClientSecret
 )
 
 $ErrorActionPreference = 'Stop'
@@ -204,7 +200,7 @@ function Get-DeploymentOutputs {
     $json | ConvertFrom-Json
 }
 
-function Invoke-Job([string] $JobName, [switch] $ReturnExecution) {
+function Invoke-Job([string] $JobName) {
     $execution = & az containerapp job start `
         --resource-group $ResourceGroup `
         --name $JobName `
@@ -224,10 +220,7 @@ function Invoke-Job([string] $JobName, [switch] $ReturnExecution) {
             --output tsv `
             --only-show-errors
         if ($LASTEXITCODE -ne 0) { throw "Could not read execution status for $JobName." }
-        if ($status -eq 'Succeeded') {
-            if ($ReturnExecution) { return $execution }
-            return
-        }
+        if ($status -eq 'Succeeded') { return }
         if ($status -in @('Failed', 'Stopped', 'Degraded')) {
             throw "Container Apps Job $JobName execution $execution ended with status $status."
         }
@@ -291,7 +284,7 @@ if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($compiled.parametersJso
 }
 $parameters = ($compiled.parametersJson | ConvertFrom-Json).parameters
 
-foreach ($scriptOwnedName in @('operatorKeySecret', 'adminOidcClientSecret', 'runtimeReplicaCount', 'initialOperatorPassword')) {
+foreach ($scriptOwnedName in @('operatorKeySecret', 'adminOidcClientSecret', 'runtimeReplicaCount')) {
     if ($null -ne $parameters.PSObject.Properties[$scriptOwnedName]) {
         throw "Remove '$scriptOwnedName' from the nonsecret Bicep parameter file; deploy.ps1 owns it."
     }
@@ -426,12 +419,6 @@ Invoke-Job -JobName $outputs.jobNames.value.grantRuntime
 Write-Host 'Running idempotent Bootstrap...'
 Invoke-Job -JobName $outputs.jobNames.value.bootstrap
 
-if ($adminPasswordEnabled) {
-    Write-Host 'Checking first-Operator initialization through the trusted setup job...'
-    Invoke-FirstOperatorSetup -JobName $outputs.jobNames.value.bootstrap `
-        -WorkspaceId $outputs.monitoring.value.logAnalyticsWorkspaceId
-}
-
 Write-Host 'Validating configured destination secret references without printing values...'
 Invoke-Job -JobName $outputs.jobNames.value.validateSecrets
 
@@ -452,7 +439,12 @@ try { $null = Grant-DeploymentSettingsReader $settingsVault }
 catch { Write-Warning "Grant yourself Key Vault Secrets User on $settingsVault to read its stored values: $_" }
 
 Write-Host "Ready: https://$($outputs.adminFqdn.value)"
-if ($adminPasswordEnabled) { Write-Host 'Dashboard password login is enabled; use your provisioned Operator credential.' }
+if ($adminPasswordEnabled) {
+    # bootstrap creates the first Operator only while no User exists, so the hint is safe to repeat.
+    Write-Host 'Password sign-in is enabled. On a fresh deployment, create the first Operator interactively:'
+    Write-Host "  az containerapp exec --resource-group $ResourceGroup --name $($outputs.appNames.value.admin) --command /bin/sh"
+    Write-Host '  /app/service operator-user bootstrap --display-name "<name>" --email <email>'
+}
 Write-Host "Ingestion: https://$($outputs.ingestionFqdn.value)"
 Write-Host "Source-secret vault: $($outputs.secretVaults.value.source)"
 Write-Host "Destination-secret vault: $($outputs.secretVaults.value.destination)"

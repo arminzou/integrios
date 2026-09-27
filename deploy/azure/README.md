@@ -70,10 +70,9 @@ Admin; the namespace role alone does not create or select a broker entity.
 
 ## Deploy or update
 
-Use the supplied command for both initial deployment and updates. On fresh password-enabled
-deployments, `-InteractiveSetup` prompts for the first Operator's display name, email and a masked,
-confirmed password. Existing accounts are detected through the setup job and require no initial
-password on redeployment. Optional OpenID Connect configuration also prompts for its client secret:
+Use the supplied command for both initial deployment and updates. Optional OpenID Connect
+configuration prompts for its client secret. On a fresh deployment, create the first Operator
+afterwards as described in [First Operator and safe redeployment](#first-operator-and-safe-redeployment):
 
 ```powershell
 Copy-Item ./main.example.bicepparam ./main.bicepparam
@@ -82,8 +81,7 @@ Copy-Item ./main.example.bicepparam ./main.bicepparam
 ./deploy.ps1 `
   -ResourceGroup 'rg-integrios-reference' `
   -Location 'canadacentral' `
-  -ParametersFile ./main.bicepparam `
-  -InteractiveSetup
+  -ParametersFile ./main.bicepparam
 ```
 
 ### What the command does
@@ -98,36 +96,34 @@ Copy-Item ./main.example.bicepparam ./main.bicepparam
 5. Runs migrations as the Migrate identity, the schema owner and database Entra administrator.
 6. Grants control-plane scope to Admin and Bootstrap, and data-plane scope to Ingestion, Worker,
    and secret validation.
-7. Runs idempotent OperatorKey Bootstrap, checks first-Operator state, provisions only when empty
-   and password login is enabled, cleans up the temporary credential, then validates destination secrets.
+7. Runs idempotent OperatorKey Bootstrap, then validates destination secrets.
 8. Starts one replica of each app, activates the latest revisions and waits for healthy revisions.
 
 ### First Operator and safe redeployment
 
 Password login defaults to enabled. Set `adminPasswordEnabled = false` to explicitly select
-OIDC-only or API-only operation; this skips password provisioning and preserves existing credentials.
-An existing User, including an OIDC User or one with a disabled password, makes first-Operator setup
-a no-op. Changing setup inputs never changes an account or resets its password. Create, reset, and
-change Operator accounts with the Admin CLI; [Run the Operator CLI](../../docs/operator-dashboard.md#run-the-operator-cli)
-explains how to reach it on Container Apps.
+OIDC-only or API-only operation; existing credentials are preserved either way. The deployment
+command never receives or stores an Operator password.
 
-Automation supplies `-InitialOperatorDisplayName`, `-InitialOperatorEmail`, and
-`-InitialOperatorPassword` as a `SecureString` obtained from its secret store. Without complete inputs
-or `-InteractiveSetup`, an empty database fails clearly before runtime starts. Do not put passwords
-in the parameter file, command-line literals, shell history, or environment files.
+On a fresh deployment, create the first Operator after the command finishes, from a shell inside
+the running Admin app. The command prints these lines with your resource group and app name:
 
-The existing Bootstrap job temporarily receives a Container Apps secret mounted as a file. Only
-that job sees the initial password; Admin does not receive it. The command restores the job template,
-removing the secret and mount before the final Bicep reconciliation. Its local request file is
-restricted to the current user before writing and deleted in `finally`. No initial password enters
-ARM deployment parameters or deployment history. Completed job executions may retain the secret
-reference and setup email, but not the secret value.
+```powershell
+az containerapp exec --resource-group <resource-group> --name <prefix>-admin --command /bin/sh
+```
 
-If cleanup fails or the command is interrupted, keep runtime stopped and rerun the deployment.
-The initial reconciliation restores the normal credential-free first-Operator setup state, and the
-database guard preserves any account already created. After a forced interruption, remove any
-`integrios-setup-*.json` temporary files owned by the interrupted process. Do not run overlapping
-deployments against the same resource group: they share the Bootstrap job template.
+```sh
+/app/service operator-user bootstrap --display-name "Deployment operator" --email operator@example.com
+```
+
+`bootstrap` prompts for a masked, confirmed password and creates the User and Password credential
+together only while no User exists. An existing User, including an OIDC User or one with a disabled
+password, makes it a no-op, so repeating it never resets a password or adds an account. Until the
+first Operator exists, password sign-in has no account to accept. Create, reset, and change
+accounts afterwards with the same CLI; [Run the Operator CLI](../../docs/operator-dashboard.md#run-the-operator-cli)
+covers the exec quoting and session limits.
+
+Redeployment needs no Operator input and leaves every account unchanged.
 
 A failed migration, grant, Bootstrap, or validation job leaves runtime stopped. After a schema
 migration, recover by rolling forward or restoring the database rather than starting an older image

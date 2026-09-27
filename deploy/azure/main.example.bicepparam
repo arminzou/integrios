@@ -17,7 +17,7 @@ param adminAllowedCidrs = [
   '203.0.113.10/32'
 ]
 param ingestionExternal = true
-// Password login is enabled by default. First deployment securely provisions the first Operator.
+// Password login is enabled by default. Create the first Operator after deployment (see README).
 // Set false for an explicitly OIDC-only or API-only installation.
 param adminPasswordEnabled = true
 

@@ -20,13 +20,6 @@ public static class OperatorUserCli
         if (args is ["operator-user", "list"])
             return await ListAsync();
 
-        if (args is ["operator-user", "bootstrap-status"])
-        {
-            bool initialized = await SendAsync(new OperatorUserInitializedQuery());
-            Console.WriteLine(initialized ? "{\"initialized\":true}" : "{\"initialized\":false}");
-            return 0;
-        }
-
         if (args.Length < 2)
             return Usage();
 
@@ -353,7 +346,6 @@ public static class OperatorUserCli
     {
         Console.Error.WriteLine("Usage:");
         Console.Error.WriteLine("  operator-user list");
-        Console.Error.WriteLine("  operator-user bootstrap-status");
         Console.Error.WriteLine("  operator-user bootstrap [--display-name <name> --email <email> [--password-file <path>]]");
         Console.Error.WriteLine("  operator-user create --display-name <name> --email <email>");
         Console.Error.WriteLine("  operator-user set-password --user-id <id> [--email <email>]");
