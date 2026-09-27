@@ -75,10 +75,12 @@ HTTPS validation enabled outside local development.
 ## Email and password
 
 Password sign-in is enabled by default. After database migration and runtime grants, provision the
-first OperatorUser through the interactive Admin CLI connected to the deployment database:
+first OperatorUser through the interactive Admin CLI connected to the deployment database (see
+[Run the Operator CLI](#run-the-operator-cli)). The Azure reference runs this step inside its
+deployment command instead:
 
 ```bash
-docker compose run --rm admin operator-user bootstrap \
+operator-user bootstrap \
   --display-name "Deployment operator" \
   --email "operator@example.com"
 ```
@@ -115,25 +117,37 @@ Ordinary credential-management commands retain masked interactive password confi
 refuse redirected password input. Configuring OIDC later does not automatically link the initial
 password account by email; attaching a Password credential to an existing OIDC User uses User.Id.
 
-To run the same commands from a source checkout, replace `docker compose run --rm admin` with:
+## Run the Operator CLI
 
-```bash
-dotnet run --project src/Integrios.Admin --
-```
+Every `operator-user` command runs in the Admin image or project, connected to the deployment
+database with Admin's own database settings. Password commands prompt with masked input, so they
+need an interactive terminal. How you reach one depends on the deployment:
+
+| Deployment | Run a command |
+| --- | --- |
+| Docker Compose | `operator-user <command>` |
+| Source checkout | `dotnet run --project src/Integrios.Admin -- operator-user <command>` |
+| Azure Container Apps | `az containerapp exec -g <resource-group> -n <prefix>-admin --command "/bin/sh"`, then `/app/service operator-user <command>` in that shell |
+
+On Azure Container Apps, the Admin app must have an active revision. Open a shell rather than
+passing the command through `--command`: exec splits that value on spaces and ignores quotes, so an
+argument such as a two-word display name breaks. Run all commands in one session, because Azure
+limits how often exec sessions can be opened and answers with a 429 and a retry delay of several
+minutes.
 
 ## Manage credentials
 
 List Users and their password state:
 
 ```bash
-docker compose run --rm admin operator-user list
+operator-user list
 ```
 
 To attach a Password credential to an OperatorUser first created through OIDC, copy the exact
 `USER_ID` from that list. Email does not select or link a User:
 
 ```bash
-docker compose run --rm admin operator-user set-password \
+operator-user set-password \
   --user-id <user-id> \
   --email "operator@example.com"
 ```
@@ -141,10 +155,14 @@ docker compose run --rm admin operator-user set-password \
 Reset an existing password, change its sign-in email, or disable it:
 
 ```bash
-docker compose run --rm admin operator-user set-password --user-id <user-id>
-docker compose run --rm admin operator-user change-email --user-id <user-id> --email "new@example.com"
-docker compose run --rm admin operator-user disable-password --user-id <user-id>
+operator-user set-password --user-id <user-id>
+operator-user change-email --user-id <user-id> --email "new@example.com"
+operator-user disable-password --user-id <user-id>
 ```
+
+`set-password --email` only attaches a first Password credential to a User that has none. For a
+User that already has one, reset the password and change the email as two commands; the CLI
+rejects the combination before asking for a password.
 
 A password reset or disablement immediately invalidates sessions issued from that credential.
 Changing its sign-in email preserves existing sessions. Setting a new password on a disabled
@@ -160,6 +178,11 @@ requires access to the Admin CLI and the configured database:
    `--email` when that User has no Password credential yet.
 3. If password sign-in was disabled deployment-wide, set
    `INTEGRIOS_ADMIN_PASSWORD_ENABLED=true` and restart Admin.
+
+If sign-in fails, Admin's request log shows the cause. `POST /auth/password/login` answering 401
+means an unknown sign-in email or a wrong password; check the stored email with `operator-user list`,
+since it is not the display name. A 400 answered within milliseconds means the antiforgery check
+rejected the request before credentials were read; reload the page and retry.
 
 Disabling password sign-in retains stored credentials for later re-enablement and does not affect
 OIDC sessions or OperatorKey automation. An OIDC outage is recoverable through password sign-in
