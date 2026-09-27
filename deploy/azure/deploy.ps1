@@ -16,7 +16,7 @@ $template = Join-Path $PSScriptRoot 'main.bicep'
 $releaseImageSource = 'ghcr.io/arminzou/integrios'
 $imageParameters = [ordered]@{ adminImage = 'admin'; ingestionImage = 'ingestion'; workerImage = 'worker' }
 $resolvedParametersFile = (Resolve-Path -LiteralPath $ParametersFile).Path
-. (Join-Path $PSScriptRoot 'first-operator.ps1')
+. (Join-Path $PSScriptRoot 'setup-helpers.ps1')
 
 function Invoke-AzureCli {
     & az @args
