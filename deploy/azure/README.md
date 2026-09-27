@@ -107,8 +107,9 @@ Copy-Item ./main.example.bicepparam ./main.bicepparam
 Password login defaults to enabled. Set `adminPasswordEnabled = false` to explicitly select
 OIDC-only or API-only operation; this skips password provisioning and preserves existing credentials.
 An existing User, including an OIDC User or one with a disabled password, makes first-Operator setup
-a no-op. Changing setup inputs never changes an account or resets its password. Use the interactive
-`operator-user set-password` CLI for explicit credential management.
+a no-op. Changing setup inputs never changes an account or resets its password. Create, reset, and
+change Operator accounts with the Admin CLI; [Run the Operator CLI](../../docs/operator-dashboard.md#run-the-operator-cli)
+explains how to reach it on Container Apps.
 
 Automation supplies `-InitialOperatorDisplayName`, `-InitialOperatorEmail`, and
 `-InitialOperatorPassword` as a `SecureString` obtained from its secret store. Without complete inputs
