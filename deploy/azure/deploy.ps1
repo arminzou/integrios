@@ -428,7 +428,8 @@ Invoke-Job -JobName $outputs.jobNames.value.bootstrap
 
 if ($adminPasswordEnabled) {
     Write-Host 'Checking first-Operator initialization through the trusted setup job...'
-    Invoke-FirstOperatorSetup -JobName $outputs.jobNames.value.bootstrap
+    Invoke-FirstOperatorSetup -JobName $outputs.jobNames.value.bootstrap `
+        -WorkspaceId $outputs.monitoring.value.logAnalyticsWorkspaceId
 }
 
 Write-Host 'Validating configured destination secret references without printing values...'
