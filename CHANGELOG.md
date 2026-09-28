@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.11.0](https://github.com/arminzou/integrios/compare/v0.10.0...v0.11.0) (2026-09-28)
+
+
+### ⚠ BREAKING CHANGES
+
+* **auth:** Deployments that omitted the password-login setting now expose password sign-in. Set INTEGRIOS_ADMIN_PASSWORD_ENABLED=false (Compose) or adminPasswordEnabled = false (Azure) before upgrading to keep it disabled.
+
+### Features
+
+* **auth:** create every Operator account with operator-user create ([b28c629](https://github.com/arminzou/integrios/commit/b28c629783af67cd4f590b3630c0d4da531c7f82))
+* **auth:** enable password login by default with first-Operator setup ([a198293](https://github.com/arminzou/integrios/commit/a19829308f1bf0311a3906dea61821e08fbfcaad))
+* **infra:** create the first Azure Operator interactively after deployment ([c39b47d](https://github.com/arminzou/integrios/commit/c39b47d66a768ce83e35c52b6fb6d8563805e392))
+
+
+### Bug Fixes
+
+* **cli:** reject invalid set-password options before prompting ([020cbb7](https://github.com/arminzou/integrios/commit/020cbb7a78401dd7fdd511aa02bd4cea49162c77))
+* **infra:** read first-Operator status from Log Analytics ([b788bc9](https://github.com/arminzou/integrios/commit/b788bc9ebff14be796a656c8c2bb4e6250ab3d9a))
+* **infra:** tolerate revisions already in the requested state ([465c51a](https://github.com/arminzou/integrios/commit/465c51a5b650acd9c4443943cc74e20d30bcef14))
+
 ## [0.10.0](https://github.com/arminzou/integrios/compare/v0.9.0...v0.10.0) (2026-09-26)
 
 
