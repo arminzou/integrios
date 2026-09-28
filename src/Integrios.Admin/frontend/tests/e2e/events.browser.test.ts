@@ -499,7 +499,8 @@ describe("The Event ledger and inspector in a real browser", () => {
 
   it("keeps the week of Activity inside its card at 320 CSS pixels, with usable intervals", async () => {
     const page = await openEvents(`/tenants/${tenantId}/events`, { width: 320, height: 900 });
-    await page.getByRole("button", { name: "7 d" }).click();
+    // Exact: other buttons' names can contain "7 d", such as an age of "27 d".
+    await page.getByRole("button", { name: "7 d", exact: true }).click();
     const intervals = page.getByRole("group", { name: /Event activity intervals/ }).getByRole("button");
     await expect.poll(() => intervals.count()).toBe(28);
 
