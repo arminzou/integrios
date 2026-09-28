@@ -7,7 +7,7 @@ using MediatR;
 
 namespace Integrios.Application.UnitTests;
 
-[Collection(ActivityListenerCollection.Name)]
+[Collection(TelemetryListenerCollection.Name)]
 public sealed class TelemetryBehaviorTests
 {
     private sealed record PingRequest : IRequest<string>;

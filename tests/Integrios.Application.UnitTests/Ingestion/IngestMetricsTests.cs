@@ -12,7 +12,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Integrios.Application.UnitTests;
 
-[Collection(ActivityListenerCollection.Name)]
+[Collection(TelemetryListenerCollection.Name)]
 public sealed class IngestMetricsTests
 {
     private static readonly Guid SourceId = Guid.NewGuid();

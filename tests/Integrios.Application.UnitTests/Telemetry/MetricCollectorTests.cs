@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Integrios.Application.UnitTests;
 
+[Collection(TelemetryListenerCollection.Name)]
 public sealed class MetricCollectorTests
 {
     private static readonly HashSet<string> AllowedMetricLabels = ["connector_key", "http_status_class", "result", "transport"];

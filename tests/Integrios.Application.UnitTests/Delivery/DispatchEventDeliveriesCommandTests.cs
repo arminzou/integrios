@@ -17,7 +17,7 @@ using static Integrios.Tests.Shared.DeliveryTestDoubles;
 
 namespace Integrios.Application.UnitTests;
 
-[Collection(ActivityListenerCollection.Name)]
+[Collection(TelemetryListenerCollection.Name)]
 public sealed class DispatchEventDeliveriesCommandTests
 {
     [Fact]

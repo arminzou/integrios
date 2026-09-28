@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Integrios.Application.UnitTests;
 
+[Collection(TelemetryListenerCollection.Name)]
 public sealed class ProcessOutboxBatchCommandTests
 {
     [Fact]
