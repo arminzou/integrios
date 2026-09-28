@@ -71,8 +71,8 @@ Admin; the namespace role alone does not create or select a broker entity.
 ## Deploy or update
 
 Use the supplied command for both initial deployment and updates. Optional OpenID Connect
-configuration prompts for its client secret. On a fresh deployment, create the first Operator
-afterwards as described in [First Operator and safe redeployment](#first-operator-and-safe-redeployment):
+configuration prompts for its client secret. Create Operator accounts afterwards as described in
+[Operator accounts and redeployment](#operator-accounts-and-redeployment):
 
 ```powershell
 Copy-Item ./main.example.bicepparam ./main.bicepparam
@@ -99,29 +99,27 @@ Copy-Item ./main.example.bicepparam ./main.bicepparam
 7. Runs idempotent OperatorKey Bootstrap, then validates destination secrets.
 8. Starts one replica of each app, activates the latest revisions and waits for healthy revisions.
 
-### First Operator and safe redeployment
+### Operator accounts and redeployment
 
 Password login defaults to enabled. Set `adminPasswordEnabled = false` to explicitly select
 OIDC-only or API-only operation; existing credentials are preserved either way. The deployment
 command never receives or stores an Operator password.
 
-On a fresh deployment, create the first Operator after the command finishes, from a shell inside
-the running Admin app. The command prints these lines with your resource group and app name:
+Create Operator accounts after the command finishes, from a shell inside the running Admin app. The
+command prints these lines with your resource group and app name:
 
 ```powershell
 az containerapp exec --resource-group <resource-group> --name <prefix>-admin --command /bin/sh
 ```
 
 ```sh
-/app/service operator-user bootstrap --display-name "Deployment operator" --email operator@example.com
+/app/service operator-user create --display-name "Deployment operator" --email operator@example.com
 ```
 
-`bootstrap` prompts for a masked, confirmed password and creates the User and Password credential
-together only while no User exists. An existing User, including an OIDC User or one with a disabled
-password, makes it a no-op, so repeating it never resets a password or adds an account. Until the
-first Operator exists, password sign-in has no account to accept. Create, reset, and change
-accounts afterwards with the same CLI; [Run the Operator CLI](../../docs/operator-dashboard.md#run-the-operator-cli)
-covers the exec quoting and session limits.
+`create` prompts for a masked, confirmed password. Run it once for each person who needs an account;
+until one exists, password sign-in has nothing to accept. Reset and change accounts with the same CLI;
+[Run the Operator CLI](../../docs/operator-dashboard.md#run-the-operator-cli) covers the exec quoting
+and session limits.
 
 Redeployment needs no Operator input and leaves every account unchanged.
 

@@ -4,10 +4,6 @@ namespace Integrios.Application.Identity;
 
 public interface IPasswordCredentialLifecycle
 {
-    Task<bool> IsInitializedAsync(CancellationToken cancellationToken);
-
-    Task<bool> CreateFirstAsync(User user, PasswordCredential credential, CancellationToken cancellationToken);
-
     Task<PasswordCredentialMutationStatus> CreateAsync(
         User user,
         PasswordCredential credential,
@@ -48,4 +44,3 @@ public enum PasswordCredentialMutationStatus
 public sealed record PasswordCredentialMutationResult(
     PasswordCredentialMutationStatus Status,
     Guid UserId);
-

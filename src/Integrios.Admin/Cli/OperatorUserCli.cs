@@ -25,59 +25,12 @@ public static class OperatorUserCli
 
         return args[1] switch
         {
-            "bootstrap" => await BootstrapAsync(args),
             "create" => await CreateAsync(args),
             "set-password" => await SetPasswordAsync(args),
             "change-email" => await ChangeEmailAsync(args),
             "disable-password" => await DisablePasswordAsync(args),
             _ => Usage(),
         };
-    }
-
-    private static async Task<int> BootstrapAsync(string[] args)
-    {
-        if (!TryReadOptions(args, ["--display-name", "--email", "--password-file"], out var options))
-            return Usage();
-
-        if (await SendAsync(new OperatorUserInitializedQuery()))
-        {
-            Console.WriteLine("operator-user bootstrap: already initialized.");
-            return 0;
-        }
-
-        if (!options.TryGetValue("--display-name", out string? displayName)
-            || string.IsNullOrWhiteSpace(displayName)
-            || !options.TryGetValue("--email", out string? email)
-            || !PasswordCredentialRules.TryNormalizeEmail(email, out _, out _))
-            return Usage();
-
-        string password;
-        if (options.TryGetValue("--password-file", out string? path))
-        {
-            try
-            {
-                password = await File.ReadAllTextAsync(path);
-            }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException)
-            {
-                Console.Error.WriteLine("operator-user bootstrap: cannot read the password file.");
-                return 1;
-            }
-            if (!PasswordCredentialRules.IsValidPassword(password))
-            {
-                Console.Error.WriteLine("operator-user bootstrap: password file does not satisfy the password policy; its contents are read verbatim.");
-                return 2;
-            }
-        }
-        else if (!TryReadConfirmedPassword(SystemConsole, out password))
-            return 1;
-
-        bool created = await SendAsync(new BootstrapOperatorUserCommand(
-            displayName, email, PasswordHasher.HashPassword(string.Empty, password)));
-        Console.WriteLine(created
-            ? "operator-user bootstrap: created first Operator."
-            : "operator-user bootstrap: already initialized.");
-        return 0;
     }
 
     private static async Task<int> ListAsync()
@@ -98,14 +51,33 @@ public static class OperatorUserCli
 
     private static async Task<int> CreateAsync(string[] args)
     {
-        if (!TryReadOptions(args, ["--display-name", "--email"], out Dictionary<string, string> options)
+        if (!TryReadOptions(args, ["--display-name", "--email", "--password-file"], out Dictionary<string, string> options)
             || !options.TryGetValue("--display-name", out string? displayName)
             || !options.TryGetValue("--email", out string? email))
         {
             return Usage();
         }
 
-        if (!TryReadConfirmedPassword(SystemConsole, out string? password))
+        string password;
+        if (options.TryGetValue("--password-file", out string? path))
+        {
+            // Automation only: a protected file read verbatim, never a password argument.
+            try
+            {
+                password = await File.ReadAllTextAsync(path);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException)
+            {
+                Console.Error.WriteLine("operator-user create: cannot read the password file.");
+                return 1;
+            }
+            if (!PasswordCredentialRules.IsValidPassword(password))
+            {
+                Console.Error.WriteLine("operator-user create: password file does not satisfy the password policy; its contents are read verbatim.");
+                return 2;
+            }
+        }
+        else if (!TryReadConfirmedPassword(SystemConsole, out password))
             return 1;
 
         PasswordCredentialMutationResult result;
@@ -346,8 +318,7 @@ public static class OperatorUserCli
     {
         Console.Error.WriteLine("Usage:");
         Console.Error.WriteLine("  operator-user list");
-        Console.Error.WriteLine("  operator-user bootstrap [--display-name <name> --email <email> [--password-file <path>]]");
-        Console.Error.WriteLine("  operator-user create --display-name <name> --email <email>");
+        Console.Error.WriteLine("  operator-user create --display-name <name> --email <email> [--password-file <path>]");
         Console.Error.WriteLine("  operator-user set-password --user-id <id> [--email <email>]");
         Console.Error.WriteLine("  operator-user change-email --user-id <id> --email <email>");
         Console.Error.WriteLine("  operator-user disable-password --user-id <id>");

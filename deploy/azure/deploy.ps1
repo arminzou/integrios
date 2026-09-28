@@ -388,7 +388,7 @@ Invoke-Deployment -RuntimeReplicaCount 0
 $outputs = Get-DeploymentOutputs
 
 # minReplicas=0 still permits HTTP activation. Deactivate revisions during setup so a request
-# cannot race first-Operator creation through OIDC or run against an incompletely migrated schema.
+# cannot provision an OIDC User or run against an incompletely migrated schema.
 foreach ($app in $outputs.appNames.value.PSObject.Properties.Value) {
     $revisions = @(& az containerapp revision list --resource-group $ResourceGroup --name $app `
         --query '[?properties.active].name' --output tsv --only-show-errors)
@@ -440,10 +440,9 @@ catch { Write-Warning "Grant yourself Key Vault Secrets User on $settingsVault t
 
 Write-Host "Ready: https://$($outputs.adminFqdn.value)"
 if ($adminPasswordEnabled) {
-    # bootstrap creates the first Operator only while no User exists, so the hint is safe to repeat.
-    Write-Host 'Password sign-in is enabled. On a fresh deployment, create the first Operator interactively:'
+    Write-Host 'Password sign-in is enabled. Create Operator accounts interactively:'
     Write-Host "  az containerapp exec --resource-group $ResourceGroup --name $($outputs.appNames.value.admin) --command /bin/sh"
-    Write-Host '  /app/service operator-user bootstrap --display-name "<name>" --email <email>'
+    Write-Host '  /app/service operator-user create --display-name "<name>" --email <email>'
 }
 Write-Host "Ingestion: https://$($outputs.ingestionFqdn.value)"
 Write-Host "Source-secret vault: $($outputs.secretVaults.value.source)"

@@ -25,8 +25,8 @@ $rejected = $false
 try { Set-RevisionState deactivate 'app' 'app--1' } catch { $rejected = $true }
 Assert $rejected 'Other revision errors must still fail.'
 
-# The deployment command never takes an Operator password: the first Operator is created
-# interactively after deployment.
+# The deployment command never takes an Operator password: accounts are created interactively
+# after deployment.
 $tokens = $null; $errors = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot '../deploy.ps1'), [ref]$tokens, [ref]$errors)
 $parameters = @($ast.ParamBlock.Parameters | ForEach-Object { $_.Name.VariablePath.UserPath })

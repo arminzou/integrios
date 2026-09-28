@@ -74,21 +74,18 @@ HTTPS validation enabled outside local development.
 
 ## Email and password
 
-Password sign-in is enabled by default. After database migration and runtime grants, provision the
-first OperatorUser through the interactive Admin CLI connected to the deployment database (see
-[Run the Operator CLI](#run-the-operator-cli)). On Azure Container Apps, run it after the deployment
-command finishes, through a shell in the running Admin app:
+Password sign-in is enabled by default. Create each Operator account with the interactive Admin
+CLI connected to the deployment database (see [Run the Operator CLI](#run-the-operator-cli)):
 
 ```bash
-operator-user bootstrap \
+operator-user create \
   --display-name "Deployment operator" \
   --email "operator@example.com"
 ```
 
-On an empty deployment, the CLI prompts for the password twice using masked input. The User and
-Password credential are created atomically. If any User already exists, including an OIDC User,
-the command reports that setup is already complete and changes nothing. Repeating setup never
-resets a password, changes an email, or re-enables a disabled credential.
+The CLI prompts for the password twice using masked input and creates the User and Password
+credential together. A sign-in email already used by another credential is refused. Every account
+created this way is the same kind of OperatorUser, whenever it is created.
 
 To explicitly disable password login, set and apply:
 
@@ -105,16 +102,14 @@ before upgrading an OIDC-only or API-only installation. Enabling the form grants
 until a Password credential exists. If OIDC is also configured, the dashboard
 shows **Continue with _provider_** before the email-and-password form.
 
-For automated initial setup only, `operator-user bootstrap` accepts `--password-file <path>`
-pointing to a protected UTF-8 secret file. Its contents are read exactly: do not append a newline.
-Mount the file only into the setup process and remove it afterwards. Never supply the password
-itself as an argument, environment variable, or ordinary configuration value. An existing User
-makes bootstrap a no-op even when that file is absent.
+For automation only, `operator-user create` accepts `--password-file <path>` pointing to a
+protected UTF-8 secret file. Its contents are read exactly: do not append a newline. Mount the file
+only into that process and remove it afterwards. Never supply the password itself as an argument,
+environment variable, or ordinary configuration value. The other credential-management commands
+accept only masked interactive input and refuse redirected password input.
 
-Additional accounts use `operator-user create` with the same display-name and email arguments.
-Ordinary credential-management commands retain masked interactive password confirmation and
-refuse redirected password input. Configuring OIDC later does not automatically link the initial
-password account by email; attaching a Password credential to an existing OIDC User uses User.Id.
+Configuring OIDC later does not link a password account by email; attaching a Password credential
+to an existing OIDC User uses User.Id.
 
 ## Run the Operator CLI
 

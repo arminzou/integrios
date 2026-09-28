@@ -15,10 +15,9 @@ cp .env.example .env
 # edit .env: set database owner/runtime passwords, INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET, and INTEGRIOS_PUBLIC_INGESTION_BASE_URI
 # The image version needs no edit: compose.yml defaults to the release this checkout ships.
 mkdir -p secrets/sources secrets/destinations
-docker compose up -d postgres migrate grant-runtime bootstrap
-docker compose run --rm admin operator-user bootstrap \
-  --display-name "Deployment operator" --email "operator@example.com"
 docker compose up -d
+docker compose run --rm admin operator-user create \
+  --display-name "Deployment operator" --email "operator@example.com"
 ```
 
 Set `INTEGRIOS_ADMIN_RUNTIME_PASSWORD` and `INTEGRIOS_DATA_RUNTIME_PASSWORD` in `.env` to strong,
@@ -27,10 +26,10 @@ runs EF Core migrations as the database owner, `grant-runtime` creates or update
 principals, `bootstrap` runs as the control-plane principal, then `ingestion`, `admin`, and `worker`
 start with their matching scope. Existing volumes are upgraded in place; no principal is dropped.
 
-Complete the interactive first-Operator command successfully before starting runtime. It prompts
-for a password only when the database has no Users; repeated runs preserve all existing credentials.
-For an OIDC-only or API-only deployment, explicitly set `INTEGRIOS_ADMIN_PASSWORD_ENABLED=false`
-and omit this human-account setup command. OIDC provisions its User at first successful sign-in.
+`operator-user create` prompts for a masked, confirmed password and creates an Operator account;
+run it again for each person who needs one. For an OIDC-only or API-only deployment, explicitly set
+`INTEGRIOS_ADMIN_PASSWORD_ENABLED=false` and skip it. OIDC provisions its User at first successful
+sign-in.
 
 ## Bootstrap semantics
 

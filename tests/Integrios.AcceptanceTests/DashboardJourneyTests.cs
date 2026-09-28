@@ -20,15 +20,15 @@ public sealed class DashboardJourneyTests(PackagedDeploymentFixture fixture)
         RunBrowserJourneyAsync("journey.browser.test.ts");
 
     [Fact]
-    public async Task FirstOperatorBootstrap_AllowsPackagedPasswordLoginAndPreservesCredentialsOnRepeat()
+    public async Task OperatorCreatedThroughCli_SignsInWithPasswordOnly_AndDuplicateEmailChangesNothing()
     {
         (await fixture.ScalarAsync<long>("SELECT COUNT(*) FROM users")).ShouldBe(0);
-        string passwordFile = Path.Combine(Path.GetTempPath(), $"integrios-initial-password-{Guid.NewGuid():N}");
+        string passwordFile = Path.Combine(Path.GetTempPath(), $"integrios-operator-password-{Guid.NewGuid():N}");
         await File.WriteAllTextAsync(passwordFile, $"Acceptance-{Guid.NewGuid():N}!", new System.Text.UTF8Encoding(false));
         try
         {
             // The disposable test credential is mounted read-only, never supplied in argv/env.
-            ComposeResult created = await fixture.RunOperatorBootstrapAsync(passwordFile);
+            ComposeResult created = await fixture.RunOperatorCreateAsync(passwordFile);
             created.ExitCode.ShouldBe(0, created.Output);
             (await fixture.ScalarAsync<long>("SELECT COUNT(*) FROM users")).ShouldBe(1);
             (await fixture.ScalarAsync<long>("SELECT COUNT(*) FROM password_credentials")).ShouldBe(1);
@@ -36,13 +36,14 @@ public sealed class DashboardJourneyTests(PackagedDeploymentFixture fixture)
             await RunBrowserJourneyAsync("password-login.browser.test.ts", passwordFile);
             string before = await fixture.ScalarAsync<string>(snapshotSql);
 
-            ComposeResult repeated = await fixture.RunOperatorBootstrapAsync();
-            repeated.ExitCode.ShouldBe(0, repeated.Output);
+            // A second create with the same sign-in email is refused and changes nothing.
+            ComposeResult repeated = await fixture.RunOperatorCreateAsync(passwordFile);
+            repeated.ExitCode.ShouldNotBe(0, repeated.Output);
             (await fixture.ScalarAsync<long>("SELECT COUNT(*) FROM users")).ShouldBe(1);
             (await fixture.ScalarAsync<long>("SELECT COUNT(*) FROM password_credentials")).ShouldBe(1);
             string after = await fixture.ScalarAsync<string>(snapshotSql);
             // Do not let assertion output include the stored hash on failure.
-            string.Equals(before, after, StringComparison.Ordinal).ShouldBeTrue("Repeated bootstrap changed the User or credential.");
+            string.Equals(before, after, StringComparison.Ordinal).ShouldBeTrue("A refused duplicate create changed the User or credential.");
             await RunBrowserJourneyAsync("password-login.browser.test.ts", passwordFile);
         }
         finally

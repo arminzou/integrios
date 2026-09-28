@@ -278,18 +278,14 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
         return await RunComposeAsync(TimeSpan.FromMinutes(2), composeArguments.ToArray());
     }
 
-    public async Task<ComposeResult> RunOperatorBootstrapAsync(string? passwordFile = null)
-    {
-        var arguments = new List<string> { "run", "--rm", "--no-deps" };
-        if (passwordFile is not null)
-            arguments.AddRange(["--volume", $"{passwordFile}:/run/initial-operator-password:ro"]);
-        arguments.AddRange(["admin", "operator-user", "bootstrap"]);
-        if (passwordFile is not null)
-            arguments.AddRange([
-                "--display-name", "Acceptance Operator", "--email", "operator@example.test",
-                "--password-file", "/run/initial-operator-password"]);
-        return await RunComposeAsync(TimeSpan.FromMinutes(2), arguments.ToArray());
-    }
+    public async Task<ComposeResult> RunOperatorCreateAsync(string passwordFile) =>
+        await RunComposeAsync(
+            TimeSpan.FromMinutes(2),
+            "run", "--rm", "--no-deps",
+            "--volume", $"{passwordFile}:/run/operator-password:ro",
+            "admin", "operator-user", "create",
+            "--display-name", "Acceptance Operator", "--email", "operator@example.test",
+            "--password-file", "/run/operator-password");
 
     // Revokes the bootstrap OperatorKey deployment-wide. Every later control-plane call in this
     // collection must authenticate through AdminAuthorization rather than a captured header value.

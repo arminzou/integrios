@@ -4,12 +4,12 @@ import { readFile } from "node:fs/promises";
 import { chromium } from "playwright";
 import { describe, expect, it } from "vitest";
 
-// The Acceptance harness provisions this disposable account through the packaged bootstrap CLI.
+// The Acceptance harness creates this disposable account through the packaged operator-user CLI.
 // This journey uses the built dashboard and real cookie/antiforgery endpoints, with no routes mocked.
 const origin = process.env.INTEGRIOS_JOURNEY_ORIGIN;
 const passwordFile = process.env.INTEGRIOS_JOURNEY_PASSWORD_FILE;
 
-describe.skipIf(!origin || !passwordFile)("Packaged first-Operator password login", () => {
+describe.skipIf(!origin || !passwordFile)("Packaged Operator password login", () => {
   it("signs in without OIDC and uses the resulting browser session", async () => {
     const browser = await chromium.launch();
     try {

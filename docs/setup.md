@@ -11,17 +11,14 @@ delivery.
 ## Start the stack
 
 ```bash
-docker compose build
-docker compose up -d postgres migrate grant-runtime bootstrap
-docker compose run --rm admin operator-user bootstrap \
-  --display-name "Deployment operator" --email "operator@example.com"
 make up
+docker compose run --rm admin operator-user create \
+  --display-name "Deployment operator" --email "operator@example.com"
 ```
 
-The first-Operator command prompts for your password on an empty database. Complete it successfully
-before starting runtime. On later starts use `make up`; repeated first-Operator setup preserves
-existing accounts. For machine-only development, explicitly set `INTEGRIOS_ADMIN_PASSWORD_ENABLED=false`
-and omit human-account setup.
+`operator-user create` prompts for a masked, confirmed password and creates your dashboard account.
+Later starts need only `make up`. For machine-only development, explicitly set
+`INTEGRIOS_ADMIN_PASSWORD_ENABLED=false` and skip the account.
 
 The dev stack carries working infrastructure defaults. To override any of them,
 create a `.env` file (see the environment variables table below).

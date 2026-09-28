@@ -15,13 +15,6 @@ internal sealed class CreateOperatorUserCommandHandler(IPasswordCredentialLifecy
         CreateOperatorUserCommand command,
         CancellationToken cancellationToken)
     {
-        (User user, PasswordCredential credential) = CreateEntities(command);
-        PasswordCredentialMutationStatus status = await lifecycle.CreateAsync(user, credential, cancellationToken);
-        return new PasswordCredentialMutationResult(status, user.Id);
-    }
-
-    internal static (User User, PasswordCredential Credential) CreateEntities(CreateOperatorUserCommand command)
-    {
         string displayName = command.DisplayName.Trim();
         if (displayName.Length == 0)
             throw new ArgumentException("Display name is required.", nameof(command));
@@ -52,7 +45,8 @@ internal sealed class CreateOperatorUserCommandHandler(IPasswordCredentialLifecy
             DisabledAt = null,
         };
 
-        return (user, credential);
+        PasswordCredentialMutationStatus status = await lifecycle.CreateAsync(
+            user, credential, cancellationToken);
+        return new PasswordCredentialMutationResult(status, user.Id);
     }
 }
-
