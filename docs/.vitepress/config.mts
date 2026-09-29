@@ -3,6 +3,7 @@ import { defineConfig } from 'vitepress'
 export default defineConfig({
   title: 'Integrios',
   description: 'Integrios documentation',
+  srcExclude: ['**/*.local.md'],
   ignoreDeadLinks: [/^http:\/\/localhost:\d+\/?$/],
   themeConfig: {
     search: { provider: 'local' },
