@@ -1,8 +1,8 @@
 # CI/CD
 
-Integrios ships one event-driven GitHub Actions workflow (`.github/workflows/ci.yml`) you can run
-as-is or fork and adapt. The flows keep routine feedback prompt while still making complete
-verification mandatory before publishing a release:
+Integrios ships an application workflow (`.github/workflows/ci.yml`) and a separate documentation
+workflow (`.github/workflows/docs.yml`). The application flows keep routine feedback prompt while
+still making complete verification mandatory before publishing a release:
 
 1. **Pull request**: locked restore, dependency audit, Release build, architecture and unit tests,
    plus the same Functional suite against PostgreSQL and SQL Server 2022. No configuration or
@@ -15,6 +15,12 @@ verification mandatory before publishing a release:
    [Cutting a release](#cutting-a-release) for how that tag comes about.
 5. **Deploy**: owned by you. Integrios publishes images; how you run them (Compose,
    Kubernetes, etc.) lives in your own infrastructure, not in this repo.
+
+Documentation-only changes run the documentation workflow on pull requests and `main`. It installs
+the root lockfile with `npm ci`, builds the VitePress site, checks representative output pages,
+and scans the generated files for private content markers. The build fails on broken internal links.
+These changes do not start the application Acceptance suite. Local preview and build commands are in
+the repository README.
 
 ## Cutting a release
 

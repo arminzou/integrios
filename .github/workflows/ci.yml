@@ -2,10 +2,11 @@ name: ci
 
 on:
   pull_request:
-    paths-ignore: ['**.md', 'docs/**', 'LICENSE']
+    paths-ignore: ['**.md', 'docs/**', 'LICENSE', 'package.json', 'package-lock.json']
   push:
     branches: [main]
     tags: ['v*']
+    paths-ignore: ['**.md', 'docs/**', 'LICENSE', 'package.json', 'package-lock.json']
   schedule:
     - cron: '17 3 * * *'
   workflow_dispatch:

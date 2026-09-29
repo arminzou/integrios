@@ -1,0 +1,32 @@
+name: docs
+
+on:
+  pull_request:
+    paths: ['**.md', 'docs/**', 'package.json', 'package-lock.json', '.github/workflows/docs.yml']
+  push:
+    branches: [main]
+    paths: ['**.md', 'docs/**', 'package.json', 'package-lock.json', '.github/workflows/docs.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 22.22.0
+          cache: npm
+      - run: npm ci
+      - run: npm run docs:build
+      - name: Check public output
+        shell: bash
+        run: |
+          test -f docs/.vitepress/dist/index.html
+          test -f docs/.vitepress/dist/setup.html
+          if grep -R -nE 'brainspaces|\.brain/|__PRIVATE_DOC_PROBE__' docs/.vitepress/dist; then
+            echo 'Private content marker found in documentation output' >&2
+            exit 1
+          fi
