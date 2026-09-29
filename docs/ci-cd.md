@@ -21,7 +21,8 @@ the root lockfile with `npm ci`, builds the VitePress site, checks representativ
 and scans the generated files for private content markers. The build fails on broken internal links.
 Pull requests only check the build; successful `main` runs publish it to
 [GitHub Pages](https://arminzou.github.io/integrios/). These changes do not start the application
-Acceptance suite. Local preview and build commands are in the repository README.
+Acceptance suite. For local documentation work, run `npm ci`, `npm run docs:dev` to preview, and
+`npm run docs:build` to check the production build and internal links.
 
 ## Cutting a release
 

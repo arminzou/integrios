@@ -53,9 +53,6 @@ This starts the services, Postgres, migrations, and a test sink (Admin API on `h
 
 Read the [Integrios documentation](https://arminzou.github.io/integrios/).
 
-To preview the documentation site locally, run `npm ci` and `npm run docs:dev` from the repository
-root. Run `npm run docs:build` to check the production site and its internal links.
-
 - [Setup & quickstart](https://arminzou.github.io/integrios/setup.html): run locally and deliver your first event
 - [Operator dashboard access](https://arminzou.github.io/integrios/operator-dashboard.html): configure OIDC or email-and-password sign-in and recover access
 - [Database backends](https://arminzou.github.io/integrios/database-backends.html): PostgreSQL default and SQL Server 2022+ reference configuration
