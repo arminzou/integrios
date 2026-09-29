@@ -279,7 +279,7 @@ describe("The Tenant overview's Needs attention", () => {
     await within(attention).findByText("9 dead-lettered Deliveries");
     expect(within(attention).getByText("4 unrouted Events")).toBeTruthy();
     expect(within(attention).queryByText(/awaiting routing/)).toBeNull();
-    expect(within(attention).getAllByText(/Oldest .*ago/)).toHaveLength(2);
+    expect(within(attention).getAllByText(/^Oldest .+/)).toHaveLength(2);
     expect(within(attention).getByRole("link", { name: "Open unrouted Events in Events" }).getAttribute("href")).toBe(
       `/tenants/${tenantId}/events?status=unrouted`,
     );

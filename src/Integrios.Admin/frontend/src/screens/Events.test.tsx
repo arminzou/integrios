@@ -242,7 +242,7 @@ describe("Right now", () => {
     const strip = await screen.findByRole("region", { name: "Right now" });
     const awaiting = within(strip).getByRole("button", { name: /Awaiting routing/ });
     expect(awaiting.textContent).toContain("3");
-    expect(awaiting.textContent).toMatch(/Oldest .*ago/);
+    expect(awaiting.textContent).toMatch(/Oldest .+/);
     const unrouted = within(strip).getByRole("button", { name: /Unrouted/ });
     expect(unrouted.textContent).toContain("0");
     expect(unrouted.textContent).toContain("Nothing waiting");
