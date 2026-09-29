@@ -1,8 +1,16 @@
 import { defineConfig } from 'vitepress'
 
+const siteUrl = 'https://arminzou.github.io/integrios/'
+
 export default defineConfig({
   title: 'Integrios',
   description: 'Integrios documentation',
+  base: '/integrios/',
+  head: [['link', { rel: 'icon', type: 'image/svg+xml', href: '/integrios/favicon.svg' }]],
+  sitemap: { hostname: siteUrl },
+  transformHead: ({ page }) => page === '404.md' ? [] : [
+    ['link', { rel: 'canonical', href: new URL(page === 'index.md' ? '' : page.replace(/\.md$/, '.html'), siteUrl).href }]
+  ],
   srcExclude: ['**/*.local.md'],
   ignoreDeadLinks: [/^http:\/\/localhost:\d+\/?$/],
   themeConfig: {

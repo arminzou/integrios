@@ -19,8 +19,9 @@ still making complete verification mandatory before publishing a release:
 Documentation-only changes run the documentation workflow on pull requests and `main`. It installs
 the root lockfile with `npm ci`, builds the VitePress site, checks representative output pages,
 and scans the generated files for private content markers. The build fails on broken internal links.
-These changes do not start the application Acceptance suite. Local preview and build commands are in
-the repository README.
+Pull requests only check the build; successful `main` runs publish it to
+[GitHub Pages](https://arminzou.github.io/integrios/). These changes do not start the application
+Acceptance suite. Local preview and build commands are in the repository README.
 
 ## Cutting a release
 

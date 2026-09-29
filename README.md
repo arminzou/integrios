@@ -37,7 +37,7 @@ body mapping, HTTP method and path, and its success rule. Generic external event
 universal source path; HTTP(S) is the only destination protocol. Integrios deliberately does not
 require provider-specific destination actions or runtime plugins.
 
-For the full design (processing flow, durability guarantees, and platform concepts), see [docs/architecture.md](docs/architecture.md).
+For the full design (processing flow, durability guarantees, and platform concepts), see the [architecture guide](https://arminzou.github.io/integrios/architecture.html).
 
 ## Getting Started
 
@@ -47,23 +47,25 @@ Prerequisite: Docker.
 make up
 ```
 
-This starts the services, Postgres, migrations, and a test sink (Admin API on `http://localhost:5150`, Ingestion on `http://localhost:5231`). Then follow the [setup guide](docs/setup.md) to onboard a tenant and send your first event end to end. For a production deployment, see [deploy/](deploy/README.md) (Docker Compose) or [deploy/azure](deploy/azure/README.md) (Azure Container Apps).
+This starts the services, Postgres, migrations, and a test sink (Admin API on `http://localhost:5150`, Ingestion on `http://localhost:5231`). Then follow the [setup guide](https://arminzou.github.io/integrios/setup.html) to onboard a tenant and send your first event end to end. For a production deployment, see [deploy/](deploy/README.md) (Docker Compose) or [deploy/azure](deploy/azure/README.md) (Azure Container Apps).
 
 ## Documentation
+
+Read the [Integrios documentation](https://arminzou.github.io/integrios/).
 
 To preview the documentation site locally, run `npm ci` and `npm run docs:dev` from the repository
 root. Run `npm run docs:build` to check the production site and its internal links.
 
-- [Setup & quickstart](docs/setup.md): run locally and deliver your first event
-- [Operator dashboard access](docs/operator-dashboard.md): configure OIDC or email-and-password sign-in and recover access
-- [Database backends](docs/database-backends.md): PostgreSQL default and SQL Server 2022+ reference configuration
-- [GitHub-to-Slack walkthrough](docs/github-to-slack-walkthrough.md): a verified provider webhook
+- [Setup & quickstart](https://arminzou.github.io/integrios/setup.html): run locally and deliver your first event
+- [Operator dashboard access](https://arminzou.github.io/integrios/operator-dashboard.html): configure OIDC or email-and-password sign-in and recover access
+- [Database backends](https://arminzou.github.io/integrios/database-backends.html): PostgreSQL default and SQL Server 2022+ reference configuration
+- [GitHub-to-Slack walkthrough](https://arminzou.github.io/integrios/github-to-slack-walkthrough.html): a verified provider webhook
   source through to a transformed destination delivery, end to end
-- [Connector manifest reference](docs/connector-manifest.md): every property a Connector manifest
+- [Connector manifest reference](https://arminzou.github.io/integrios/connector-manifest.html): every property a Connector manifest
   may carry, and what each one is validated against
-- [Architecture](docs/architecture.md): design, processing flow, and platform concepts
-- [Observability](docs/observability.md): metrics, traces, logs, and OTLP export
-- [CI/CD](docs/ci-cd.md): the pipeline and published images
+- [Architecture](https://arminzou.github.io/integrios/architecture.html): design, processing flow, and platform concepts
+- [Observability](https://arminzou.github.io/integrios/observability.html): metrics, traces, logs, and OTLP export
+- [CI/CD](https://arminzou.github.io/integrios/ci-cd.html): the pipeline and published images
 - [Contributing](CONTRIBUTING.md)
 
 ## Tech Stack

@@ -20,13 +20,36 @@ jobs:
           node-version: 22.22.0
           cache: npm
       - run: npm ci
+      - name: Add excluded-content probe
+        run: printf '%s\n' '__PRIVATE_DOC_PROBE__' > docs/__private_doc_probe.local.md
       - run: npm run docs:build
       - name: Check public output
         shell: bash
         run: |
           test -f docs/.vitepress/dist/index.html
           test -f docs/.vitepress/dist/setup.html
-          if grep -R -nE 'brainspaces|\.brain/|__PRIVATE_DOC_PROBE__' docs/.vitepress/dist; then
-            echo 'Private content marker found in documentation output' >&2
+          if test -e docs/.vitepress/dist/__private_doc_probe.local.html ||
+             grep -R -n '__PRIVATE_DOC_PROBE__' docs/.vitepress/dist; then
+            echo 'Excluded documentation appeared in public output' >&2
             exit 1
           fi
+      - name: Upload Pages artifact
+        if: github.event_name == 'push'
+        uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4
+        with:
+          path: docs/.vitepress/dist
+
+  deploy:
+    if: github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
