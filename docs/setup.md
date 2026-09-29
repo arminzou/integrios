@@ -353,4 +353,4 @@ for SQL Server configuration and migration details.
 ## Production deployment
 
 This guide covers the local dev stack only. For a production reference deployment, see
-[`deploy/README.md`](../deploy/README.md).
+[`deploy/README.md`](https://github.com/arminzou/integrios/blob/main/deploy/README.md).

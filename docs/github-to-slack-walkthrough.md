@@ -31,7 +31,7 @@ set).
 
 ## 1. Apply the example Connector manifests
 
-The [`examples/connectors/`](../examples/connectors/) directory carries the exact
+The [`examples/connectors/`](https://github.com/arminzou/integrios/tree/main/examples/connectors) directory carries the exact
 machine-validated manifests this walkthrough uses. `github.json` declares bounded webhook
 verification choices; `slack.json` declares generic HTTP delivery with bearer-token
 authentication. The concrete Source mapping and Slack success rule are authored on the Tenant

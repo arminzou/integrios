@@ -9,9 +9,9 @@ when a host also states them in `appsettings.json`.
 Ingestion and Worker additionally load key-per-file and, when configured, Azure Key Vault after
 the standard sources. A value from either later source overrides an earlier value for the same
 key. They load at startup; restart the owning process after changing a Tenant secret. See
-[Tenant secrets](../secrets/README.md) for file names and process isolation. Compose variables
+[Tenant secrets](https://github.com/arminzou/integrios/blob/main/secrets/README.md) for file names and process isolation. Compose variables
 such as `INTEGRIOS_ADMIN_OIDC_AUTHORITY` are deployment-file inputs that Compose maps to the
-runtime keys below; see [the deployment example](../deploy/.env.example).
+runtime keys below; see [the deployment example](https://github.com/arminzou/integrios/blob/main/deploy/.env.example).
 
 ## Shared and host settings
 
@@ -79,7 +79,7 @@ processing starts.
 | `Integrios:Worker:FanoutLoop:IdlePollInterval` | `Integrios__Worker__FanoutLoop__IdlePollInterval` | `00:00:02` | Positive `TimeSpan`. |
 | `Integrios:Worker:DeliveryLoop:BatchSize` | `Integrios__Worker__DeliveryLoop__BatchSize` | `25` | Positive integer. |
 | `Integrios:Worker:DeliveryLoop:IdlePollInterval` | `Integrios__Worker__DeliveryLoop__IdlePollInterval` | `00:00:02` | Positive `TimeSpan`. |
-| `Integrios:Worker:HistoryRetention:Period` | `Integrios__Worker__HistoryRetention__Period` | Unset: disabled | `TimeSpan` of at least seven days. Enabling deletion requires reviewing [retention behavior](../deploy/README.md#completed-history-retention). |
+| `Integrios:Worker:HistoryRetention:Period` | `Integrios__Worker__HistoryRetention__Period` | Unset: disabled | `TimeSpan` of at least seven days. Enabling deletion requires reviewing [retention behavior](https://github.com/arminzou/integrios/blob/main/deploy/README.md#completed-history-retention). |
 
 ## Credentials and Tenant secret sources
 
@@ -101,8 +101,8 @@ defaults only. Do not put deployment credentials in `secrets/sources` or
 | `INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET` | same | Admin `bootstrap` command | Non-empty in Production for the initial OperatorKey; supplied out of band. |
 | `INTEGRIOS_OPERATOR_KEY_ROTATION_SECRET` | same | Admin `operator-key rotate` command | Non-empty for a rotation. |
 | `Integrios:KeyVault:Uri` | `Integrios__KeyVault__Uri` | Ingestion, Worker | Optional. If set, the owning process loads its direction-specific vault at startup; an invalid or unreachable vault stops startup. |
-| `SourceSecrets:<tenant-slug>:<secret-reference>` | `SourceSecrets__<tenant-slug>__<secret-reference>` | Ingestion | Open-ended Tenant secret namespace; see [file and vault naming](../secrets/README.md). |
-| `DestinationSecrets:<tenant-slug>:<secret-reference>` | `DestinationSecrets__<tenant-slug>__<secret-reference>` | Worker | Open-ended Tenant secret namespace; see [file and vault naming](../secrets/README.md). |
+| `SourceSecrets:<tenant-slug>:<secret-reference>` | `SourceSecrets__<tenant-slug>__<secret-reference>` | Ingestion | Open-ended Tenant secret namespace; see [file and vault naming](https://github.com/arminzou/integrios/blob/main/secrets/README.md). |
+| `DestinationSecrets:<tenant-slug>:<secret-reference>` | `DestinationSecrets__<tenant-slug>__<secret-reference>` | Worker | Open-ended Tenant secret namespace; see [file and vault naming](https://github.com/arminzou/integrios/blob/main/secrets/README.md). |
 
 `database grant-runtime` requires a non-empty list with unique principal names and a `control-plane`
 or `data-plane` scope on every entry. Credential keys may be omitted for grant-only mode; if a key

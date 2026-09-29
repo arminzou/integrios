@@ -83,7 +83,7 @@ The workflow lives in one file you own in your fork. To publish elsewhere, edit 
 `package` job in `ci.yml`:
 
 - **Different GHCR namespace**: nothing to change. `images:` uses
-  `ghcr.io/${{ github.repository }}/<service>`, so your fork publishes under your own
+  <code v-pre>ghcr.io/${{ github.repository }}/&lt;service&gt;</code>, so your fork publishes under your own
   owner/repo automatically.
 - **A non-GHCR registry** (Docker Hub, a private registry, etc.): point the `Log in`
   step and the `images:` value at your registry, and supply credentials as repository
