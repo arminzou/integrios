@@ -3,7 +3,7 @@ import { defineConfig } from 'vitepress'
 const siteUrl = 'https://arminzou.github.io/integrios/'
 
 export default defineConfig({
-  title: 'Integrios',
+  title: 'Integrios Docs',
   description: 'Integrios documentation',
   base: '/integrios/',
   head: [['link', { rel: 'icon', type: 'image/svg+xml', href: '/integrios/favicon.svg' }]],
@@ -17,7 +17,7 @@ export default defineConfig({
     search: { provider: 'local' },
     nav: [
       { text: 'Home', link: '/' },
-      { text: 'Getting started', link: '/setup' },
+      { text: 'Getting started', link: '/what-is-integrios' },
       { text: 'Concepts', link: '/architecture' },
       { text: 'Configuration', link: '/configuration' },
       { text: 'Operations', link: '/observability' },
@@ -25,6 +25,7 @@ export default defineConfig({
     ],
     sidebar: [
       { text: 'Getting started', items: [
+        { text: 'What is Integrios?', link: '/what-is-integrios' },
         { text: 'Setup', link: '/setup' },
         { text: 'GitHub to Slack walkthrough', link: '/github-to-slack-walkthrough' }
       ] },

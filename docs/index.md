@@ -1,14 +1,12 @@
 ---
 layout: doc
-title: Self-hosted event integration documentation
-description: Integrios is a self-hosted runtime for moving business-system Events to HTTP APIs. Explore setup, delivery, operations, and recovery.
 outline: false
 aside: false
 ---
 
-# Integrios documentation
+# Integrios Docs
 
-Integrios is a self-hosted runtime for moving business-system Events to HTTP APIs. Your team keeps control of its sources and deployment while Integrios handles delivery and gives Operators the history needed to investigate failures.
+Explore guides for getting started with Integrios, understanding how it works, and running it in your environment.
 
 <div class="docs-start">
   <div>
@@ -21,6 +19,8 @@ Integrios is a self-hosted runtime for moving business-system Events to HTTP API
 <div class="docs-index-grid">
   <section>
     <h2><span class="docs-index-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h15m-6-6 6 6-6 6"/></svg></span>Get started</h2>
+    <a href="./what-is-integrios.html">What is Integrios?</a>
+    <p>Why teams use it and where it fits.</p>
     <a href="./setup.html">Setup and quickstart</a>
     <p>Run locally and send an Event end to end.</p>
     <a href="./github-to-slack-walkthrough.html">GitHub to Slack walkthrough</a>
