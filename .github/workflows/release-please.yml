@@ -26,7 +26,7 @@ jobs:
       # from an event its own token caused, so a tag created under GITHUB_TOKEN would never fire
       # ci.yml's `push: tags` release run -- publishing nothing, silently. The App is scoped to
       # this repository and its token expires in an hour, unlike a personal access token.
-      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+      - uses: actions/create-github-app-token@v3.2.0
         id: app-token
         with:
           app-id: ${{ vars.RELEASE_PLEASE_APP_ID }}

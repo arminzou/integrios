@@ -78,8 +78,8 @@ commands, test logs and TRX results, resolved external image digests, and the pu
 Ingestion, Admin, and Worker image digests.
 
 The repository pins its .NET SDK, NuGet dependency graph, container versions, and
-third-party GitHub Actions. Action references in `ci.yml` use immutable commit SHAs with a
-readable release-version comment; keep that form when adapting the workflow.
+GitHub Actions. Action references use release-version tags such as `@v7.0.1`;
+keep that form when adapting the workflow.
 
 Publishing exists only in the main and release flows. Pull requests, including those from
 forks, run only the read-only verification job and never need or receive registry
