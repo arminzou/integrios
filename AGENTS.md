@@ -26,11 +26,18 @@ team points it at their own stack. Licensed under MIT.
 - `src/Integrios.Admin` owns tenant management, Connector, Source and Destination authoring, topic and subscription management, and it serves the Operator dashboard. Control plane.
 - `src/Integrios.Worker` owns outbox polling, fanout to subscriptions, delivery, and retry/DLQ behavior.
 - The development Compose stack includes WireMock as a controllable local sink for testing and demos. It is not part of the deployable product.
-- `src/Integrios.Domain` holds core domain types and shared contracts.
+- `src/Integrios.Application` holds the use cases: commands, queries, their handlers, and the ports
+  they need, grouped by responsibility (such as `Authoring`, `Ingestion`, `Delivery`) and then by
+  capability.
+- `src/Integrios.Infrastructure` implements those ports: persistence, messaging, secret resolution,
+  and other external-system adapters.
+- `src/Integrios.Domain` holds entities, enums, and value objects.
 - `tests/` contains the test projects; a project's name states what it needs to run.
 - `src/Integrios.Migrations.Postgres/` and `src/Integrios.Migrations.SqlServer/` contain the
   provider-specific EF Core migrations.
-- `docs/` is for public documentation only.
+- `docs/` is for public documentation only. It is also the source of the public VitePress site,
+  published to GitHub Pages: preview it with `npm ci` then `npm run docs:dev`, and see
+  [the CI guide](docs/ci-cd.md) for the build and publishing workflow.
 
 ## Architecture
 
@@ -59,7 +66,7 @@ service-to-service configuration calls.
 - `Integrios.Ingestion` owns the intake surface, tenant resolution, and acceptance-boundary writes. It does not own fanout, delivery, or retry behavior.
 - `Integrios.Admin` owns control plane configuration. It does not own event processing.
 - `Integrios.Worker` owns outbox polling, fanout to subscriptions, per-subscription delivery, and retry/DLQ/replay. It does not own HTTP intake or config writes.
-- `Integrios.Domain` owns domain entities, enums, and API contracts. It does not own implementation logic.
+- `Integrios.Domain` owns entities, enums, and value objects. It does not own ports, handlers, persistence, or API contracts.
 
 ### Scope constraints
 
@@ -170,7 +177,7 @@ with traits or category filters.
 
 Default verification:
 
-- docs-only change: verify referenced files and paths exist
+- docs-only change: run `npm run docs:build`, which fails on broken internal links
 - code change: run the most relevant build/test commands for the touched area
 - schema or architecture change: verify migrations, tests, and docs stay aligned
 
@@ -194,14 +201,15 @@ Common types:
 
 Suggested scopes:
 
-- `api`
 - `admin`
+- `dashboard`
+- `ingestion`
 - `worker`
-- `mocksink`
+- `api`
 - `core`
 - `db`
-- `docs`
 - `infra`
+- `docs`
 
 Examples:
 
