@@ -137,6 +137,7 @@ async function openDashboard(path = "/tenants", options: Parameters<Browser["new
 }
 
 async function accessibilityViolations(page: Page): Promise<string[]> {
+  await page.locator('[role="status"][aria-busy="true"]').waitFor({ state: "detached" });
   await page.addScriptTag({ path: axePath });
   return page.evaluate(async () => {
     const results = await (
