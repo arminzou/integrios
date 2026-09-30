@@ -270,8 +270,9 @@ it("keeps a webhook Source's verification when its mapping is edited", async () 
   fireEvent.change(within(form).getByLabelText("Event mapping (JSONata, optional)"), { target: { value: "payload" } });
 
   // A changed mapping retypes this Source's Events, so Enter alone does not save it.
-  fireEvent.submit(form);
-  await new Promise((resolve) => setTimeout(resolve, 50));
+  await act(async () => {
+    fireEvent.submit(form);
+  });
   expect(calls.some((call) => call.method === "PUT")).toBe(false);
 
   fireEvent.click(within(form).getByRole("button", { name: "Save configuration" }));

@@ -55,7 +55,16 @@ describe("Tenants list", () => {
     const label = "Name or slug";
     const calls = stubHttp(({ url }) => ({
       status: 200,
-      body: page([tenant({ name: url.searchParams.has("after") ? "Second" : "Acme" })], "cursor-1"),
+      body: page(
+        [
+          tenant(
+            url.searchParams.has("after")
+              ? { id: "22222222-2222-2222-2222-222222222222", name: "Second" }
+              : { name: "Acme" },
+          ),
+        ],
+        "cursor-1",
+      ),
     }));
     const { router } = renderScreen(<TenantsScreen />, "/tenants");
     await screen.findByRole("link", { name: "Acme" });

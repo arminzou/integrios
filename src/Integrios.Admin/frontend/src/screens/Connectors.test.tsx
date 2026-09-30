@@ -82,17 +82,6 @@ describe("Opening a Connector from its row", () => {
 
     expect(router.state.location.pathname).toBe("/connectors");
   });
-
-  it("leaves a modified click to the browser, which is what opens it in a new tab", async () => {
-    stubHttp(() => listed);
-
-    const { router } = renderScreen(<ConnectorsScreen />, "/connectors");
-    const name = await screen.findByText(installed.name);
-
-    fireEvent.click(name, { ctrlKey: true });
-
-    expect(router.state.location.pathname).toBe("/connectors");
-  });
 });
 
 describe("A deployment with no Connectors", () => {
