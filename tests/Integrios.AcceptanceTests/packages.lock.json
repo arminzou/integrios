@@ -699,8 +699,8 @@
       },
       "System.Security.Cryptography.Pkcs": {
         "type": "Transitive",
-        "resolved": "9.0.4",
-        "contentHash": "cUFTcMlz/Qw9s90b2wnWSCvHdjv51Bau9FQqhsr4TlwSe1OX+7SoXUqphis5G74MLOvMOCghxPPlEqOdCrVVGA=="
+        "resolved": "9.0.21",
+        "contentHash": "KD+oHoYIxwNCajjVe58WVwq9cRpum+Pg3tRveDRtkcaw6w3oc7sNBoMRtb5P5OehI3bgv1ucMpgjf8lpj5J96A=="
       },
       "System.Security.Cryptography.ProtectedData": {
         "type": "Transitive",
@@ -762,11 +762,11 @@
       "integrios.admin": {
         "type": "Project",
         "dependencies": {
-          "Integrios.Application": "[0.8.0, )",
-          "Integrios.Domain": "[0.8.0, )",
-          "Integrios.Infrastructure": "[0.8.0, )",
-          "Integrios.Migrations.Postgres": "[0.8.0, )",
-          "Integrios.Migrations.SqlServer": "[0.8.0, )",
+          "Integrios.Application": "[0.11.0, )",
+          "Integrios.Domain": "[0.11.0, )",
+          "Integrios.Infrastructure": "[0.11.0, )",
+          "Integrios.Migrations.Postgres": "[0.11.0, )",
+          "Integrios.Migrations.SqlServer": "[0.11.0, )",
           "Microsoft.AspNetCore.Authentication.OpenIdConnect": "[10.0.5, )",
           "Microsoft.AspNetCore.OpenApi": "[10.0.5, )",
           "Microsoft.OpenApi": "[2.7.5, )"
@@ -775,7 +775,7 @@
       "integrios.application": {
         "type": "Project",
         "dependencies": {
-          "Integrios.Domain": "[0.8.0, )",
+          "Integrios.Domain": "[0.11.0, )",
           "MediatR": "[12.5.0, )",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.5, )",
           "Microsoft.Extensions.Diagnostics": "[10.0.5, )",
@@ -792,8 +792,8 @@
           "Azure.Identity": "[1.21.0, )",
           "Azure.Messaging.ServiceBus": "[7.20.2, )",
           "Dapper": "[2.1.72, )",
-          "Integrios.Application": "[0.8.0, )",
-          "Integrios.Domain": "[0.8.0, )",
+          "Integrios.Application": "[0.11.0, )",
+          "Integrios.Domain": "[0.11.0, )",
           "Jsonata.Net.Native": "[3.0.0, )",
           "Microsoft.EntityFrameworkCore.SqlServer": "[10.0.4, )",
           "Npgsql": "[10.0.2, )",
@@ -805,28 +805,29 @@
           "OpenTelemetry.Instrumentation.AspNetCore": "[1.15.2, )",
           "OpenTelemetry.Instrumentation.Http": "[1.15.1, )",
           "OpenTelemetry.Instrumentation.Runtime": "[1.15.1, )",
-          "OpenTelemetry.Instrumentation.SqlClient": "[1.15.2, )"
+          "OpenTelemetry.Instrumentation.SqlClient": "[1.15.2, )",
+          "System.Security.Cryptography.Pkcs": "[9.0.21, )"
         }
       },
       "integrios.migrations.postgres": {
         "type": "Project",
         "dependencies": {
-          "Integrios.Infrastructure": "[0.8.0, )",
+          "Integrios.Infrastructure": "[0.11.0, )",
           "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.1, )"
         }
       },
       "integrios.migrations.sqlserver": {
         "type": "Project",
         "dependencies": {
-          "Integrios.Infrastructure": "[0.8.0, )",
+          "Integrios.Infrastructure": "[0.11.0, )",
           "Microsoft.EntityFrameworkCore.SqlServer": "[10.0.4, )"
         }
       },
       "integrios.tests.shared": {
         "type": "Project",
         "dependencies": {
-          "Integrios.Application": "[0.8.0, )",
-          "Integrios.Domain": "[0.8.0, )"
+          "Integrios.Application": "[0.11.0, )",
+          "Integrios.Domain": "[0.11.0, )"
         }
       }
     }
