@@ -43,7 +43,7 @@
     "openapi-typescript": "7.9.1",
     "playwright": "1.62.1",
     "tailwindcss": "4.3.3",
-    "typescript": "5.9.2",
+    "typescript": "7.0.2",
     "vite": "7.3.7",
     "vitest": "4.1.12"
   }
