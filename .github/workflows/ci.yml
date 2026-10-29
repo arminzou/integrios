@@ -97,6 +97,8 @@ jobs:
         run: npm ci
 
       - name: Audit frontend dependencies
+        # Dependabot alerts report new advisories; nightly runs would only repeat them.
+        if: github.event_name != 'schedule'
         working-directory: src/Integrios.Admin/frontend
         run: npm audit --audit-level=high
 
