@@ -10,6 +10,10 @@ updates:
     groups:
       frontend:
         update-types: [minor, patch]
+    # Major upgrades are planned work; security updates still arrive regardless.
+    ignore:
+      - dependency-name: "*"
+        update-types: [version-update:semver-major]
 
   # No central package management: the solution at the root reaches every project.
   - package-ecosystem: nuget
@@ -22,3 +26,6 @@ updates:
     groups:
       nuget:
         update-types: [minor, patch]
+    ignore:
+      - dependency-name: "*"
+        update-types: [version-update:semver-major]
