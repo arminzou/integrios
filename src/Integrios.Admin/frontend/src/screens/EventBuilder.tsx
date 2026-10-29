@@ -421,7 +421,7 @@ export function EventBuilder({
       />
     );
 
-  const useDraft = () => {
+  const applyDraft = () => {
     onUse({ expression: settled, schema: draft.schema, identity });
     changeOpen(false);
   };
@@ -608,7 +608,7 @@ export function EventBuilder({
                 Back to Source
               </Button>
             </DialogPrimitive.Close>
-            <Button type="button" disabled={!mappable} onClick={useDraft}>
+            <Button type="button" disabled={!mappable} onClick={applyDraft}>
               Use configuration
             </Button>
           </div>
