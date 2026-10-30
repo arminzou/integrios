@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.12.0](https://github.com/arminzou/integrios/compare/v0.11.0...v0.12.0) (2026-10-30)
+
+
+### Features
+
+* **api:** check webhook verification settings when a Source is saved ([c4bccc9](https://github.com/arminzou/integrios/commit/c4bccc90d95cdb9230e4a638a5f048cccee1c57a))
+* **api:** verify webhooks that send a fixed token in a header ([#67](https://github.com/arminzou/integrios/issues/67)) ([c4bccc9](https://github.com/arminzou/integrios/commit/c4bccc90d95cdb9230e4a638a5f048cccee1c57a))
+* **infra:** run hosts as Windows services and systemd units ([#68](https://github.com/arminzou/integrios/issues/68)) ([738f481](https://github.com/arminzou/integrios/commit/738f481eee7bad67a4ee694f542ca106c9afea22))
+
+
+### Bug Fixes
+
+* **infra:** match the Prometheus exporter to OpenTelemetry 1.20 ([5c43313](https://github.com/arminzou/integrios/commit/5c433135b82d2a4982dadf4b4e4fc1b69206343e))
+* **infra:** stop reading the key-per-file directory on Windows ([738f481](https://github.com/arminzou/integrios/commit/738f481eee7bad67a4ee694f542ca106c9afea22))
+
 ## [0.11.0](https://github.com/arminzou/integrios/compare/v0.10.0...v0.11.0) (2026-09-28)
 
 
