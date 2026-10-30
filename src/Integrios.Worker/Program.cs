@@ -7,7 +7,7 @@ using Integrios.Worker.Cli;
 
 // The Worker is a WebApplication only to serve its operational HTTP surface.
 // The outbox loop is a hosted service.
-var builder = WebApplication.CreateBuilder(args);
+var builder = ServiceHosting.CreateBuilder(args);
 builder.Logging.AddOperationalConsoleLogging(builder.Environment.IsDevelopment());
 bool secretCommand = SecretValidationCli.IsCommand(args);
 

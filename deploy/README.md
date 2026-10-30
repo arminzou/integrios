@@ -227,6 +227,38 @@ Server migration assembly automatically. Set `Database__Provider: sqlserver` and
 Both `READ_COMMITTED_SNAPSHOT` settings are supported;
 see [Database backends](../docs/database-backends.md) for the queue-locking policy.
 
+## Running without containers
+
+Ingestion, Admin, and Worker can each run from `dotnet publish` output as an operating-system
+service. Each host reports start, stop, and readiness to its service manager, and does nothing
+different when started from a terminal or in a container. Build the Admin dashboard assets first
+(`npm ci` and `npm run build:assets` in `src/Integrios.Admin/frontend`), or Admin publishes without
+its dashboard.
+
+Give each host its own ports, as the [Ports](#ports) table does: set `ASPNETCORE_URLS` on Ingestion
+and Admin, and `OperationalPort` on Ingestion and Admin and `WorkerMetricsPort` on the Worker.
+With the defaults, the hosts collide on one machine and only the first starts. The operational
+port listens on every interface, as a container needs; on a server, allow it through the firewall
+only for the local monitoring agent, because it serves `/health`, `/ready`, and metrics without
+authentication.
+
+- **Windows Service.** Register each host with `sc.exe create`, pointing `binPath` at its
+  executable. A host started as a Windows service reads `appsettings.json` from its own folder, and
+  writes warnings and errors to the Windows Event Log (a service running under its own account
+  rather than LocalSystem may need its event source registered by an administrator first, and
+  writes nothing there until then); send traces to a collector with
+  `OTEL_EXPORTER_OTLP_ENDPOINT`. Give each service its own environment, including its Tenant
+  secrets, so Ingestion never sees destination secrets and the Worker never sees source secrets.
+  Windows allows services only a few seconds when the machine shuts down, less than the Worker's
+  grace period, so stop the Worker before a planned restart. Attempts cut short are retried.
+- **systemd.** Use `Type=notify` in the unit, so systemd waits for the host to report ready. Set
+  `TimeoutStopSec` on the Worker's unit above `Integrios:Delivery:ShutdownGracePeriod`, so
+  in-flight delivery attempts can finish on stop.
+
+The key-per-file directory `/run/secrets/integrios` is shared by every process on one host, so a
+service deployment takes Tenant secrets from per-service environment variables or Azure Key Vault
+instead. On Windows the hosts do not read that directory at all.
+
 ## Ports
 
 | Service | Port | Purpose |

@@ -6,8 +6,8 @@ Environment variables override those files. For a hierarchical key, replace each
 `Database:Provider` becomes `Database__Provider`. The tables below show effective defaults even
 when a host also states them in `appsettings.json`.
 
-Ingestion and Worker additionally load key-per-file and, when configured, Azure Key Vault after
-the standard sources. A value from either later source overrides an earlier value for the same
+Ingestion and Worker additionally load key-per-file (except on Windows) and, when configured,
+Azure Key Vault after the standard sources. A value from either later source overrides an earlier value for the same
 key. They load at startup; restart the owning process after changing a Tenant secret. See
 [Tenant secrets](https://github.com/arminzou/integrios/blob/main/secrets/README.md) for file names and process isolation. Compose variables
 such as `INTEGRIOS_ADMIN_OIDC_AUTHORITY` are deployment-file inputs that Compose maps to the

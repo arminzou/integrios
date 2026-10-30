@@ -20,7 +20,7 @@ if (args is ["operator-user", ..])
 if (args is ["database", ..])
     return await DatabaseCli.RunAsync(args);
 
-var builder = WebApplication.CreateBuilder(args);
+var builder = ServiceHosting.CreateBuilder(args);
 builder.Logging.AddOperationalConsoleLogging(builder.Environment.IsDevelopment());
 int operationalPort = builder.AddOperationalEndpoints("OperationalPort");
 

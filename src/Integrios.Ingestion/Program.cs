@@ -10,7 +10,7 @@ using Integrios.Ingestion.Endpoints;
 using Integrios.Ingestion.ErrorHandling;
 using Microsoft.AspNetCore.Authentication;
 
-var builder = WebApplication.CreateBuilder(args);
+var builder = ServiceHosting.CreateBuilder(args);
 builder.Logging.AddOperationalConsoleLogging(builder.Environment.IsDevelopment());
 bool secretCommand = SourceSecretValidationCli.IsCommand(args);
 

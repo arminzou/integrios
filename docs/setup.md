@@ -249,7 +249,8 @@ after them and therefore win for the same key:
 1. appsettings files, User Secrets in Development, environment variables, and command-line
    arguments, in the framework's usual order. An environment variable uses `__` as the separator:
    `DestinationSecrets__acme__erp-api-key`.
-2. Key-per-file from `/run/secrets/integrios`, when that directory exists. Each file name is a
+2. Key-per-file from `/run/secrets/integrios`, when that directory exists; never on Windows,
+   where that path would point into the system drive. Each file name is a
    configuration key with `__` as the separator, and its content is the value. Files whose names
    start with `ignore.` are skipped.
 3. Azure Key Vault, when `Integrios:KeyVault:Uri` is set. The process authenticates with

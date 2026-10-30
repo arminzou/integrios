@@ -11,14 +11,16 @@ public static class SecretResolutionDependencyInjection
 {
     // Fixed, not configurable: each container mounts its own directory here, so a process sees
     // only its own direction's secrets. Processes sharing one host outside containers must take
-    // secrets from per-process environment variables or a vault instead.
+    // secrets from per-process environment variables or a vault instead. Not read on Windows, where
+    // the path lands in a system-drive folder any local user can create.
     private const string KeyPerFileDirectory = "/run/secrets/integrios";
 
     // Both sources load once: a new or rotated secret takes effect when the process restarts.
     // An unreachable or unauthorized vault throws here, so the process fails to start.
     public static IConfigurationManager AddSecretConfigurationSources(this IConfigurationManager configuration)
     {
-        configuration.AddKeyPerFile(KeyPerFileDirectory, optional: true, reloadOnChange: false);
+        if (!OperatingSystem.IsWindows())
+            configuration.AddKeyPerFile(KeyPerFileDirectory, optional: true, reloadOnChange: false);
 
         string? keyVaultUri = configuration["Integrios:KeyVault:Uri"];
         if (!string.IsNullOrWhiteSpace(keyVaultUri))

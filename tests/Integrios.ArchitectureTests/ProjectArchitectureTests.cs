@@ -213,6 +213,7 @@ public sealed class ProjectArchitectureTests
         [
             "Integrios.Infrastructure.DependencyInjection",
             "Integrios.Infrastructure.Hosting.OperationalEndpointExtensions",
+            "Integrios.Infrastructure.Hosting.ServiceHosting",
             "Integrios.Infrastructure.SecretResolutionDependencyInjection",
             "Integrios.Infrastructure.Telemetry.TelemetryExtensions"
         ];
