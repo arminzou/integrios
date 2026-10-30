@@ -5,7 +5,9 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting.WindowsServices;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.EventLog;
 using Npgsql;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
@@ -35,6 +37,13 @@ public static class TelemetryExtensions
                 options.UseUtcTimestamp = true;
                 options.TimestampFormat = "yyyy-MM-dd'T'HH:mm:ss.fffffff'Z'";
             });
+
+        // A Windows service has no console, so a failed start would leave no trace but an SCM error.
+        if (OperatingSystem.IsWindows() && WindowsServiceHelpers.IsWindowsService())
+        {
+            logging.AddEventLog();
+            logging.AddFilter<EventLogLoggerProvider>(level => level >= LogLevel.Warning);
+        }
 
         return logging;
     }

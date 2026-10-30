@@ -227,6 +227,47 @@ Server migration assembly automatically. Set `Database__Provider: sqlserver` and
 Both `READ_COMMITTED_SNAPSHOT` settings are supported;
 see [Database backends](../docs/database-backends.md) for the queue-locking policy.
 
+## Running without containers
+
+Ingestion, Admin, and Worker can each run from `dotnet publish` output as an operating-system
+service. Each host reports start, stop, and readiness to its service manager, and does nothing
+different when started from a terminal or in a container. Build the Admin dashboard assets first
+(`npm ci` and `npm run build:assets` in `src/Integrios.Admin/frontend`), or Admin publishes without
+its dashboard.
+
+Give each host its own ports, as the [Ports](#ports) table does: set `ASPNETCORE_URLS` on Ingestion
+and Admin, and `OperationalPort` on Ingestion and Admin and `WorkerMetricsPort` on the Worker.
+With the defaults, the hosts collide on one machine and only the first starts. The operational
+port listens on every interface, as a container needs; on a server, allow it through the firewall
+only for the local monitoring agent, because it serves `/health`, `/ready`, and metrics without
+authentication.
+
+- **Windows Service.** Register each host with `sc.exe create`, pointing `binPath` at its
+  executable. A host started as a Windows service reads `appsettings.json` from its own folder, and
+  writes warnings and errors to the Windows Event Log (a service running under its own account
+  rather than LocalSystem may need its event source registered by an administrator first, and
+  writes nothing there until then); send traces to a collector with
+  `OTEL_EXPORTER_OTLP_ENDPOINT`. Windows allows services only a few seconds when the machine shuts
+  down, less than the Worker's grace period, so stop the Worker before a planned restart. Attempts
+  cut short are retried.
+
+  Put each service's secrets, such as its connection string and Tenant secrets, in an
+  `appsettings.Production.json` in that service's own folder, and limit the file to
+  Administrators, SYSTEM, and that service's account. Ingestion's file holds only `SourceSecrets`
+  and the Worker's only `DestinationSecrets`. Do not use service environment variables for
+  secrets: Windows stores them in the service's registry key, which every local user can read.
+  When an upgrade installs into a new folder, copy the file and its permissions across.
+- **systemd.** Use `Type=notify` in the unit, so systemd waits for the host to report ready. Set
+  `TimeoutStopSec` on the Worker's unit above `Integrios:Delivery:ShutdownGracePeriod`, so
+  in-flight delivery attempts can finish on stop. Give each unit its secrets through
+  `EnvironmentFile=`, pointing at a file readable only by root; `Environment=` lines in the unit
+  are visible to every user through `systemctl show`.
+
+Never pass a secret on the command line, where any user who can list processes sees it. The
+key-per-file directory `/run/secrets/integrios` would be shared by every process on one host, so a
+service deployment does not use it; on Windows the hosts do not read it at all. Azure Key Vault
+works the same in every deployment.
+
 ## Ports
 
 | Service | Port | Purpose |

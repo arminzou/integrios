@@ -200,11 +200,17 @@ public sealed class SecretResolverTests : IDisposable
 
         configuration.AddSecretConfigurationSources();
 
+        configuration.Sources.ShouldNotContain(source => source.GetType().Name.Contains("KeyVault"));
+        // The mount path means nothing on Windows, where it would read a folder any local user can create.
+        if (OperatingSystem.IsWindows())
+        {
+            configuration.Sources.OfType<KeyPerFileConfigurationSource>().ShouldBeEmpty();
+            return;
+        }
         KeyPerFileConfigurationSource keyPerFile =
             configuration.Sources.OfType<KeyPerFileConfigurationSource>().ShouldHaveSingleItem();
         keyPerFile.Optional.ShouldBeTrue();
         keyPerFile.ReloadOnChange.ShouldBeFalse();
-        configuration.Sources.ShouldNotContain(source => source.GetType().Name.Contains("KeyVault"));
     }
 
     [Fact]
