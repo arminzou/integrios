@@ -1,0 +1,31 @@
+{
+  "manifest_schema_version": 1,
+  "key": "dataverse_webhook",
+  "contract_version": 1,
+  "direction": "source",
+  "source_configuration_schema": {
+    "type": "object",
+    "properties": {},
+    "additionalProperties": true
+  },
+  "source_verification": {
+    "allow_unverified": false,
+    "schemes": [
+      {
+        "scheme": "header_token",
+        "required_config": [],
+        "required_secret_refs": ["token"]
+      }
+    ]
+  },
+  "destination_authentication": {
+    "allow_unauthenticated": true,
+    "schemes": []
+  },
+  "presentation": {
+    "name": "Dataverse webhook",
+    "description": "Dataverse RemoteExecutionContext messages posted by a Dataverse webhook step. Register the webhook with HttpHeader authentication, sending the Source's token in X-Integrios-Token; Integrios never provisions or manages the Dataverse side.",
+    "event_types": [],
+    "authoring_presets": []
+  }
+}

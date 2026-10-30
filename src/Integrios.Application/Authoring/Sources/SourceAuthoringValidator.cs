@@ -139,6 +139,15 @@ internal static class SourceAuthoringValidator
         }
     }
 
+    public static void ValidateVerificationConfig(SourceVerificationInput? verification, ISourceVerifierRegistry verifiers)
+    {
+        if (verification is not null
+            && verifiers.GetRequired(verification.Scheme).ValidateConfig(verification.Config) is { } error)
+        {
+            throw new SourceValidationException(error, "verification");
+        }
+    }
+
     private static void ValidateVerification(
         SourceVerificationInput? verification,
         ConnectorSourceVerificationManifest capabilities)

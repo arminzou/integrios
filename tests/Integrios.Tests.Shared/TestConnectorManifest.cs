@@ -95,6 +95,11 @@ public static class TestConnectorManifest
             Scheme = scheme,
             RequiredSecretRefs = ["secret"],
         },
+        "header_token" => new ConnectorSchemeManifest
+        {
+            Scheme = scheme,
+            RequiredSecretRefs = ["token"],
+        },
         _ => new ConnectorSchemeManifest { Scheme = scheme },
     };
 }

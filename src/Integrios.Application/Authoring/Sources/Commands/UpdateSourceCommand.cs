@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Integrios.Application.Authoring.Connectors;
 using Integrios.Application.Authoring.Topics;
+using Integrios.Application.Ingestion;
 using Integrios.Application.Transforms;
 using Integrios.Domain.Entities;
 using Integrios.Domain.ValueObjects;
@@ -24,7 +25,8 @@ internal sealed class UpdateSourceCommandHandler(
     IConnectorReader connectorReader,
     ITopicRepository topicRepository,
     IAuthoringLock authoringLock,
-    ITransformEvaluator evaluator)
+    ITransformEvaluator evaluator,
+    ISourceVerifierRegistry verifiers)
     : IRequestHandler<UpdateSourceCommand, SourceDto?>
 {
     public async Task<SourceDto?> Handle(UpdateSourceCommand command, CancellationToken cancellationToken)
@@ -45,6 +47,7 @@ internal sealed class UpdateSourceCommandHandler(
         Connector connector = await connectorReader.GetByIdAsync(source.ConnectorId, cancellationToken)
             ?? throw new SourceValidationException("The Source's Connector does not exist.");
         SourceAuthoringValidator.Validate(source.Type, command.Configuration, command.Verification, connector);
+        SourceAuthoringValidator.ValidateVerificationConfig(command.Verification, verifiers);
         SourceAuthoringValidator.ValidateRuntimeContract(
             source.Type, command.InputRequirements, command.Mapping, command.EventIdentityRule, evaluator);
         IReadOnlyList<string> eventTypes = SourceAuthoringValidator.ValidateEventTypes(command.EventTypes);

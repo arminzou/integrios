@@ -310,6 +310,7 @@ public static class DependencyInjection
     private static IServiceCollection AddSourceVerificationServices(this IServiceCollection services)
     {
         services.AddSingleton<ISourceVerifier, HmacSha256SourceVerifier>();
+        services.AddSingleton<ISourceVerifier, HeaderTokenSourceVerifier>();
         services.AddSingleton<ISourceVerifierRegistry, SourceVerifierRegistry>();
 
         return services;

@@ -61,4 +61,17 @@ internal sealed class HmacSha256SourceVerifier : ISourceVerifier
         byte[] expected = HMACSHA256.HashData(Encoding.UTF8.GetBytes(secret), rawBody.Span);
         return CryptographicOperations.FixedTimeEquals(provided, expected);
     }
+
+    public string? ValidateConfig(JsonElement config)
+    {
+        if ((SourceVerificationConfig.HeaderNameError(config) ?? SourceVerificationConfig.StringError(config, "prefix")) is { } error)
+            return error;
+        if (SourceVerificationConfig.OptionalString(config, "encoding", out string? encoding) is { } encodingError)
+            return encodingError;
+        return encoding is null
+            || encoding.Equals("hex", StringComparison.OrdinalIgnoreCase)
+            || encoding.Equals("base64", StringComparison.OrdinalIgnoreCase)
+            ? null
+            : "Source verification config field 'encoding' must be 'hex' or 'base64'.";
+    }
 }

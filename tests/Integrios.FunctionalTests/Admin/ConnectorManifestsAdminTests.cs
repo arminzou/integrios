@@ -167,7 +167,7 @@ public sealed class ConnectorManifestsAdminTests : IClassFixture<AdminApiFixture
         JsonElement document = result.GetProperty("manifest");
         ConnectorManifest manifest = ConnectorManifestParser.Parse(
             document,
-            new SourceVerifierRegistry([new HmacSha256SourceVerifier()]),
+            new SourceVerifierRegistry([new HmacSha256SourceVerifier(), new HeaderTokenSourceVerifier()]),
             new DestinationAuthenticatorRegistry([
                 new ApiKeyHeaderAuthenticator(),
                 new BearerTokenAuthenticator(),
@@ -179,7 +179,7 @@ public sealed class ConnectorManifestsAdminTests : IClassFixture<AdminApiFixture
         manifest.SourceVerification.AllowUnverified.ShouldBeTrue();
         manifest.DestinationAuthentication.AllowUnauthenticated.ShouldBeTrue();
         manifest.SourceVerification.Schemes.Select(scheme => scheme.Scheme)
-            .ShouldBe(sourceCapable ? ["hmac_sha256"] : []);
+            .ShouldBe(sourceCapable ? ["header_token", "hmac_sha256"] : []);
         manifest.DestinationAuthentication.Schemes.Select(scheme => scheme.Scheme)
             .ShouldBe(destinationCapable ? ["api_key_header", "bearer_token", "oauth2_client_credentials"] : []);
     }
@@ -201,7 +201,7 @@ public sealed class ConnectorManifestsAdminTests : IClassFixture<AdminApiFixture
         JsonElement result = await response.Content.ReadFromJsonAsync<JsonElement>(HostJson.Options);
         ConnectorManifest manifest = ConnectorManifestParser.Parse(
             result.GetProperty("manifest"),
-            new SourceVerifierRegistry([new HmacSha256SourceVerifier()]),
+            new SourceVerifierRegistry([new HmacSha256SourceVerifier(), new HeaderTokenSourceVerifier()]),
             new DestinationAuthenticatorRegistry([
                 new ApiKeyHeaderAuthenticator(),
                 new BearerTokenAuthenticator(),

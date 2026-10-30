@@ -289,6 +289,189 @@ it("keeps a webhook Source's verification when its mapping is edited", async () 
   });
 });
 
+/// Edits a webhook Source's secret reference, then each labelled setting in `settings`, and returns
+/// the verification the Save sent. A null manifest makes the Connector request fail;
+/// `manifestAfterOpen` holds it until the form is open.
+async function saveSecretReference(
+  verification: { scheme: string; config: object; secret_refs: Record<string, string> },
+  manifest: object | null,
+  expectedShown: string,
+  manifestAfterOpen = false,
+  settings: Record<string, string> = {},
+) {
+  let openForm = () => {};
+  const formOpen = manifestAfterOpen ? new Promise<void>((resolve) => (openForm = resolve)) : Promise.resolve();
+  const calls = stubHttp(async ({ method, url }) => {
+    if (method === "PUT") return { status: 200, body: {} };
+    if (url.pathname.endsWith(`/connectors/${connectorId}`)) {
+      await formOpen;
+      return manifest
+        ? {
+            status: 200,
+            body: {
+              id: connectorId,
+              key: "webhooks",
+              contract_version: 1,
+              manifest_schema_version: 1,
+              name: "Webhooks",
+              direction: "source",
+              status: "active",
+              manifest,
+              created_at: "2026-09-09T00:00:00Z",
+              updated_at: "2026-09-09T00:00:00Z",
+            },
+          }
+        : { status: 500, body: {} };
+    }
+    if (url.pathname.endsWith(`/sources/${sourceId}`))
+      return {
+        status: 200,
+        body: {
+          id: sourceId,
+          tenant_id: tenantId,
+          connector_id: connectorId,
+          topic_id: topicId,
+          name: "webhook-intake",
+          type: "webhook",
+          configuration: { callback_id: "66666666-6666-6666-6666-666666666666" },
+          verification,
+          input_requirements: null,
+          mapping: null,
+          event_identity_rule: null,
+          event_types: ["order.created"],
+          revision: "revision",
+          status: "active",
+          created_at: "2026-09-09T00:00:00Z",
+          updated_at: "2026-09-09T00:00:00Z",
+        },
+      };
+    return { status: 200, body: page([]) };
+  });
+  renderScreen(
+    <SourcesScreen tenantId={tenantId} selectedSourceId={sourceId} />,
+    `/tenants/${tenantId}/sources/${sourceId}`,
+  );
+
+  fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+  const form = await screen.findByRole("form", { name: "Edit Webhook Source" });
+  openForm();
+  await waitFor(() =>
+    expect(calls.some((call) => call.url.pathname.endsWith(`/connectors/${connectorId}`))).toBe(true),
+  );
+  const secretReference = within(form).getByLabelText("Secret reference") as HTMLInputElement;
+  await waitFor(() => expect(secretReference.value).toBe(expectedShown));
+  fireEvent.change(secretReference, { target: { value: "rotated" } });
+  for (const [label, value] of Object.entries(settings))
+    fireEvent.change(within(form).getByLabelText(label), { target: { value } });
+  await act(async () => {
+    fireEvent.submit(form);
+  });
+
+  await waitFor(() => expect(calls.some((call) => call.method === "PUT")).toBe(true));
+  return (calls.find((call) => call.method === "PUT")!.body as { verification: unknown }).verification;
+}
+
+const verificationManifest = (scheme: string, secretField: string) => ({
+  source_verification: {
+    allow_unverified: false,
+    schemes: [{ scheme, required_config: [], required_secret_refs: [secretField] }],
+  },
+});
+
+it("saves a verification secret reference under the field its scheme declares", async () => {
+  const verification = { scheme: "header_token", config: {}, secret_refs: { token: "old" } };
+
+  expect(await saveSecretReference(verification, verificationManifest("header_token", "token"), "old")).toEqual({
+    ...verification,
+    secret_refs: { token: "rotated" },
+  });
+});
+
+/// A Save while the Connector request has failed must not invent a "secret" field: intake would keep
+/// checking the old token while the form reported the rotation saved.
+it("keeps a Source's stored secret field when its Connector manifest is unavailable", async () => {
+  const verification = { scheme: "header_token", config: {}, secret_refs: { token: "old" } };
+
+  expect(await saveSecretReference(verification, null, "old")).toEqual({
+    ...verification,
+    secret_refs: { token: "rotated" },
+  });
+});
+
+it("edits the reference its scheme uses when a Source stores several", async () => {
+  const verification = { scheme: "header_token", config: {}, secret_refs: { secret: "extra", token: "current" } };
+
+  expect(
+    await saveSecretReference(verification, verificationManifest("header_token", "token"), "current", true),
+  ).toEqual({
+    ...verification,
+    secret_refs: { secret: "extra", token: "rotated" },
+  });
+});
+
+it("keeps a stored verification setting and saves an edited one", async () => {
+  const verification = {
+    scheme: "header_token",
+    config: { header_name: "X-Gitlab-Token" },
+    secret_refs: { token: "old" },
+  };
+
+  expect(
+    await saveSecretReference(verification, verificationManifest("header_token", "token"), "old", false, {
+      Prefix: "Bearer ",
+    }),
+  ).toEqual({
+    scheme: "header_token",
+    config: { header_name: "X-Gitlab-Token", prefix: "Bearer " },
+    secret_refs: { token: "rotated" },
+  });
+});
+
+/// Shopify signs without the "sha256=" prefix, so an empty prefix has to be saved, not read as "use
+/// the default".
+it("saves an HMAC prefix cleared to empty", async () => {
+  const verification = { scheme: "hmac_sha256", config: {}, secret_refs: { secret: "old" } };
+
+  expect(
+    await saveSecretReference(verification, verificationManifest("hmac_sha256", "secret"), "old", false, {
+      Header: "X-Shopify-Hmac-Sha256",
+      Prefix: "",
+    }),
+  ).toEqual({
+    scheme: "hmac_sha256",
+    config: { header_name: "X-Shopify-Hmac-Sha256", prefix: "" },
+    secret_refs: { secret: "rotated" },
+  });
+});
+
+it("falls back to the default header when the Header field is cleared", async () => {
+  const verification = {
+    scheme: "header_token",
+    config: { header_name: "X-Gitlab-Token" },
+    secret_refs: { token: "old" },
+  };
+
+  expect(
+    await saveSecretReference(verification, verificationManifest("header_token", "token"), "old", false, {
+      Header: "",
+    }),
+  ).toEqual({ scheme: "header_token", config: {}, secret_refs: { token: "rotated" } });
+});
+
+/// Intake reads any case of "base64" as base64, so the picker must show such a stored value, not a blank.
+it.each([
+  ["BASE64", "base64"],
+  ["", "hex"],
+])("reads a stored HMAC encoding %j the way intake does", async (stored, saved) => {
+  const verification = { scheme: "hmac_sha256", config: { encoding: stored }, secret_refs: { secret: "old" } };
+
+  expect(await saveSecretReference(verification, verificationManifest("hmac_sha256", "secret"), "old")).toEqual({
+    scheme: "hmac_sha256",
+    config: { encoding: saved },
+    secret_refs: { secret: "rotated" },
+  });
+});
+
 /// Closing Edit without saving is Cancel. A draft that outlived it came back on the next Edit reading
 /// as the Source's configuration - and the Event Builder took it for what the Source had.
 it("discards an unsaved Source draft when the Edit sheet closes", async () => {

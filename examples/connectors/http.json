@@ -20,6 +20,11 @@
     "allow_unverified": true,
     "schemes": [
       {
+        "scheme": "header_token",
+        "required_config": [],
+        "required_secret_refs": ["token"]
+      },
+      {
         "scheme": "hmac_sha256",
         "required_config": [],
         "required_secret_refs": ["secret"]

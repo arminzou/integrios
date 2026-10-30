@@ -74,7 +74,11 @@ const sourceTypes = [
 ];
 
 /// A scheme the manifest offers but this dashboard has no word for is shown as the Connector named it.
-const verificationLabel = (scheme: string) => (scheme === "hmac_sha256" ? "HMAC SHA-256" : scheme);
+const verificationLabels: Record<string, string> = {
+  hmac_sha256: "HMAC SHA-256",
+  header_token: "Header token",
+};
+const verificationLabel = (scheme: string) => verificationLabels[scheme] ?? scheme;
 
 /// Where the input comes from, said once under the Type it follows from. A line rather than a card:
 /// the sections below say how that input is verified, declared, and normalized.
@@ -116,7 +120,60 @@ const identityFieldSchema = {
 const verificationFieldSchema = {
   verification_scheme: z.string(),
   verification_secret_ref: z.string(),
+  verification_header_name: z.string(),
+  verification_prefix: z.string(),
+  verification_encoding: z.string(),
 };
+
+/// The optional verification settings this form authors, each with the platform's default. A scheme
+/// not listed keeps whatever config it was saved with.
+const verificationOptions: Record<string, { header_name: string; prefix: string; encoding?: string }> = {
+  hmac_sha256: { header_name: "X-Hub-Signature-256", prefix: "sha256=", encoding: "hex" },
+  header_token: { header_name: "X-Integrios-Token", prefix: "" },
+};
+
+type VerificationOptionValues = {
+  verification_header_name: string;
+  verification_prefix: string;
+  verification_encoding: string;
+};
+
+/// What the settings fields show: the stored value where there is one, else the default.
+function verificationOptionValues(scheme: string, config?: unknown): VerificationOptionValues {
+  const options = verificationOptions[scheme];
+  const stored = object(config);
+  const value = (field: "header_name" | "prefix" | "encoding") => {
+    const current = stored[field];
+    return typeof current === "string" ? current : (options?.[field] ?? "");
+  };
+  const encoding = value("encoding");
+  return {
+    verification_header_name: value("header_name"),
+    verification_prefix: value("prefix"),
+    // Intake reads any case of "base64" as base64 and anything else as hex.
+    verification_encoding: !options?.encoding ? "" : encoding.toLowerCase() === "base64" ? "base64" : "hex",
+  };
+}
+
+/// The config to save: the stored document with each setting written back, except one that still
+/// holds its default and was never stored, so an untouched Source keeps the config it had.
+function verificationConfig(scheme: string, values: VerificationOptionValues, stored?: unknown) {
+  const config = { ...object(stored) };
+  const options = verificationOptions[scheme];
+  if (!options) return config;
+  const authored = {
+    header_name: values.verification_header_name.trim(),
+    prefix: values.verification_prefix,
+    encoding: values.verification_encoding,
+  };
+  for (const field of ["header_name", "prefix", "encoding"] as const) {
+    const fallback = options[field];
+    if (fallback === undefined || (authored[field] === fallback && !Object.hasOwn(config, field))) continue;
+    config[field] = authored[field];
+  }
+  if (authored.header_name === "") delete config.header_name;
+  return config;
+}
 
 const brokerFieldSchema = {
   broker_transport: z.string(),
@@ -503,13 +560,16 @@ function SourceVerificationFields<TValues extends FieldValues>({
   connectorChosen,
   pending,
   capabilities,
+  onSchemeChange,
 }: {
   control: Control<TValues>;
   connectorChosen: boolean;
   pending: boolean;
   capabilities: ReturnType<typeof sourceCapabilities>;
+  onSchemeChange: (scheme: string) => void;
 }) {
   const scheme = String(useWatch({ control, name: "verification_scheme" as Path<TValues> }) ?? "");
+  const options = verificationOptions[scheme];
   return (
     <Section title="Request verification" hint="How Integrios checks that a request came from the provider.">
       <SelectField
@@ -528,6 +588,7 @@ function SourceVerificationFields<TValues extends FieldValues>({
         emptyLabel={capabilities.allowUnverified ? "No verification" : undefined}
         disabled={pending || capabilities.schemes.length === 0}
         required={!capabilities.allowUnverified}
+        onChange={onSchemeChange}
       >
         {capabilities.schemes.map((value) => (
           <SelectItem key={value} value={value}>
@@ -544,6 +605,28 @@ function SourceVerificationFields<TValues extends FieldValues>({
           required
         />
       ) : null}
+      {options ? (
+        <>
+          <TextField
+            control={control}
+            name={"verification_header_name" as Path<TValues>}
+            label="Header"
+            hint={`The request header Integrios reads; empty for the default, ${options.header_name}.`}
+          />
+          <TextField
+            control={control}
+            name={"verification_prefix" as Path<TValues>}
+            label="Prefix"
+            hint={`Text before the value in that header; empty for none. Default: ${options.prefix || "none"}.`}
+          />
+          {options.encoding ? (
+            <SelectField control={control} name={"verification_encoding" as Path<TValues>} label="Signature encoding">
+              <SelectItem value="hex">Hex</SelectItem>
+              <SelectItem value="base64">Base64</SelectItem>
+            </SelectField>
+          ) : null}
+        </>
+      ) : null}
     </Section>
   );
 }
@@ -558,9 +641,34 @@ function sourceCapabilities(manifest: unknown) {
   const required = object(object(manifest).source_configuration_schema).required;
   return {
     schemes: schemes.map((scheme) => String(object(scheme).scheme ?? "")).filter(Boolean),
+    // Every source verification scheme declares exactly one secret field; its name differs by scheme.
+    secretFields: Object.fromEntries(
+      schemes.map((scheme) => {
+        const refs = object(scheme).required_secret_refs;
+        return [String(object(scheme).scheme ?? ""), Array.isArray(refs) && refs.length ? String(refs[0]) : "secret"];
+      }),
+    ) as Record<string, string>,
     allowUnverified: verification.allow_unverified !== false,
     requiredConfiguration: Array.isArray(required) ? required.map(String) : [],
   };
+}
+
+/// The secret field a verification scheme stores its reference under. Until the Connector manifest
+/// loads, a Source keeping its scheme keeps the field it was saved with.
+function secretField(
+  scheme: string,
+  capabilities: ReturnType<typeof sourceCapabilities>,
+  stored?: Source["verification"],
+): string {
+  const declared = capabilities.secretFields[scheme];
+  if (declared) return declared;
+  const keys = stored?.scheme === scheme ? Object.keys(object(stored.secret_refs)) : [];
+  return keys.length === 1 ? keys[0] : "secret";
+}
+
+function storedSecretReference(source: Source, capabilities: ReturnType<typeof sourceCapabilities>): string {
+  const scheme = source.verification?.scheme ?? "";
+  return String(object(source.verification?.secret_refs)[secretField(scheme, capabilities, source.verification)] ?? "");
 }
 
 function sourceConfiguration(values: BrokerValues): Record<string, unknown> {
@@ -836,6 +944,7 @@ function CreateSource({
       broker_secret_ref: "",
       verification_scheme: "",
       verification_secret_ref: "",
+      ...verificationOptionValues(""),
       input_requirements: "",
       mapping: "",
       identity_kind: "",
@@ -883,8 +992,11 @@ function CreateSource({
               values.type === "webhook" && values.verification_scheme.trim()
                 ? {
                     scheme: values.verification_scheme.trim(),
-                    config: {},
-                    secret_refs: { secret: values.verification_secret_ref.trim() },
+                    config: verificationConfig(values.verification_scheme.trim(), values),
+                    secret_refs: {
+                      [secretField(values.verification_scheme.trim(), capabilities)]:
+                        values.verification_secret_ref.trim(),
+                    },
                   }
                 : null,
             input_requirements: values.type === "event_api" ? null : optionalJson(values.input_requirements),
@@ -994,6 +1106,10 @@ function CreateSource({
             connectorChosen={connectorId !== ""}
             pending={connector.isPending}
             capabilities={capabilities}
+            onSchemeChange={(scheme) => {
+              for (const [field, value] of Object.entries(verificationOptionValues(scheme)))
+                form.setValue(field as keyof VerificationOptionValues, value);
+            }}
           />
         ) : null}
         {sourceType === "broker" ? <MessageBrokerFields control={form.control} /> : null}
@@ -1382,7 +1498,8 @@ function EditSourceForm({
       broker_authentication: storedBrokerFields?.broker_authentication ?? "",
       broker_secret_ref: storedBrokerFields?.broker_secret_ref ?? "",
       verification_scheme: source.verification?.scheme ?? "",
-      verification_secret_ref: String(object(source.verification?.secret_refs).secret ?? ""),
+      verification_secret_ref: storedSecretReference(source, capabilities),
+      ...verificationOptionValues(source.verification?.scheme ?? "", source.verification?.config),
       identity_kind: source.event_identity_rule?.kind ?? "",
       identity_value: source.event_identity_rule?.value ?? "",
       identity_allow_missing: source.event_identity_rule?.allow_missing ?? false,
@@ -1390,6 +1507,13 @@ function EditSourceForm({
     },
   });
   const verificationScheme = form.watch("verification_scheme");
+  // The form may open before the manifest names the scheme's secret field; show that field's reference once it does.
+  useEffect(() => {
+    if (!connector.data || form.getFieldState("verification_secret_ref").isDirty) return;
+    form.resetField("verification_secret_ref", {
+      defaultValue: storedSecretReference(source, sourceCapabilities(connector.data.manifest)),
+    });
+  }, [connector.data, form, source]);
   useFixedTypeFollowsDeclaration(form.watch("mapping"), form.watch("event_types"), (next) =>
     form.setValue("mapping", next, { shouldDirty: true }),
   );
@@ -1418,17 +1542,18 @@ function EditSourceForm({
             verification: values.verification_scheme.trim()
               ? {
                   scheme: values.verification_scheme.trim(),
-                  config:
-                    source.verification?.scheme === values.verification_scheme
-                      ? (source.verification.config ?? {})
-                      : {},
-                  secret_refs:
-                    source.verification?.scheme === values.verification_scheme
-                      ? {
-                          ...(source.verification.secret_refs ?? {}),
-                          secret: values.verification_secret_ref.trim(),
-                        }
-                      : { secret: values.verification_secret_ref.trim() },
+                  config: verificationConfig(
+                    values.verification_scheme.trim(),
+                    values,
+                    source.verification?.scheme === values.verification_scheme ? source.verification.config : undefined,
+                  ),
+                  secret_refs: {
+                    ...(source.verification?.scheme === values.verification_scheme
+                      ? (source.verification.secret_refs ?? {})
+                      : {}),
+                    [secretField(values.verification_scheme.trim(), capabilities, source.verification)]:
+                      values.verification_secret_ref.trim(),
+                  },
                 }
               : null,
             input_requirements: optionalJson(values.input_requirements),
@@ -1522,6 +1647,11 @@ function EditSourceForm({
             connectorChosen
             pending={connector.isPending}
             capabilities={capabilities}
+            onSchemeChange={(scheme) => {
+              const stored = source.verification?.scheme === scheme ? source.verification.config : undefined;
+              for (const [field, value] of Object.entries(verificationOptionValues(scheme, stored)))
+                form.setValue(field as keyof VerificationOptionValues, value, { shouldDirty: true });
+            }}
           />
         ) : null}
         {source.type !== "event_api" ? (

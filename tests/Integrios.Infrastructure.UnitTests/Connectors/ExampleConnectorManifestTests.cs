@@ -10,7 +10,7 @@ namespace Integrios.Infrastructure.UnitTests;
 public sealed class ExampleConnectorManifestTests
 {
     private static readonly string[] ExpectedFiles =
-        ["dataverse.json", "github.json", "http.json", "slack.json"];
+        ["dataverse.json", "dataverse_webhook.json", "github.json", "http.json", "slack.json"];
 
     [Fact]
     public void Examples_AreTheCurrentSetAndParseAsOrdinaryOperatorInput()
@@ -44,7 +44,7 @@ public sealed class ExampleConnectorManifestTests
         ConnectorManifest manifest = ParseExample("http.json");
 
         manifest.SourceVerification.Schemes.Select(scheme => scheme.Scheme)
-            .ShouldBe(["hmac_sha256"]);
+            .ShouldBe(["header_token", "hmac_sha256"]);
         manifest.DestinationAuthentication.Schemes.Select(scheme => scheme.Scheme)
             .ShouldBe(["api_key_header", "bearer_token"]);
     }
@@ -67,7 +67,7 @@ public sealed class ExampleConnectorManifestTests
         JsonElement document = JsonSerializer.Deserialize<JsonElement>(File.ReadAllText(path));
         return ConnectorManifestParser.Parse(
             document,
-            new SourceVerifierRegistry([new HmacSha256SourceVerifier()]),
+            new SourceVerifierRegistry([new HmacSha256SourceVerifier(), new HeaderTokenSourceVerifier()]),
             new DestinationAuthenticatorRegistry([new ApiKeyHeaderAuthenticator(), new BearerTokenAuthenticator()]));
     }
 

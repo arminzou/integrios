@@ -1,6 +1,6 @@
 # Connector manifest examples
 
-Four working Connector manifests, applied as ordinary Operator input. Every property they use, and
+Five working Connector manifests, applied as ordinary Operator input. Every property they use, and
 every rule they are validated against, is documented in the
 [Connector manifest reference](../../docs/connector-manifest.md).
 
@@ -10,6 +10,7 @@ every rule they are validated against, is documented in the
 | `github.json` | `github` | source | A verified provider webhook: `hmac_sha256` required, with `allow_unverified` set to `false`, and the Event types GitHub produces. |
 | `slack.json` | `slack` | destination | A delivery-only Connector that requires `bearer_token`, with a configuration schema that admits `base_uri` and nothing else. |
 | `dataverse.json` | `dataverse` | source | A source-only Connector that constrains nothing: an empty configuration schema, and unverified input permitted. |
+| `dataverse_webhook.json` | `dataverse_webhook` | source | A provider webhook that cannot sign requests: `header_token` required, for a Dataverse webhook step using HttpHeader authentication. |
 
 Each is applied at its own key and contract version, for example:
 

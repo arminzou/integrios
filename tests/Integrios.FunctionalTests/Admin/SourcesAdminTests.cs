@@ -375,6 +375,96 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
         updated.Verification.SecretRefs.GetProperty("secret").GetString().ShouldBe("probe-signing-secret");
     }
 
+    [Theory]
+    [InlineData("hmac_sha256", "secret", """{"header_name":42}""", "'header_name' must be a string")]
+    [InlineData("hmac_sha256", "secret", """{"header_name":"Bad Header"}""", "'header_name' must be a valid HTTP header name")]
+    [InlineData("hmac_sha256", "secret", """{"prefix":false}""", "'prefix' must be a string")]
+    [InlineData("hmac_sha256", "secret", """{"encoding":"base32"}""", "'encoding' must be 'hex' or 'base64'")]
+    [InlineData("header_token", "token", """{"header_name":"X Token"}""", "'header_name' must be a valid HTTP header name")]
+    [InlineData("header_token", "token", """{"prefix":["Bearer "]}""", "'prefix' must be a string")]
+    public async Task WebhookVerification_RefusesUnusableOptionalConfigWhenSaved(
+        string scheme, string secretField, string config, string message)
+    {
+        Guid connectorId = await fixture.ApplyConnectorManifestAsync(
+            $"config_{scheme}",
+            TestConnectorManifest.Create($"config_{scheme}", "Config probe", "source", sourceVerificationSchemes: [scheme]));
+        Guid topicId = await CreateTopicAsync();
+
+        HttpResponseMessage response = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources",
+            WebhookSource(connectorId, topicId, scheme, secretField, config)));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        using JsonDocument body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        body.RootElement.GetProperty("errors").GetProperty("verification")[0].GetString()!.ShouldContain(message);
+    }
+
+    [Theory]
+    [InlineData("hmac_sha256", "secret", """{"header_name":"X-Shopify-Hmac-Sha256","prefix":"","encoding":"BASE64"}""")]
+    [InlineData("header_token", "token", """{"header_name":"Authorization","prefix":"Bearer "}""")]
+    [InlineData("header_token", "token", """{"header_name":null,"prefix":null}""")]
+    public async Task WebhookVerification_AcceptsUsableOptionalConfig(string scheme, string secretField, string config)
+    {
+        Guid connectorId = await fixture.ApplyConnectorManifestAsync(
+            $"usable_{scheme}",
+            TestConnectorManifest.Create($"usable_{scheme}", "Config probe", "source", sourceVerificationSchemes: [scheme]));
+        Guid topicId = await CreateTopicAsync();
+
+        HttpResponseMessage response = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources",
+            WebhookSource(connectorId, topicId, scheme, secretField, config)));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
+    }
+
+    [Fact]
+    public async Task WebhookVerification_RefusesUnusableOptionalConfigOnUpdate()
+    {
+        Guid connectorId = await fixture.ApplyConnectorManifestAsync(
+            "update_config",
+            TestConnectorManifest.Create("update_config", "Config probe", "source", sourceVerificationSchemes: ["header_token"]));
+        Guid topicId = await CreateTopicAsync();
+        HttpResponseMessage create = await client.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources",
+            WebhookSource(connectorId, topicId, "header_token", "token", "{}")));
+        create.StatusCode.ShouldBe(HttpStatusCode.Created);
+        SourceDto source = (await create.Content.ReadFromJsonAsync<SourceDto>(HostJson.Options))!;
+
+        HttpResponseMessage update = await client.SendAsync(AdminRequest(HttpMethod.Put, $"/admin/tenants/{fixture.TenantId}/sources/{source.Id}", new
+        {
+            event_types = new[] { "probe.created" },
+            name = "webhook-intake",
+            configuration = source.Configuration,
+            verification = new
+            {
+                scheme = "header_token",
+                config = new { header_name = "X Token" },
+                secret_refs = new { token = "probe-secret" },
+            },
+            input_requirements = (object?)null,
+            mapping = (object?)null,
+            event_identity_rule = (object?)null,
+        }));
+
+        update.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        using JsonDocument body = JsonDocument.Parse(await update.Content.ReadAsStringAsync());
+        body.RootElement.GetProperty("errors").GetProperty("verification")[0].GetString()!
+            .ShouldContain("'header_name' must be a valid HTTP header name");
+    }
+
+    private static object WebhookSource(Guid connectorId, Guid topicId, string scheme, string secretField, string config) => new
+    {
+        event_types = new[] { "probe.created" },
+        connector_id = connectorId,
+        name = "webhook-intake",
+        topic_id = topicId,
+        type = "webhook",
+        configuration = new { },
+        verification = new
+        {
+            scheme,
+            config = JsonSerializer.Deserialize<JsonElement>(config),
+            secret_refs = new Dictionary<string, string> { [secretField] = "probe-secret" },
+        },
+    };
+
     // A reference names a secret; it is never the secret. Nothing downstream can tell the two apart
     // once the value is stored, and intake failing closed on an unresolvable reference looks the
     // same either way, so authoring is the only place this can be caught.

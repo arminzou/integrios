@@ -14,9 +14,8 @@ public sealed class WebhooksEndpoints : IEndpointGroup
     public void Map(RouteGroupBuilder group)
     {
         // No TenantApiKey authentication: a provider webhook cannot carry an Integrios credential.
-        // Source verification (HMAC over the raw body) is the trust boundary here instead. The
-        // callback id is the sole routing coordinate: it carries no Tenant, Connector, Destination,
-        // or Topic information.
+        // Source verification is the trust boundary here instead. The callback id is the sole
+        // routing coordinate: it carries no Tenant, Connector, Destination, or Topic information.
         group.MapPost(ReceiveWebhook, "/{callbackId:guid}");
     }
 
