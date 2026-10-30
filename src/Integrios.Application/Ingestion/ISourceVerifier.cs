@@ -16,6 +16,9 @@ public interface ISourceVerifier
         IReadOnlyDictionary<string, string> headers,
         JsonElement config,
         IReadOnlyDictionary<string, string> secrets);
+
+    // Withheld from the Source mapping and identity rule, so a mapping cannot copy a credential into an Event.
+    IReadOnlyList<string> CredentialHeaders(JsonElement config) => [];
 }
 
 public interface ISourceVerifierRegistry

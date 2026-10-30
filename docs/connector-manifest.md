@@ -172,6 +172,7 @@ manifest declares which of the platform's schemes the Connector permits; it cann
 | Declared in | `scheme` | `required_config` | `required_secret_refs` |
 |---|---|---|---|
 | `source_verification` | `hmac_sha256` | *(empty)* | `secret` |
+| `source_verification` | `header_token` | *(empty)* | `token` |
 | `destination_authentication` | `api_key_header` | `header_name` | `api_key` |
 | `destination_authentication` | `bearer_token` | *(empty)* | `token` |
 | `destination_authentication` | `oauth2_client_credentials` | `token_endpoint`, `client_id`, `client_auth_method` | `client_secret` |
@@ -180,6 +181,15 @@ For `oauth2_client_credentials`, `client_auth_method` is `client_secret_basic` o
 `client_secret_post`. A Destination may also store the platform-owned optional `scope` field even
 though the manifest lists only the scheme's required fields. The token endpoint must be an absolute
 HTTPS URL without user information or a fragment.
+
+`header_token` is for providers that cannot sign a request and send a fixed token in a header
+instead, such as a Dataverse webhook step using HttpHeader authentication. By default the token is
+expected, with nothing before it, in `X-Integrios-Token`; a Source may override this with the
+optional `header_name` and `prefix` verification config fields, for example `Authorization` and
+`Bearer `. The token header is withheld from the Source mapping's `$context.headers` and from the
+Event identity rule, so no mapping can copy it into an Event. The token is the same on every
+request, so it proves the sender knows it, not that the body is unchanged: prefer `hmac_sha256`
+wherever a provider can sign.
 
 ## Presentation
 

@@ -289,6 +289,79 @@ it("keeps a webhook Source's verification when its mapping is edited", async () 
   });
 });
 
+it("saves a verification secret reference under the field its scheme declares", async () => {
+  const calls = stubHttp(({ method, url }) => {
+    if (method === "PUT") return { status: 200, body: {} };
+    if (url.pathname.endsWith(`/connectors/${connectorId}`))
+      return {
+        status: 200,
+        body: {
+          id: connectorId,
+          key: "dataverse_webhook",
+          contract_version: 1,
+          manifest_schema_version: 1,
+          name: "Dataverse webhook",
+          direction: "source",
+          status: "active",
+          manifest: {
+            source_verification: {
+              allow_unverified: false,
+              schemes: [{ scheme: "header_token", required_config: [], required_secret_refs: ["token"] }],
+            },
+          },
+          created_at: "2026-09-09T00:00:00Z",
+          updated_at: "2026-09-09T00:00:00Z",
+        },
+      };
+    if (url.pathname.endsWith(`/sources/${sourceId}`))
+      return {
+        status: 200,
+        body: {
+          id: sourceId,
+          tenant_id: tenantId,
+          connector_id: connectorId,
+          topic_id: topicId,
+          name: "dataverse-intake",
+          type: "webhook",
+          configuration: { callback_id: "66666666-6666-6666-6666-666666666666" },
+          verification: { scheme: "header_token", config: {}, secret_refs: { token: "dataverse-old" } },
+          input_requirements: null,
+          mapping: null,
+          event_identity_rule: null,
+          event_types: ["order.created"],
+          revision: "revision",
+          status: "active",
+          created_at: "2026-09-09T00:00:00Z",
+          updated_at: "2026-09-09T00:00:00Z",
+        },
+      };
+    return { status: 200, body: page([]) };
+  });
+  renderScreen(
+    <SourcesScreen tenantId={tenantId} selectedSourceId={sourceId} />,
+    `/tenants/${tenantId}/sources/${sourceId}`,
+  );
+
+  fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+  const form = await screen.findByRole("form", { name: "Edit Webhook Source" });
+  await waitFor(() => expect(within(form).getAllByText("Header token").length).toBeGreaterThan(0));
+  const secretReference = within(form).getByLabelText("Secret reference") as HTMLInputElement;
+  expect(secretReference.value).toBe("dataverse-old");
+  fireEvent.change(secretReference, { target: { value: "dataverse-new" } });
+  await act(async () => {
+    fireEvent.submit(form);
+  });
+
+  await waitFor(() => expect(calls.some((call) => call.method === "PUT")).toBe(true));
+  expect(calls.find((call) => call.method === "PUT")!.body).toMatchObject({
+    verification: { scheme: "header_token", config: {}, secret_refs: { token: "dataverse-new" } },
+  });
+  expect(
+    (calls.find((call) => call.method === "PUT")!.body as { verification: { secret_refs: object } }).verification
+      .secret_refs,
+  ).toEqual({ token: "dataverse-new" });
+});
+
 /// Closing Edit without saving is Cancel. A draft that outlived it came back on the next Edit reading
 /// as the Source's configuration - and the Event Builder took it for what the Source had.
 it("discards an unsaved Source draft when the Edit sheet closes", async () => {

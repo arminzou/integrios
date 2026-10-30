@@ -95,6 +95,104 @@ public sealed class WebhookEndpointTests(IngestionApiFixture fixture)
         response.StatusCode.ShouldBe(HttpStatusCode.Accepted);
     }
 
+    [Theory]
+    [InlineData(null, null, "X-Integrios-Token", "")]
+    [InlineData("X-Gitlab-Token", null, "X-Gitlab-Token", "")]
+    [InlineData("Authorization", "Bearer ", "Authorization", "Bearer ")]
+    public async Task PostWebhook_HeaderToken_AcceptsTheConfiguredSecret(
+        string? headerName, string? prefix, string sentHeader, string sentPrefix)
+    {
+        Guid callbackId = Guid.NewGuid();
+        fixture.SourceEndpointResolver.Result = HeaderTokenEndpoint(headerName, prefix);
+
+        HttpResponseMessage response = await client.SendAsync(
+            HeaderTokenRequest(callbackId, sentHeader, sentPrefix + IngestionApiFixture.WebhookSecretValue));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        fixture.EventAcceptance.LastSubmission.ShouldNotBeNull();
+    }
+
+    [Theory]
+    [InlineData("X-Integrios-Token", "wrong")]
+    [InlineData("X-Integrios-Token", "correct-horse-battery-stapLe")]
+    [InlineData("X-Integrios-Token", IngestionApiFixture.WebhookSecretValue + "x")]
+    [InlineData("X-Other-Header", IngestionApiFixture.WebhookSecretValue)]
+    public async Task PostWebhook_HeaderToken_RejectsAnyOtherValue(string sentHeader, string sentValue)
+    {
+        Guid callbackId = Guid.NewGuid();
+        fixture.SourceEndpointResolver.Result = HeaderTokenEndpoint(null, null);
+
+        HttpResponseMessage response = await client.SendAsync(HeaderTokenRequest(callbackId, sentHeader, sentValue));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        fixture.EventAcceptance.LastSubmission.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task PostWebhook_HeaderToken_RejectsTheSecretWithoutItsPrefix()
+    {
+        Guid callbackId = Guid.NewGuid();
+        fixture.SourceEndpointResolver.Result = HeaderTokenEndpoint("Authorization", "Bearer ");
+
+        HttpResponseMessage response = await client.SendAsync(
+            HeaderTokenRequest(callbackId, "Authorization", IngestionApiFixture.WebhookSecretValue));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task PostWebhook_HeaderToken_WithholdsTheSecretFromTheMapping()
+    {
+        Guid callbackId = Guid.NewGuid();
+        fixture.SourceEndpointResolver.Result = HeaderTokenEndpoint("X-Gitlab-Token", null) with
+        {
+            SourceMapping = new TransformSpec(
+                "jsonata",
+                "1",
+                """{ "event_type": "test.opened", "source_event_id": $context.headers.`x-delivery-id`, "payload": $context.headers }"""),
+        };
+
+        HttpResponseMessage response = await client.SendAsync(
+            HeaderTokenRequest(callbackId, "x-gitlab-token", IngestionApiFixture.WebhookSecretValue));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        string payload = fixture.EventAcceptance.LastSubmission!.Payload.GetRawText();
+        payload.ShouldContain("x-delivery-id");
+        payload.ShouldNotContain(IngestionApiFixture.WebhookSecretValue);
+        payload.ShouldNotContain("x-gitlab-token");
+    }
+
+    private static ResolvedSourceEndpoint HeaderTokenEndpoint(string? headerName, string? prefix)
+    {
+        Dictionary<string, string> config = [];
+        if (headerName is not null)
+            config["header_name"] = headerName;
+        if (prefix is not null)
+            config["prefix"] = prefix;
+        return BuildResolvedEndpoint() with
+        {
+            SourceVerification = new SourceVerification
+            {
+                Scheme = "header_token",
+                Config = JsonSerializer.SerializeToElement(config),
+                SecretRefs = JsonSerializer.Deserialize<JsonElement>(
+                    $$"""{"token":"{{IngestionApiFixture.WebhookSecretReference}}"}"""),
+            },
+        };
+    }
+
+    private static HttpRequestMessage HeaderTokenRequest(Guid callbackId, string headerName, string headerValue)
+    {
+        HttpRequestMessage request = new(HttpMethod.Post, $"/webhooks/{callbackId}")
+        {
+            Content = new StringContent("""{"action":"opened"}""", Encoding.UTF8, "application/json")
+        };
+        request.Headers.TryAddWithoutValidation(headerName, headerValue);
+        request.Headers.TryAddWithoutValidation(EventTypeHeaderName, "issue.opened");
+        request.Headers.TryAddWithoutValidation(DeliveryIdHeaderName, $"delivery-{Guid.NewGuid()}");
+        return request;
+    }
+
     // A Source may name a secret that was never provisioned, and nothing at authoring time can tell:
     // the control plane holds names and the data plane holds values, deliberately. So the failure
     // lands here, per request. 5xx is the honest status — the request is fine and a retry succeeds

@@ -32,7 +32,7 @@ internal sealed class AcceptVerifiedWebhookCommandHandler(
         ResolvedSourceEndpoint endpoint = await endpointResolver.ResolveAsync(command.CallbackId, cancellationToken)
             ?? throw new SourceEndpointNotFoundException("No active webhook Source matches this callback URL.");
 
-        await VerifyAsync(endpoint, command, cancellationToken);
+        IReadOnlyDictionary<string, string> headers = await VerifyAsync(endpoint, command, cancellationToken);
 
         if (command.ContentType?.Split(';')[0].Trim().Equals("application/json", StringComparison.OrdinalIgnoreCase) != true)
             throw new WebhookPayloadException("The request Content-Type must be application/json.");
@@ -54,9 +54,9 @@ internal sealed class AcceptVerifiedWebhookCommandHandler(
         if (rawInput.ValueKind != JsonValueKind.Object)
             throw new WebhookPayloadException("The request body must be a JSON object.");
 
-        JsonElement context = BuildContext(command.Headers);
+        JsonElement context = BuildContext(headers);
         string? sourceEventId = endpoint.EventIdentityRule is { } identityRule
-            ? SourceEventIdentityExtractor.ExtractWebhook(identityRule, command.Headers, rawInput)
+            ? SourceEventIdentityExtractor.ExtractWebhook(identityRule, headers, rawInput)
             : null;
         if (sourceEventId is not null && await eventAcceptance.FindBySourceEventIdAsync(endpoint.SourceId, sourceEventId, cancellationToken) is { } existing)
             return ToResult(existing);
@@ -104,12 +104,12 @@ internal sealed class AcceptVerifiedWebhookCommandHandler(
         return ToResult(accepted);
     }
 
-    private async Task VerifyAsync(
+    private async Task<IReadOnlyDictionary<string, string>> VerifyAsync(
         ResolvedSourceEndpoint endpoint, AcceptVerifiedWebhookCommand command, CancellationToken cancellationToken)
     {
         // Connectors that allow unverified sources permit no selected SourceVerification scheme.
         if (endpoint.SourceVerification is not { } verification)
-            return;
+            return command.Headers;
 
         ISourceVerifier verifier = verifierRegistry.GetRequired(verification.Scheme);
 
@@ -138,6 +138,13 @@ internal sealed class AcceptVerifiedWebhookCommandHandler(
         bool verified = verifier.Verify(command.RawBody, command.Headers, verification.Config, secrets);
         if (!verified)
             throw new SourceVerificationException("Signature verification failed.");
+
+        IReadOnlyList<string> credentialHeaders = verifier.CredentialHeaders(verification.Config);
+        if (credentialHeaders.Count == 0)
+            return command.Headers;
+        return command.Headers
+            .Where(header => !credentialHeaders.Contains(header.Key, StringComparer.OrdinalIgnoreCase))
+            .ToDictionary(StringComparer.OrdinalIgnoreCase);
     }
 
     // Bounded, non-secret transport facts available to a webhook Source's mapping: lower-cased

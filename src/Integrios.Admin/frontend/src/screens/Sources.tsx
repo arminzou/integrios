@@ -74,7 +74,11 @@ const sourceTypes = [
 ];
 
 /// A scheme the manifest offers but this dashboard has no word for is shown as the Connector named it.
-const verificationLabel = (scheme: string) => (scheme === "hmac_sha256" ? "HMAC SHA-256" : scheme);
+const verificationLabels: Record<string, string> = {
+  hmac_sha256: "HMAC SHA-256",
+  header_token: "Header token",
+};
+const verificationLabel = (scheme: string) => verificationLabels[scheme] ?? scheme;
 
 /// Where the input comes from, said once under the Type it follows from. A line rather than a card:
 /// the sections below say how that input is verified, declared, and normalized.
@@ -558,6 +562,13 @@ function sourceCapabilities(manifest: unknown) {
   const required = object(object(manifest).source_configuration_schema).required;
   return {
     schemes: schemes.map((scheme) => String(object(scheme).scheme ?? "")).filter(Boolean),
+    // Every source verification scheme declares exactly one secret field; its name differs by scheme.
+    secretFields: Object.fromEntries(
+      schemes.map((scheme) => {
+        const refs = object(scheme).required_secret_refs;
+        return [String(object(scheme).scheme ?? ""), Array.isArray(refs) && refs.length ? String(refs[0]) : "secret"];
+      }),
+    ) as Record<string, string>,
     allowUnverified: verification.allow_unverified !== false,
     requiredConfiguration: Array.isArray(required) ? required.map(String) : [],
   };
@@ -884,7 +895,10 @@ function CreateSource({
                 ? {
                     scheme: values.verification_scheme.trim(),
                     config: {},
-                    secret_refs: { secret: values.verification_secret_ref.trim() },
+                    secret_refs: {
+                      [capabilities.secretFields[values.verification_scheme.trim()] ?? "secret"]:
+                        values.verification_secret_ref.trim(),
+                    },
                   }
                 : null,
             input_requirements: values.type === "event_api" ? null : optionalJson(values.input_requirements),
@@ -1382,7 +1396,7 @@ function EditSourceForm({
       broker_authentication: storedBrokerFields?.broker_authentication ?? "",
       broker_secret_ref: storedBrokerFields?.broker_secret_ref ?? "",
       verification_scheme: source.verification?.scheme ?? "",
-      verification_secret_ref: String(object(source.verification?.secret_refs).secret ?? ""),
+      verification_secret_ref: String(Object.values(object(source.verification?.secret_refs))[0] ?? ""),
       identity_kind: source.event_identity_rule?.kind ?? "",
       identity_value: source.event_identity_rule?.value ?? "",
       identity_allow_missing: source.event_identity_rule?.allow_missing ?? false,
@@ -1422,13 +1436,13 @@ function EditSourceForm({
                     source.verification?.scheme === values.verification_scheme
                       ? (source.verification.config ?? {})
                       : {},
-                  secret_refs:
-                    source.verification?.scheme === values.verification_scheme
-                      ? {
-                          ...(source.verification.secret_refs ?? {}),
-                          secret: values.verification_secret_ref.trim(),
-                        }
-                      : { secret: values.verification_secret_ref.trim() },
+                  secret_refs: {
+                    ...(source.verification?.scheme === values.verification_scheme
+                      ? (source.verification.secret_refs ?? {})
+                      : {}),
+                    [capabilities.secretFields[values.verification_scheme.trim()] ?? "secret"]:
+                      values.verification_secret_ref.trim(),
+                  },
                 }
               : null,
             input_requirements: optionalJson(values.input_requirements),
