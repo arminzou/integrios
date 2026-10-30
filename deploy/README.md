@@ -247,17 +247,26 @@ authentication.
   writes warnings and errors to the Windows Event Log (a service running under its own account
   rather than LocalSystem may need its event source registered by an administrator first, and
   writes nothing there until then); send traces to a collector with
-  `OTEL_EXPORTER_OTLP_ENDPOINT`. Give each service its own environment, including its Tenant
-  secrets, so Ingestion never sees destination secrets and the Worker never sees source secrets.
-  Windows allows services only a few seconds when the machine shuts down, less than the Worker's
-  grace period, so stop the Worker before a planned restart. Attempts cut short are retried.
+  `OTEL_EXPORTER_OTLP_ENDPOINT`. Windows allows services only a few seconds when the machine shuts
+  down, less than the Worker's grace period, so stop the Worker before a planned restart. Attempts
+  cut short are retried.
+
+  Put each service's secrets, such as its connection string and Tenant secrets, in an
+  `appsettings.Production.json` in that service's own folder, and limit the file to
+  Administrators, SYSTEM, and that service's account. Ingestion's file holds only `SourceSecrets`
+  and the Worker's only `DestinationSecrets`. Do not use service environment variables for
+  secrets: Windows stores them in the service's registry key, which every local user can read.
+  When an upgrade installs into a new folder, copy the file and its permissions across.
 - **systemd.** Use `Type=notify` in the unit, so systemd waits for the host to report ready. Set
   `TimeoutStopSec` on the Worker's unit above `Integrios:Delivery:ShutdownGracePeriod`, so
-  in-flight delivery attempts can finish on stop.
+  in-flight delivery attempts can finish on stop. Give each unit its secrets through
+  `EnvironmentFile=`, pointing at a file readable only by root; `Environment=` lines in the unit
+  are visible to every user through `systemctl show`.
 
-The key-per-file directory `/run/secrets/integrios` is shared by every process on one host, so a
-service deployment takes Tenant secrets from per-service environment variables or Azure Key Vault
-instead. On Windows the hosts do not read that directory at all.
+Never pass a secret on the command line, where any user who can list processes sees it. The
+key-per-file directory `/run/secrets/integrios` would be shared by every process on one host, so a
+service deployment does not use it; on Windows the hosts do not read it at all. Azure Key Vault
+works the same in every deployment.
 
 ## Ports
 
