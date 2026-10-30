@@ -289,13 +289,15 @@ it("keeps a webhook Source's verification when its mapping is edited", async () 
   });
 });
 
-/// Edits a webhook Source's secret reference and returns the verification the Save sent. A null
-/// manifest makes the Connector request fail; `manifestAfterOpen` holds it until the form is open.
+/// Edits a webhook Source's secret reference, then each labelled setting in `settings`, and returns
+/// the verification the Save sent. A null manifest makes the Connector request fail;
+/// `manifestAfterOpen` holds it until the form is open.
 async function saveSecretReference(
   verification: { scheme: string; config: object; secret_refs: Record<string, string> },
   manifest: object | null,
   expectedShown: string,
   manifestAfterOpen = false,
+  settings: Record<string, string> = {},
 ) {
   let openForm = () => {};
   const formOpen = manifestAfterOpen ? new Promise<void>((resolve) => (openForm = resolve)) : Promise.resolve();
@@ -359,6 +361,8 @@ async function saveSecretReference(
   const secretReference = within(form).getByLabelText("Secret reference") as HTMLInputElement;
   await waitFor(() => expect(secretReference.value).toBe(expectedShown));
   fireEvent.change(secretReference, { target: { value: "rotated" } });
+  for (const [label, value] of Object.entries(settings))
+    fireEvent.change(within(form).getByLabelText(label), { target: { value } });
   await act(async () => {
     fireEvent.submit(form);
   });
@@ -402,6 +406,69 @@ it("edits the reference its scheme uses when a Source stores several", async () 
   ).toEqual({
     ...verification,
     secret_refs: { secret: "extra", token: "rotated" },
+  });
+});
+
+it("keeps a stored verification setting and saves an edited one", async () => {
+  const verification = {
+    scheme: "header_token",
+    config: { header_name: "X-Gitlab-Token" },
+    secret_refs: { token: "old" },
+  };
+
+  expect(
+    await saveSecretReference(verification, verificationManifest("header_token", "token"), "old", false, {
+      Prefix: "Bearer ",
+    }),
+  ).toEqual({
+    scheme: "header_token",
+    config: { header_name: "X-Gitlab-Token", prefix: "Bearer " },
+    secret_refs: { token: "rotated" },
+  });
+});
+
+/// Shopify signs without the "sha256=" prefix, so an empty prefix has to be saved, not read as "use
+/// the default".
+it("saves an HMAC prefix cleared to empty", async () => {
+  const verification = { scheme: "hmac_sha256", config: {}, secret_refs: { secret: "old" } };
+
+  expect(
+    await saveSecretReference(verification, verificationManifest("hmac_sha256", "secret"), "old", false, {
+      Header: "X-Shopify-Hmac-Sha256",
+      Prefix: "",
+    }),
+  ).toEqual({
+    scheme: "hmac_sha256",
+    config: { header_name: "X-Shopify-Hmac-Sha256", prefix: "" },
+    secret_refs: { secret: "rotated" },
+  });
+});
+
+it("falls back to the default header when the Header field is cleared", async () => {
+  const verification = {
+    scheme: "header_token",
+    config: { header_name: "X-Gitlab-Token" },
+    secret_refs: { token: "old" },
+  };
+
+  expect(
+    await saveSecretReference(verification, verificationManifest("header_token", "token"), "old", false, {
+      Header: "",
+    }),
+  ).toEqual({ scheme: "header_token", config: {}, secret_refs: { token: "rotated" } });
+});
+
+/// Intake reads any case of "base64" as base64, so the picker must show such a stored value, not a blank.
+it.each([
+  ["BASE64", "base64"],
+  ["", "hex"],
+])("reads a stored HMAC encoding %j the way intake does", async (stored, saved) => {
+  const verification = { scheme: "hmac_sha256", config: { encoding: stored }, secret_refs: { secret: "old" } };
+
+  expect(await saveSecretReference(verification, verificationManifest("hmac_sha256", "secret"), "old")).toEqual({
+    scheme: "hmac_sha256",
+    config: { encoding: saved },
+    secret_refs: { secret: "rotated" },
   });
 });
 

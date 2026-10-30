@@ -182,11 +182,16 @@ For `oauth2_client_credentials`, `client_auth_method` is `client_secret_basic` o
 though the manifest lists only the scheme's required fields. The token endpoint must be an absolute
 HTTPS URL without user information or a fragment.
 
+Both source verification schemes accept optional verification config fields on the Source, checked
+when the Source is saved: `header_name` must be a valid HTTP header name and `prefix` a string, and
+`hmac_sha256` also accepts `encoding`, `hex` or `base64`. An absent or null field takes the default.
+For `hmac_sha256` the defaults are `X-Hub-Signature-256`, `sha256=`, and `hex`.
+
 `header_token` is for providers that cannot sign a request and send a fixed token in a header
 instead, such as a Dataverse webhook step using HttpHeader authentication. By default the token is
-expected, with nothing before it, in `X-Integrios-Token`; a Source may override this with the
-optional `header_name` and `prefix` verification config fields, for example `Authorization` and
-`Bearer `. The token header is withheld from the Source mapping's `$context.headers` and from the
+expected, with nothing before it, in `X-Integrios-Token`; a Source may override this with
+`header_name` and `prefix`, for example `Authorization` and `Bearer `. The prefix matches in any
+case, so `bearer ` matches `Bearer `; the token itself must match exactly. The token header is withheld from the Source mapping's `$context.headers` and from the
 Event identity rule, so no mapping can copy it into an Event. The token is the same on every
 request, so it proves the sender knows it, not that the body is unchanged: prefer `hmac_sha256`
 wherever a provider can sign.

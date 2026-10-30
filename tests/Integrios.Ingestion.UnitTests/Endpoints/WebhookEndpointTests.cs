@@ -99,6 +99,7 @@ public sealed class WebhookEndpointTests(IngestionApiFixture fixture)
     [InlineData(null, null, "X-Integrios-Token", "")]
     [InlineData("X-Gitlab-Token", null, "X-Gitlab-Token", "")]
     [InlineData("Authorization", "Bearer ", "Authorization", "Bearer ")]
+    [InlineData("Authorization", "Bearer ", "Authorization", "bearer ")]
     public async Task PostWebhook_HeaderToken_AcceptsTheConfiguredSecret(
         string? headerName, string? prefix, string sentHeader, string sentPrefix)
     {

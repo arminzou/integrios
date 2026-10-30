@@ -120,7 +120,60 @@ const identityFieldSchema = {
 const verificationFieldSchema = {
   verification_scheme: z.string(),
   verification_secret_ref: z.string(),
+  verification_header_name: z.string(),
+  verification_prefix: z.string(),
+  verification_encoding: z.string(),
 };
+
+/// The optional verification settings this form authors, each with the platform's default. A scheme
+/// not listed keeps whatever config it was saved with.
+const verificationOptions: Record<string, { header_name: string; prefix: string; encoding?: string }> = {
+  hmac_sha256: { header_name: "X-Hub-Signature-256", prefix: "sha256=", encoding: "hex" },
+  header_token: { header_name: "X-Integrios-Token", prefix: "" },
+};
+
+type VerificationOptionValues = {
+  verification_header_name: string;
+  verification_prefix: string;
+  verification_encoding: string;
+};
+
+/// What the settings fields show: the stored value where there is one, else the default.
+function verificationOptionValues(scheme: string, config?: unknown): VerificationOptionValues {
+  const options = verificationOptions[scheme];
+  const stored = object(config);
+  const value = (field: "header_name" | "prefix" | "encoding") => {
+    const current = stored[field];
+    return typeof current === "string" ? current : (options?.[field] ?? "");
+  };
+  const encoding = value("encoding");
+  return {
+    verification_header_name: value("header_name"),
+    verification_prefix: value("prefix"),
+    // Intake reads any case of "base64" as base64 and anything else as hex.
+    verification_encoding: !options?.encoding ? "" : encoding.toLowerCase() === "base64" ? "base64" : "hex",
+  };
+}
+
+/// The config to save: the stored document with each setting written back, except one that still
+/// holds its default and was never stored, so an untouched Source keeps the config it had.
+function verificationConfig(scheme: string, values: VerificationOptionValues, stored?: unknown) {
+  const config = { ...object(stored) };
+  const options = verificationOptions[scheme];
+  if (!options) return config;
+  const authored = {
+    header_name: values.verification_header_name.trim(),
+    prefix: values.verification_prefix,
+    encoding: values.verification_encoding,
+  };
+  for (const field of ["header_name", "prefix", "encoding"] as const) {
+    const fallback = options[field];
+    if (fallback === undefined || (authored[field] === fallback && !Object.hasOwn(config, field))) continue;
+    config[field] = authored[field];
+  }
+  if (authored.header_name === "") delete config.header_name;
+  return config;
+}
 
 const brokerFieldSchema = {
   broker_transport: z.string(),
@@ -507,13 +560,16 @@ function SourceVerificationFields<TValues extends FieldValues>({
   connectorChosen,
   pending,
   capabilities,
+  onSchemeChange,
 }: {
   control: Control<TValues>;
   connectorChosen: boolean;
   pending: boolean;
   capabilities: ReturnType<typeof sourceCapabilities>;
+  onSchemeChange: (scheme: string) => void;
 }) {
   const scheme = String(useWatch({ control, name: "verification_scheme" as Path<TValues> }) ?? "");
+  const options = verificationOptions[scheme];
   return (
     <Section title="Request verification" hint="How Integrios checks that a request came from the provider.">
       <SelectField
@@ -532,6 +588,7 @@ function SourceVerificationFields<TValues extends FieldValues>({
         emptyLabel={capabilities.allowUnverified ? "No verification" : undefined}
         disabled={pending || capabilities.schemes.length === 0}
         required={!capabilities.allowUnverified}
+        onChange={onSchemeChange}
       >
         {capabilities.schemes.map((value) => (
           <SelectItem key={value} value={value}>
@@ -547,6 +604,28 @@ function SourceVerificationFields<TValues extends FieldValues>({
           hint="Reference name only; never enter the secret value."
           required
         />
+      ) : null}
+      {options ? (
+        <>
+          <TextField
+            control={control}
+            name={"verification_header_name" as Path<TValues>}
+            label="Header"
+            hint={`The request header Integrios reads; empty for the default, ${options.header_name}.`}
+          />
+          <TextField
+            control={control}
+            name={"verification_prefix" as Path<TValues>}
+            label="Prefix"
+            hint={`Text before the value in that header; empty for none. Default: ${options.prefix || "none"}.`}
+          />
+          {options.encoding ? (
+            <SelectField control={control} name={"verification_encoding" as Path<TValues>} label="Signature encoding">
+              <SelectItem value="hex">Hex</SelectItem>
+              <SelectItem value="base64">Base64</SelectItem>
+            </SelectField>
+          ) : null}
+        </>
       ) : null}
     </Section>
   );
@@ -865,6 +944,7 @@ function CreateSource({
       broker_secret_ref: "",
       verification_scheme: "",
       verification_secret_ref: "",
+      ...verificationOptionValues(""),
       input_requirements: "",
       mapping: "",
       identity_kind: "",
@@ -912,7 +992,7 @@ function CreateSource({
               values.type === "webhook" && values.verification_scheme.trim()
                 ? {
                     scheme: values.verification_scheme.trim(),
-                    config: {},
+                    config: verificationConfig(values.verification_scheme.trim(), values),
                     secret_refs: {
                       [secretField(values.verification_scheme.trim(), capabilities)]:
                         values.verification_secret_ref.trim(),
@@ -1026,6 +1106,10 @@ function CreateSource({
             connectorChosen={connectorId !== ""}
             pending={connector.isPending}
             capabilities={capabilities}
+            onSchemeChange={(scheme) => {
+              for (const [field, value] of Object.entries(verificationOptionValues(scheme)))
+                form.setValue(field as keyof VerificationOptionValues, value);
+            }}
           />
         ) : null}
         {sourceType === "broker" ? <MessageBrokerFields control={form.control} /> : null}
@@ -1415,6 +1499,7 @@ function EditSourceForm({
       broker_secret_ref: storedBrokerFields?.broker_secret_ref ?? "",
       verification_scheme: source.verification?.scheme ?? "",
       verification_secret_ref: storedSecretReference(source, capabilities),
+      ...verificationOptionValues(source.verification?.scheme ?? "", source.verification?.config),
       identity_kind: source.event_identity_rule?.kind ?? "",
       identity_value: source.event_identity_rule?.value ?? "",
       identity_allow_missing: source.event_identity_rule?.allow_missing ?? false,
@@ -1457,10 +1542,11 @@ function EditSourceForm({
             verification: values.verification_scheme.trim()
               ? {
                   scheme: values.verification_scheme.trim(),
-                  config:
-                    source.verification?.scheme === values.verification_scheme
-                      ? (source.verification.config ?? {})
-                      : {},
+                  config: verificationConfig(
+                    values.verification_scheme.trim(),
+                    values,
+                    source.verification?.scheme === values.verification_scheme ? source.verification.config : undefined,
+                  ),
                   secret_refs: {
                     ...(source.verification?.scheme === values.verification_scheme
                       ? (source.verification.secret_refs ?? {})
@@ -1561,6 +1647,11 @@ function EditSourceForm({
             connectorChosen
             pending={connector.isPending}
             capabilities={capabilities}
+            onSchemeChange={(scheme) => {
+              const stored = source.verification?.scheme === scheme ? source.verification.config : undefined;
+              for (const [field, value] of Object.entries(verificationOptionValues(scheme, stored)))
+                form.setValue(field as keyof VerificationOptionValues, value, { shouldDirty: true });
+            }}
           />
         ) : null}
         {source.type !== "event_api" ? (

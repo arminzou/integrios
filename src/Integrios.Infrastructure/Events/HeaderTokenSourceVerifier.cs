@@ -27,7 +27,7 @@ internal sealed class HeaderTokenSourceVerifier : ISourceVerifier
             throw new SourceVerificationException("Source verification secret field 'token' is required.");
 
         if (!headers.TryGetValue(headerName, out string? headerValue)
-            || !headerValue.StartsWith(prefix, StringComparison.Ordinal))
+            || !headerValue.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
@@ -40,6 +40,9 @@ internal sealed class HeaderTokenSourceVerifier : ISourceVerifier
     }
 
     public IReadOnlyList<string> CredentialHeaders(JsonElement config) => [HeaderName(config)];
+
+    public string? ValidateConfig(JsonElement config) =>
+        SourceVerificationConfig.HeaderNameError(config) ?? SourceVerificationConfig.StringError(config, "prefix");
 
     private static string HeaderName(JsonElement config) =>
         config.TryGetProperty("header_name", out JsonElement headerNameElement)

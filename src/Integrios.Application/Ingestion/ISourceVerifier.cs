@@ -19,6 +19,9 @@ public interface ISourceVerifier
 
     // Withheld from the Source mapping and identity rule, so a mapping cannot copy a credential into an Event.
     IReadOnlyList<string> CredentialHeaders(JsonElement config) => [];
+
+    // Checks a Source's optional config when it is saved; null when it is usable.
+    string? ValidateConfig(JsonElement config) => null;
 }
 
 public interface ISourceVerifierRegistry
