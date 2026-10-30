@@ -289,30 +289,38 @@ it("keeps a webhook Source's verification when its mapping is edited", async () 
   });
 });
 
-it("saves a verification secret reference under the field its scheme declares", async () => {
-  const calls = stubHttp(({ method, url }) => {
+/// Edits a webhook Source's secret reference and returns the verification the Save sent. A null
+/// manifest makes the Connector request fail; `manifestAfterOpen` holds it until the form is open.
+async function saveSecretReference(
+  verification: { scheme: string; config: object; secret_refs: Record<string, string> },
+  manifest: object | null,
+  expectedShown: string,
+  manifestAfterOpen = false,
+) {
+  let openForm = () => {};
+  const formOpen = manifestAfterOpen ? new Promise<void>((resolve) => (openForm = resolve)) : Promise.resolve();
+  const calls = stubHttp(async ({ method, url }) => {
     if (method === "PUT") return { status: 200, body: {} };
-    if (url.pathname.endsWith(`/connectors/${connectorId}`))
-      return {
-        status: 200,
-        body: {
-          id: connectorId,
-          key: "dataverse_webhook",
-          contract_version: 1,
-          manifest_schema_version: 1,
-          name: "Dataverse webhook",
-          direction: "source",
-          status: "active",
-          manifest: {
-            source_verification: {
-              allow_unverified: false,
-              schemes: [{ scheme: "header_token", required_config: [], required_secret_refs: ["token"] }],
+    if (url.pathname.endsWith(`/connectors/${connectorId}`)) {
+      await formOpen;
+      return manifest
+        ? {
+            status: 200,
+            body: {
+              id: connectorId,
+              key: "webhooks",
+              contract_version: 1,
+              manifest_schema_version: 1,
+              name: "Webhooks",
+              direction: "source",
+              status: "active",
+              manifest,
+              created_at: "2026-09-09T00:00:00Z",
+              updated_at: "2026-09-09T00:00:00Z",
             },
-          },
-          created_at: "2026-09-09T00:00:00Z",
-          updated_at: "2026-09-09T00:00:00Z",
-        },
-      };
+          }
+        : { status: 500, body: {} };
+    }
     if (url.pathname.endsWith(`/sources/${sourceId}`))
       return {
         status: 200,
@@ -321,10 +329,10 @@ it("saves a verification secret reference under the field its scheme declares", 
           tenant_id: tenantId,
           connector_id: connectorId,
           topic_id: topicId,
-          name: "dataverse-intake",
+          name: "webhook-intake",
           type: "webhook",
           configuration: { callback_id: "66666666-6666-6666-6666-666666666666" },
-          verification: { scheme: "header_token", config: {}, secret_refs: { token: "dataverse-old" } },
+          verification,
           input_requirements: null,
           mapping: null,
           event_identity_rule: null,
@@ -344,22 +352,57 @@ it("saves a verification secret reference under the field its scheme declares", 
 
   fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
   const form = await screen.findByRole("form", { name: "Edit Webhook Source" });
-  await waitFor(() => expect(within(form).getAllByText("Header token").length).toBeGreaterThan(0));
+  openForm();
+  await waitFor(() =>
+    expect(calls.some((call) => call.url.pathname.endsWith(`/connectors/${connectorId}`))).toBe(true),
+  );
   const secretReference = within(form).getByLabelText("Secret reference") as HTMLInputElement;
-  expect(secretReference.value).toBe("dataverse-old");
-  fireEvent.change(secretReference, { target: { value: "dataverse-new" } });
+  await waitFor(() => expect(secretReference.value).toBe(expectedShown));
+  fireEvent.change(secretReference, { target: { value: "rotated" } });
   await act(async () => {
     fireEvent.submit(form);
   });
 
   await waitFor(() => expect(calls.some((call) => call.method === "PUT")).toBe(true));
-  expect(calls.find((call) => call.method === "PUT")!.body).toMatchObject({
-    verification: { scheme: "header_token", config: {}, secret_refs: { token: "dataverse-new" } },
+  return (calls.find((call) => call.method === "PUT")!.body as { verification: unknown }).verification;
+}
+
+const verificationManifest = (scheme: string, secretField: string) => ({
+  source_verification: {
+    allow_unverified: false,
+    schemes: [{ scheme, required_config: [], required_secret_refs: [secretField] }],
+  },
+});
+
+it("saves a verification secret reference under the field its scheme declares", async () => {
+  const verification = { scheme: "header_token", config: {}, secret_refs: { token: "old" } };
+
+  expect(await saveSecretReference(verification, verificationManifest("header_token", "token"), "old")).toEqual({
+    ...verification,
+    secret_refs: { token: "rotated" },
   });
+});
+
+/// A Save while the Connector request has failed must not invent a "secret" field: intake would keep
+/// checking the old token while the form reported the rotation saved.
+it("keeps a Source's stored secret field when its Connector manifest is unavailable", async () => {
+  const verification = { scheme: "header_token", config: {}, secret_refs: { token: "old" } };
+
+  expect(await saveSecretReference(verification, null, "old")).toEqual({
+    ...verification,
+    secret_refs: { token: "rotated" },
+  });
+});
+
+it("edits the reference its scheme uses when a Source stores several", async () => {
+  const verification = { scheme: "header_token", config: {}, secret_refs: { secret: "extra", token: "current" } };
+
   expect(
-    (calls.find((call) => call.method === "PUT")!.body as { verification: { secret_refs: object } }).verification
-      .secret_refs,
-  ).toEqual({ token: "dataverse-new" });
+    await saveSecretReference(verification, verificationManifest("header_token", "token"), "current", true),
+  ).toEqual({
+    ...verification,
+    secret_refs: { secret: "extra", token: "rotated" },
+  });
 });
 
 /// Closing Edit without saving is Cancel. A draft that outlived it came back on the next Edit reading

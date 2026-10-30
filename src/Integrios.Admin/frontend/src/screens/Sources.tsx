@@ -574,6 +574,24 @@ function sourceCapabilities(manifest: unknown) {
   };
 }
 
+/// The secret field a verification scheme stores its reference under. Until the Connector manifest
+/// loads, a Source keeping its scheme keeps the field it was saved with.
+function secretField(
+  scheme: string,
+  capabilities: ReturnType<typeof sourceCapabilities>,
+  stored?: Source["verification"],
+): string {
+  const declared = capabilities.secretFields[scheme];
+  if (declared) return declared;
+  const keys = stored?.scheme === scheme ? Object.keys(object(stored.secret_refs)) : [];
+  return keys.length === 1 ? keys[0] : "secret";
+}
+
+function storedSecretReference(source: Source, capabilities: ReturnType<typeof sourceCapabilities>): string {
+  const scheme = source.verification?.scheme ?? "";
+  return String(object(source.verification?.secret_refs)[secretField(scheme, capabilities, source.verification)] ?? "");
+}
+
 function sourceConfiguration(values: BrokerValues): Record<string, unknown> {
   if (values.broker_transport !== "azure_service_bus") return {};
   const transportConfig =
@@ -896,7 +914,7 @@ function CreateSource({
                     scheme: values.verification_scheme.trim(),
                     config: {},
                     secret_refs: {
-                      [capabilities.secretFields[values.verification_scheme.trim()] ?? "secret"]:
+                      [secretField(values.verification_scheme.trim(), capabilities)]:
                         values.verification_secret_ref.trim(),
                     },
                   }
@@ -1396,7 +1414,7 @@ function EditSourceForm({
       broker_authentication: storedBrokerFields?.broker_authentication ?? "",
       broker_secret_ref: storedBrokerFields?.broker_secret_ref ?? "",
       verification_scheme: source.verification?.scheme ?? "",
-      verification_secret_ref: String(Object.values(object(source.verification?.secret_refs))[0] ?? ""),
+      verification_secret_ref: storedSecretReference(source, capabilities),
       identity_kind: source.event_identity_rule?.kind ?? "",
       identity_value: source.event_identity_rule?.value ?? "",
       identity_allow_missing: source.event_identity_rule?.allow_missing ?? false,
@@ -1404,6 +1422,13 @@ function EditSourceForm({
     },
   });
   const verificationScheme = form.watch("verification_scheme");
+  // The form may open before the manifest names the scheme's secret field; show that field's reference once it does.
+  useEffect(() => {
+    if (!connector.data || form.getFieldState("verification_secret_ref").isDirty) return;
+    form.resetField("verification_secret_ref", {
+      defaultValue: storedSecretReference(source, sourceCapabilities(connector.data.manifest)),
+    });
+  }, [connector.data, form, source]);
   useFixedTypeFollowsDeclaration(form.watch("mapping"), form.watch("event_types"), (next) =>
     form.setValue("mapping", next, { shouldDirty: true }),
   );
@@ -1440,7 +1465,7 @@ function EditSourceForm({
                     ...(source.verification?.scheme === values.verification_scheme
                       ? (source.verification.secret_refs ?? {})
                       : {}),
-                    [capabilities.secretFields[values.verification_scheme.trim()] ?? "secret"]:
+                    [secretField(values.verification_scheme.trim(), capabilities, source.verification)]:
                       values.verification_secret_ref.trim(),
                   },
                 }
