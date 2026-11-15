@@ -3,11 +3,12 @@
 Thanks for your interest. Integrios is an early-stage, open-source integration platform;
 contributions, issues, and feedback are welcome.
 
-> **Maturity:** this is a preview release. The backend foundation works end to end, including
+> **Maturity:** this is a preview release. The backend works end to end, including
 > Operator-authored Connector definitions (see the [GitHub-to-Slack
-> walkthrough](docs/github-to-slack-walkthrough.md) for a shipped, worked example); an Operator
-> admin UI is planned and not yet implemented — every capability is driven through the Admin and
-> Ingestion HTTP APIs today.
+> walkthrough](docs/github-to-slack-walkthrough.md) for a shipped, worked example), and Admin serves
+> the Operator dashboard.
+
+Every change follows [RULES.md](RULES.md).
 
 ## Getting set up
 
@@ -17,47 +18,117 @@ Prerequisites: [.NET 10 SDK](https://dotnet.microsoft.com/download) and Docker.
 # Build the solution
 dotnet build Integrios.slnx
 
-# Run the unit tests
+# Run every test project (the functional and acceptance projects need Docker)
 dotnet test Integrios.slnx
+
+# Run one test project
+dotnet test tests/Integrios.Ingestion.UnitTests/Integrios.Ingestion.UnitTests.csproj
 
 # Run the full stack locally (services, Postgres, migrations)
 make up
+
+# Run one service
+dotnet run --project src/Integrios.Ingestion
+dotnet run --project src/Integrios.Admin
+dotnet run --project src/Integrios.Worker
+
+# Apply C# formatting (per .editorconfig)
+dotnet format Integrios.slnx
+
+# Inspect or apply database migrations through the Compose network
+make db-info
+make db-migrate
 ```
 
-See [docs/setup.md](docs/setup.md) for the end-to-end run and a first-event walkthrough.
+No `.env` is needed; the Makefile and `compose.yml` default all development values, and a repo-root
+`.env` overrides them. See [docs/setup.md](docs/setup.md) for the end-to-end run and a first-event
+walkthrough, and the [docs site guide](docs/ci-cd.md) to preview the public documentation.
 
 ## Project layout
 
-- `src/` contains the services: `Integrios.Ingestion` (data plane), `Integrios.Admin` (control
-  plane), `Integrios.Worker` (delivery), plus `Integrios.Domain`, `Integrios.Application`,
-  `Integrios.Infrastructure`, plus WireMock as the bundled local test sink.
-- `tests/`: xUnit test projects.
-- `src/Integrios.Migrations.Postgres/` and `src/Integrios.Migrations.SqlServer/`: provider-specific
-  EF Core migrations.
-- `docs/`: public documentation.
+- `Integrios.slnx` is the solution entry point.
+- `src/Integrios.Ingestion` owns intake, Tenant authentication, and the durable acceptance boundary.
+  Data plane, port 5231.
+- `src/Integrios.Admin` owns Tenant management; Connector, Source, and Destination authoring; Topic
+  and Subscription management; and it serves the Operator dashboard. Control plane, port 5150.
+- `src/Integrios.Worker` owns outbox polling, fanout to Subscriptions, delivery, and retry and
+  dead-letter behavior.
+- `src/Integrios.Application` holds the use cases: commands, queries, their handlers, and the ports
+  they need, grouped by responsibility (such as `Authoring`, `Ingestion`, `Delivery`) and then by
+  capability.
+- `src/Integrios.Infrastructure` implements those ports: persistence, messaging, secret resolution,
+  and other external-system adapters.
+- `src/Integrios.Domain` holds entities, enums, and value objects.
+- `src/Integrios.Migrations.Postgres/` and `src/Integrios.Migrations.SqlServer/` hold the
+  provider-specific EF Core migrations.
+- `tests/` holds the xUnit test projects; a project's name states what it needs to run.
+- `docs/` holds the public documentation and is the source of the public site.
+- The development Compose stack includes WireMock as a controllable local sink for testing and
+  demos. It is not part of the deployable product.
+
+## Choosing tests
+
+A test project's name states what it needs to run. `Integrios.<Layer>.UnitTests` needs nothing;
+`Integrios.FunctionalTests` starts databases and a message-broker emulator through Testcontainers;
+`Integrios.AcceptanceTests` builds every service image, composes the packaged deployment, and drives
+the dashboard's golden journey against it in Chromium, so it also needs Node and `npm ci` plus
+`npx playwright install chromium` in `src/Integrios.Admin/frontend`. Cost follows that ordering, and
+acceptance dominates a run of everything.
+
+Choose tests by what the change can actually break, not by default:
+
+| Change | Run |
+|---|---|
+| frontend-only code under `src/Integrios.Admin/frontend/` | `npm --prefix src/Integrios.Admin/frontend run check` |
+| backend or shared infrastructure code | `UnitTests` projects + `ArchitectureTests` |
+| backend behavior in `src/` | add `FunctionalTests` on the default provider |
+| raw SQL, JSON operators, migrations, or the `DbContext` | add the second provider leg, `INTEGRIOS_TEST_DATABASE_PROVIDER=sqlserver` |
+| host composition, dependency registration, Dockerfile, Compose, bootstrap, or an HTTP contract the acceptance tests exercise | add `AcceptanceTests` |
+| docs-only change | `npm run docs:build`, which fails on broken internal links |
+
+The second provider leg is for plausible provider divergence, not reassurance: one provider catches
+nearly everything that is not provider-specific. A schema or architecture change also checks that
+migrations, tests, and docs stay aligned.
+
+CI runs `AcceptanceTests` through the `acceptance` job on every non-PR run (`run_kind` `main`,
+`nightly`, or `release`). Running it locally before each commit in a batch duplicates a gate that is
+about to run anyway; run it once before pushing, or when the change is in the table above.
+
+While iterating, filter to the narrowest relevant test rather than running a whole project:
+`dotnet test <project> --filter "FullyQualifiedName~SourcesAdminTests"`. Do not partition a project
+with traits or category filters. If you skip verification, say so explicitly.
 
 ## Making changes
 
 1. Fork the repo and branch off `main`.
 2. Keep changes focused; add or update tests where you change behavior.
-3. Run `dotnet build` and the relevant `dotnet test` projects before opening a PR.
+3. Run the tests [Choosing tests](#choosing-tests) names for your change before opening a PR.
 4. Open a pull request against `main` with a clear description.
 
 ## Commit messages
 
 Use [Conventional Commits](https://www.conventionalcommits.org/):
 
-```
+```text
 <type>(<scope>): <description>
 ```
 
-Common types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `perf`. Suggested
-scopes: `api`, `admin`, `worker`, `core`, `db`, `docs`, `infra`.
+Common types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `perf`. Suggested scopes:
+`admin`, `dashboard`, `ingestion`, `worker`, `api`, `core`, `db`, `infra`, `docs`.
+
+```text
+feat(api): add webhook intake endpoint with tenant resolution
+fix(worker): handle null payload in delivery attempt tracker
+docs: update domain model overview
+chore(db): add initial migration for tenant and connector tables
+```
 
 ## CI
 
-Every pull request runs build + unit tests via GitHub Actions. Image publishing runs only
-on the canonical repository, never on fork PRs.
+A pull request that changes code runs the build, architecture and unit tests, the dashboard
+checks, and the functional tests through GitHub Actions; a documentation-only pull request runs the
+documentation build instead. Images are published only from pushes to `main` and release tags, never
+from a pull request. [docs/ci-cd.md](docs/ci-cd.md) describes each run.
 
 ## License
 
