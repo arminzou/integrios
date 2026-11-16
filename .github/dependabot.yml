@@ -15,6 +15,21 @@ updates:
       - dependency-name: "*"
         update-types: [version-update:semver-major]
 
+  # Docs site tooling; nothing here ships in a release.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      docs:
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: "*"
+        update-types: [version-update:semver-major]
+
   # No central package management: the solution at the root reaches every project.
   - package-ecosystem: nuget
     directory: /
