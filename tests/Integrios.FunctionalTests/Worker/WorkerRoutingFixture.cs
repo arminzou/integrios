@@ -102,6 +102,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         services.AddSingleton<ISubscriptionRepository>(subscriptionRepository);
         services.AddSingleton(infrastructureProvider.GetRequiredService<DeliveryExecutionOptions>());
         services.AddSingleton<IEventDeliveryQueue>(DeliveryQueue);
+        services.AddSingleton<IPullDeliveryQueue>(DeliveryQueue);
         services.AddSingleton<IDeliveryClient>(_ => DeliveryClient);
         services.AddSingleton<IDestinationAuthenticator, ApiKeyHeaderAuthenticator>();
         services.AddSingleton<IDestinationAuthenticator, BearerTokenAuthenticator>();
@@ -111,7 +112,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         services.AddSingleton<IDestinationAuthenticatorRegistry, DestinationAuthenticatorRegistry>();
         services.AddSingleton<IDestinationAuthenticationSecretResolver>(_ => SecretResolver);
         services.AddSingleton<ITransformEvaluator, JsonataTransformEvaluator>();
-        services.AddLogging();
+        services.AddLogging(logging => logging.AddProvider(PullClaimLogs));
         applicationProvider = services.BuildServiceProvider();
         mediator = applicationProvider.GetRequiredService<IMediator>();
     }
@@ -167,11 +168,8 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     internal static readonly Guid PullDestinationBId = Guid.Parse("cccccccc-0000-0000-0000-0000000000b1");
     internal IPullDeliveryQueue PullQueue => DeliveryQueue;
     internal CapturingLoggerProvider PullClaimLogs { get; } = new();
-    internal PullDeliveryClaimer PullClaimer => new(
-        DeliveryQueue,
-        new JsonataTransformEvaluator(),
-        applicationProvider.GetRequiredService<IntegriosMetrics>(),
-        LoggerFactory.Create(logging => logging.AddProvider(PullClaimLogs)).CreateLogger<PullDeliveryClaimer>());
+    internal Task<IReadOnlyList<PullDelivery>> ClaimPullAsync(Guid destinationId, int max) =>
+        mediator.Send(new ClaimPullDeliveriesCommand(destinationId, max));
 
     public Task SeedPullDestinationsAsync()
     {

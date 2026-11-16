@@ -26,7 +26,7 @@ public sealed class PullDeliveryTests : IClassFixture<WorkerRoutingFixture>, IAs
     public Task DisposeAsync() => Task.CompletedTask;
 
     private Task<IReadOnlyList<PullDelivery>> ClaimAsync(Guid destinationId, int max = 32) =>
-        fixture.PullClaimer.ClaimAsync(destinationId, max, CancellationToken.None);
+        fixture.ClaimPullAsync(destinationId, max);
 
     private static PullAttemptOwner Owner(Guid destinationId, PullDelivery delivery) =>
         new(destinationId, delivery.DeliveryId, delivery.AttemptId);
