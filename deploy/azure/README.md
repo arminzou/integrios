@@ -11,6 +11,11 @@ Application Insights; Azure Managed Prometheus; an Operator Workbook; and an Azu
 Admin's Data Protection key ring. It reuses an existing Azure Container Registry and never
 provisions Service Bus topology.
 
+Every app and job runs the one Integrios image and names its role as the first argument, such as
+`integrios ingestion`, or `integrios admin database migrate` for one of Admin's tools. This profile
+has not been requalified on Azure since it moved to the one image, so verify your first deployment
+before you rely on it.
+
 ## Supplied defaults
 
 | Area | Supplied reference |
@@ -22,7 +27,7 @@ provisions Service Bus topology.
 | Azure SQL | General Purpose serverless, one vCore maximum, 0.5 minimum capacity, 60-minute auto-pause, local backup redundancy |
 | PostgreSQL | PostgreSQL 16 Burstable B1ms, 32 GiB storage, seven-day local backup, no HA or geo-redundant backup |
 | Deployment | Maintenance window: runtime at zero, migrate, Bootstrap, validate secrets, then start one replica |
-| Images | Existing Operator-owned ACR; one published release imported into it and deployed pinned by digest |
+| Image | Existing Operator-owned ACR; one published release imported into it and deployed pinned by digest |
 | Service Bus | Optional receiver role on an existing namespace; no namespace, queue, topic, or subscription creation |
 
 ## Prerequisites
@@ -31,8 +36,7 @@ provisions Service Bus topology.
 - an authenticated Azure subscription with the required resource providers registered;
 - permission to create resources and role assignments in the deployment, ACR, and optional
   Service Bus resource groups, including importing images into the ACR;
-- an existing ACR that can reach `ghcr.io`, or one already holding the matched Admin, Ingestion,
-  and Worker images;
+- an existing ACR that can reach `ghcr.io`, or one already holding the release's image;
 - a region available to both Container Apps and the selected managed database in your subscription;
 - one explicit Admin caller CIDR—empty and allow-all lists are rejected;
 - permission to assign yourself `Key Vault Secrets Officer` on the two Tenant-secret vaults after
@@ -47,17 +51,16 @@ Every app and job runs as exactly one user-assigned identity, selected through `
 ## Select a release
 
 Set `release` in the parameter file to a published version, without the Git tag's `v` prefix: Git
-release `v0.9.0` publishes container tag `0.9.0`. On each run, `deploy.ps1` imports any of that
-release's Admin, Ingestion, and Worker images missing from your registry from
-`ghcr.io/arminzou/integrios`, resolves each to its digest, and deploys those digests. Upgrading is
-a change to `release` followed by the same command.
+release `v0.9.0` publishes container tag `0.9.0`. On each run, `deploy.ps1` imports that release's
+image from `ghcr.io/arminzou/integrios` when your registry lacks it, resolves it to its digest, and
+deploys that digest. Upgrading is a change to `release` followed by the same command.
 
 A tag the registry already holds is used as it is and never re-imported, so the first import of a
-release fixes the digests every later deployment of it resolves to.
+release fixes the digest every later deployment of it resolves to.
 
-To deploy images you built or imported yourself, remove `release` and set `adminImage`,
-`ingestionImage`, and `workerImage` to full `<registry>.azurecr.io/<repository>@sha256:<digest>`
-references from one matched build. The command accepts one form or the other, never both.
+To deploy an image you built or imported yourself, remove `release` and set `image` to a full
+`<registry>.azurecr.io/<repository>@sha256:<digest>` reference. The command accepts one form or the
+other, never both.
 
 Copy `main.example.bicepparam`, replace its placeholder registry, resource group, region, names,
 and CIDRs, and keep the file free of secret values. The
@@ -86,10 +89,10 @@ Copy-Item ./main.example.bicepparam ./main.bicepparam
 
 ### What the command does
 
-1. Checks what Azure cannot: no secret values in the parameter file, a release or digest-pinned
-   images from the configured registry, a matching location, no allow-all Admin CIDR, and paired
+1. Checks what Azure cannot: no secret values in the parameter file, a release or a digest-pinned
+   image from the configured registry, a matching location, no allow-all Admin CIDR, and paired
    Service Bus and sign-in settings.
-2. For a `release`, imports any missing images and resolves each to its digest.
+2. For a `release`, imports the image when missing and resolves it to its digest.
 3. Reads the stored initial OperatorKey secret, or generates it on the first deployment.
 4. Reconciles infrastructure with all runtime replicas at zero and deactivates revisions to prevent
    HTTP requests from waking them during setup.
@@ -113,7 +116,7 @@ az containerapp exec --resource-group <resource-group> --name <prefix>-admin --c
 ```
 
 ```sh
-/app/service operator-user create --display-name "Deployment operator" --email operator@example.com
+/app/integrios admin operator-user create --display-name "Deployment operator" --email operator@example.com
 ```
 
 `create` prompts for a masked, confirmed password. Run it once for each person who needs an account;
@@ -124,8 +127,8 @@ and session limits.
 Redeployment needs no Operator input and leaves every account unchanged.
 
 A failed migration, grant, Bootstrap, or validation job leaves runtime stopped. After a schema
-migration, recover by rolling forward or restoring the database rather than starting an older image
-set. Validation checks every Destination secret reference, so store a new Destination's secret
+migration, recover by rolling forward or restoring the database rather than starting an older
+image. Validation checks every Destination secret reference, so store a new Destination's secret
 before the next deployment.
 
 ### Deployment secrets
@@ -263,9 +266,9 @@ Observability failures do not participate in liveness or readiness.
   does not become healthy.
 - Confirm the selected database accepts Azure-service traffic and the Migrate identity remains its
   Entra administrator and schema owner.
-- Confirm each resolved image digest exists in the configured ACR and each user-assigned identity
-  has `AcrPull`. The command prints the digests it resolved, and the `main` deployment records them
-  as the `adminImage`, `ingestionImage`, and `workerImage` parameters.
+- Confirm the resolved image digest exists in the configured ACR and each user-assigned identity
+  has `AcrPull`. The command prints the digest it resolved, and the `main` deployment records it as
+  the `image` parameter.
 - If Ingestion, Worker, or the validation job fails at startup with a Key Vault error, confirm its
   identity holds `Key Vault Secrets User` on its own Tenant-secret vault; a new assignment can take
   a few minutes to apply.
