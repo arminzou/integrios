@@ -7,16 +7,19 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>integrios</AssemblyName>
     <RootNamespace>Integrios</RootNamespace>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
   </PropertyGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="Integrios.UnitTests" />
   </ItemGroup>
 
+  <!-- The roles build portable: a runtime or self-contained publish of this executable would
+       otherwise flow into each role, and a role without an app host cannot be self-contained. -->
   <ItemGroup>
-    <ProjectReference Include="..\Integrios.Admin\Integrios.Admin.csproj" />
-    <ProjectReference Include="..\Integrios.Ingestion\Integrios.Ingestion.csproj" />
-    <ProjectReference Include="..\Integrios.Worker\Integrios.Worker.csproj" />
+    <ProjectReference Include="..\Integrios.Admin\Integrios.Admin.csproj" GlobalPropertiesToRemove="RuntimeIdentifier;SelfContained" />
+    <ProjectReference Include="..\Integrios.Ingestion\Integrios.Ingestion.csproj" GlobalPropertiesToRemove="RuntimeIdentifier;SelfContained" />
+    <ProjectReference Include="..\Integrios.Worker\Integrios.Worker.csproj" GlobalPropertiesToRemove="RuntimeIdentifier;SelfContained" />
   </ItemGroup>
 
 </Project>

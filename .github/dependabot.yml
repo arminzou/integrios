@@ -30,7 +30,7 @@ updates:
       - dependency-name: "*"
         update-types: [version-update:semver-major]
 
-  # The image bundles the .NET runtime, so a runtime patch reaches Operators
+  # The image and the Windows archive bundle the .NET runtime, so a runtime patch reaches Operators
   # only as an Integrios release. `fix` makes release-please cut a patch release for it.
   - package-ecosystem: docker
     directory: /
