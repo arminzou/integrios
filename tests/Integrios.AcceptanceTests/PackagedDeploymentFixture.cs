@@ -75,19 +75,11 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
             ["INTEGRIOS_ADMIN_OIDC_AUTHORITY"] = "",
             ["INTEGRIOS_ADMIN_OIDC_CLIENT_ID"] = "",
             ["INTEGRIOS_ADMIN_PASSWORD_ENABLED"] = "",
-            ["INTEGRIOS_BOOTSTRAP_IMAGE"] = $"{projectName}-bootstrap",
-            ["INTEGRIOS_ADMIN_IMAGE"] = $"{projectName}-admin",
-            ["INTEGRIOS_INGESTION_IMAGE"] = $"{projectName}-ingestion",
-            ["INTEGRIOS_WORKER_IMAGE"] = $"{projectName}-worker",
+            ["INTEGRIOS_IMAGE"] = $"{projectName}-integrios",
         };
     }
 
-    /// The images this deployment built, so a test can assert what an artifact carries rather than
-    /// only what a running deployment happens to serve.
-    public string AdminImage => environment["INTEGRIOS_ADMIN_IMAGE"];
-    public string BootstrapImage => environment["INTEGRIOS_BOOTSTRAP_IMAGE"];
-    public string IngestionImage => environment["INTEGRIOS_INGESTION_IMAGE"];
-    public string WorkerImage => environment["INTEGRIOS_WORKER_IMAGE"];
+    public string Image => environment["INTEGRIOS_IMAGE"];
     public string RepoRoot => repoRoot;
 
     public HttpClient AdminClient { get; private set; } = null!;
@@ -722,19 +714,11 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
 
     private async Task RemoveImagesBestEffortAsync()
     {
-        string[] imageNames =
-        [
-            environment["INTEGRIOS_BOOTSTRAP_IMAGE"],
-            environment["INTEGRIOS_ADMIN_IMAGE"],
-            environment["INTEGRIOS_INGESTION_IMAGE"],
-            environment["INTEGRIOS_WORKER_IMAGE"],
-        ];
-
         try
         {
             await RunDockerAsync(
                 TimeSpan.FromMinutes(2),
-                ["image", "rm", .. imageNames]);
+                ["image", "rm", Image]);
         }
         catch
         {

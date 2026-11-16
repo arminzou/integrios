@@ -1,3 +1,9 @@
+x-integrios-image: &integrios-image
+  build:
+    context: .
+    dockerfile: Dockerfile
+  image: ${INTEGRIOS_IMAGE:-integrios:dev}
+
 services:
   postgres:
     image: postgres:16.14-alpine3.24
@@ -17,12 +23,8 @@ services:
       retries: 10
 
   migrate:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        PROJECT: Integrios.Admin
-    image: ${INTEGRIOS_BOOTSTRAP_IMAGE:-integrios-bootstrap:dev}
+    <<: *integrios-image
+    entrypoint: ["/app/integrios", "admin"]
     depends_on:
       postgres:
         condition: service_healthy
@@ -31,12 +33,8 @@ services:
     command: ["database", "migrate"]
 
   grant-runtime:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        PROJECT: Integrios.Admin
-    image: ${INTEGRIOS_BOOTSTRAP_IMAGE:-integrios-bootstrap:dev}
+    <<: *integrios-image
+    entrypoint: ["/app/integrios", "admin"]
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -53,12 +51,8 @@ services:
   bootstrap:
     # Same command as production. The runtime grant job precedes Bootstrap; the bundled
     # WireMock/Grafana and disposable credential defaults make this stack dev-only.
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        PROJECT: Integrios.Admin
-    image: ${INTEGRIOS_BOOTSTRAP_IMAGE:-integrios-bootstrap:dev}
+    <<: *integrios-image
+    entrypoint: ["/app/integrios", "admin"]
     depends_on:
       grant-runtime:
         condition: service_completed_successfully
@@ -69,12 +63,8 @@ services:
     command: ["bootstrap"]
 
   ingestion:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        PROJECT: Integrios.Ingestion
-    image: ${INTEGRIOS_INGESTION_IMAGE:-integrios-ingestion:dev}
+    <<: *integrios-image
+    entrypoint: ["/app/integrios", "ingestion"]
     depends_on:
       bootstrap:
         condition: service_completed_successfully
@@ -90,14 +80,8 @@ services:
       - "${INTEGRIOS_INGESTION_OPERATIONAL_PORT:-5232}:5299"
 
   admin:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        PROJECT: Integrios.Admin
-        # Only this image builds and carries the Operator dashboard.
-        DASHBOARD: admin
-    image: ${INTEGRIOS_ADMIN_IMAGE:-integrios-admin:dev}
+    <<: *integrios-image
+    entrypoint: ["/app/integrios", "admin"]
     depends_on:
       bootstrap:
         condition: service_completed_successfully
@@ -120,13 +104,8 @@ services:
       - "${INTEGRIOS_ADMIN_OPERATIONAL_PORT:-5151}:5299"
 
   worker:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        PROJECT: Integrios.Worker
-        HTTP_PORT: "5299"
-    image: ${INTEGRIOS_WORKER_IMAGE:-integrios-worker:dev}
+    <<: *integrios-image
+    entrypoint: ["/app/integrios", "worker"]
     depends_on:
       bootstrap:
         condition: service_completed_successfully

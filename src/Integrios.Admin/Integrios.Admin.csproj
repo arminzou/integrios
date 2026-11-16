@@ -4,6 +4,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <UseAppHost>false</UseAppHost>
     <!-- Emit the Admin OpenAPI document from the build, so the frontend client is generated from
          the same contract the API serves. Off by default and turned on by the frontend client
          generation step, which supplies placeholder settings instead of running a host. -->

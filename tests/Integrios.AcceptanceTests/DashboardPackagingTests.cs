@@ -5,14 +5,11 @@ using System.Text.RegularExpressions;
 
 namespace Integrios.AcceptanceTests;
 
-/// What the packaged Admin image actually serves and carries. Everything here runs against the
-/// built images and the running deployment, not against a test host: the point is that the artifact
-/// a deployment pulls behaves this way, not that the source could.
 [Collection(PackagedDeploymentCollection.Name)]
 public sealed class DashboardPackagingTests(PackagedDeploymentFixture fixture)
 {
     [Fact]
-    public async Task AdminImage_ServesTheDashboardShellAndItsAssets()
+    public async Task AdminRole_ServesTheDashboardShellAndItsAssets()
     {
         using HttpResponseMessage shell = await fixture.AdminClient.GetAsync("/");
         shell.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -126,33 +123,29 @@ public sealed class DashboardPackagingTests(PackagedDeploymentFixture fixture)
     }
 
     [Fact]
-    public async Task OnlyTheAdminImageCarriesTheDashboard()
+    public async Task OnlyTheAdminRoleServesTheDashboardTheImageCarries()
     {
-        IReadOnlyList<string> adminAssets = await fixture.ListImageEntriesAsync(fixture.AdminImage, "/app/wwwroot");
-        adminAssets.ShouldContain(DashboardShellFile);
+        IReadOnlyList<string> assets = await fixture.ListImageEntriesAsync(fixture.Image, "/app/wwwroot");
+        assets.ShouldContain(DashboardShellFile);
 
-        foreach (string image in (string[])[fixture.IngestionImage, fixture.WorkerImage, fixture.BootstrapImage])
+        foreach ((string role, HttpClient client) in (ValueTuple<string, HttpClient>[])[
+            ("ingestion", fixture.IngestionClient),
+            ("worker", fixture.WorkerOperationalClient)])
         {
-            IReadOnlyList<string> entries = await fixture.ListImageEntriesAsync(image, "/app/wwwroot");
-            entries.ShouldNotContain(DashboardShellFile, $"{image} carries a dashboard shell.");
-            entries.ShouldBeEmpty($"{image} carries dashboard assets: {string.Join(", ", entries)}");
+            using HttpResponseMessage response = await client.GetAsync("/");
+            string body = await response.Content.ReadAsStringAsync();
+            (response.IsSuccessStatusCode && body.Contains("<html", StringComparison.OrdinalIgnoreCase))
+                .ShouldBeFalse($"The {role} role served the dashboard shell: {(int)response.StatusCode}");
         }
     }
 
     [Fact]
-    public async Task NoImageCarriesTheDashboardBuildToolchain()
+    public async Task TheImageCarriesNoDashboardBuildToolchain()
     {
         // The dashboard is built in a stage that is discarded. A runtime image carrying Node would
         // mean the build toolchain shipped with the service.
-        foreach (string image in (string[])[
-            fixture.AdminImage,
-            fixture.BootstrapImage,
-            fixture.IngestionImage,
-            fixture.WorkerImage])
-        {
-            (await fixture.ImageHasExecutableAsync(image, "node")).ShouldBeFalse($"{image} contains node.");
-            (await fixture.ImageHasExecutableAsync(image, "npm")).ShouldBeFalse($"{image} contains npm.");
-        }
+        (await fixture.ImageHasExecutableAsync(fixture.Image, "node")).ShouldBeFalse("The image contains node.");
+        (await fixture.ImageHasExecutableAsync(fixture.Image, "npm")).ShouldBeFalse("The image contains npm.");
     }
 
     /// The header as sent, or a stand-in when it is absent. Read as text on purpose: reaching into
@@ -161,8 +154,5 @@ public sealed class DashboardPackagingTests(PackagedDeploymentFixture fixture)
     private static string CacheControlOf(HttpResponseMessage response) =>
         response.Headers.CacheControl?.ToString() ?? "(no Cache-Control header)";
 
-    /// The bootstrap and migrate services run Admin command-line verbs from an image built without
-    /// the dashboard. That they completed is asserted by the fixture's own startup gate; this
-    /// records why the image they use is deliberately a different one.
     private const string DashboardShellFile = "index.html";
 }
