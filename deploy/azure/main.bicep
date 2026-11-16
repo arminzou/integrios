@@ -18,13 +18,7 @@ param serviceBusResourceGroupName string = ''
 param databaseProvider string
 
 @description('Full immutable ACR image reference ending in @sha256:<digest>.')
-param adminImage string
-
-@description('Full immutable ACR image reference ending in @sha256:<digest>.')
-param ingestionImage string
-
-@description('Full immutable ACR image reference ending in @sha256:<digest>.')
-param workerImage string
+param image string
 
 @secure()
 param operatorKeySecret string
@@ -676,7 +670,8 @@ resource ingestion 'Microsoft.App/containerApps@2025-07-01' = {
     template: {
       containers: [{
         name: 'ingestion'
-        image: ingestionImage
+        image: image
+        args: ['ingestion']
         env: concat(ingestionDatabaseEnvironment, [
           { name: 'Integrios__KeyVault__Uri', value: sourceSecretsVault.properties.vaultUri }
         ], telemetryEnvironment)
@@ -732,7 +727,8 @@ resource admin 'Microsoft.App/containerApps@2025-07-01' = {
     template: {
       containers: [{
         name: 'admin'
-        image: adminImage
+        image: image
+        args: ['admin']
         env: concat(adminDatabaseEnvironment, [
           { name: 'Integrios__Admin__Password__Enabled', value: string(adminPasswordEnabled) }
           { name: 'Integrios__PublicIngestionBaseUri', value: 'https://${ingestion.properties.configuration.ingress.fqdn}' }
@@ -777,7 +773,8 @@ resource worker 'Microsoft.App/containerApps@2025-07-01' = {
     template: {
       containers: [{
         name: 'worker'
-        image: workerImage
+        image: image
+        args: ['worker']
         // Completed-history retention is intentionally absent. Add
         // Integrios__Worker__HistoryRetention__Period only after reviewing the rollout warning.
         env: concat(workerDatabaseEnvironment, destinationSecretsEnvironment, telemetryEnvironment)
@@ -810,8 +807,8 @@ resource migrateJob 'Microsoft.App/jobs@2025-07-01' = {
     template: {
       containers: [{
         name: 'migrate'
-        image: adminImage
-        args: ['database', 'migrate']
+        image: image
+        args: ['admin', 'database', 'migrate']
         env: migrateDatabaseEnvironment
         resources: { cpu: json('0.5'), memory: '1Gi' }
       }]
@@ -837,8 +834,8 @@ resource grantRuntimeJob 'Microsoft.App/jobs@2025-07-01' = {
     template: {
       containers: [{
         name: 'grant-runtime'
-        image: adminImage
-        args: ['database', 'grant-runtime']
+        image: image
+        args: ['admin', 'database', 'grant-runtime']
         env: concat(migrateDatabaseEnvironment, [
           { name: 'Database__RuntimePrincipals__0__Name', value: adminIdentity.name }
           { name: 'Database__RuntimePrincipals__0__Scope', value: 'control-plane' }
@@ -883,8 +880,8 @@ resource bootstrapJob 'Microsoft.App/jobs@2025-07-01' = {
     template: {
       containers: [{
         name: 'bootstrap'
-        image: adminImage
-        args: ['bootstrap']
+        image: image
+        args: ['admin', 'bootstrap']
         env: concat(bootstrapDatabaseEnvironment, [
           { name: 'INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET', secretRef: 'operator-key' }
         ])
@@ -912,8 +909,8 @@ resource validateSecretsJob 'Microsoft.App/jobs@2025-07-01' = {
     template: {
       containers: [{
         name: 'validate'
-        image: workerImage
-        args: ['secrets', 'validate', '--all']
+        image: image
+        args: ['worker', 'secrets', 'validate', '--all']
         env: concat(workerDatabaseEnvironment, destinationSecretsEnvironment)
         resources: { cpu: json('0.5'), memory: '1Gi' }
       }]
