@@ -12,8 +12,11 @@ internal sealed class BacklogSnapshotReader(IDbConnectionFactory connectionFacto
         string databaseNow = connectionFactory.Provider == DatabaseProvider.SqlServer
             ? "@DatabaseNow"
             : "clock.database_now";
-        string claimable = EventDeliveryClaimability.Predicate(
-            connectionFactory.Provider, "delivery", databaseNow);
+        string transport = connectionFactory.Provider == DatabaseProvider.SqlServer ? "N'http'" : "'http'";
+        // Pull rows wait for their Subscriber, not the push Worker, so they stay out of its backlog.
+        string claimable = $"delivery.transport = {transport} AND ("
+            + EventDeliveryClaimability.Predicate(connectionFactory.Provider, "delivery", databaseNow)
+            + ")";
         string deliveryAnchor = EventDeliveryClaimability.EligibilityAnchor(
             connectionFactory.Provider, "delivery");
 
