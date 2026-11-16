@@ -11,7 +11,6 @@ namespace Integrios.Migrations.SqlServer.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            // An authored Connector with this key would otherwise become pull without notice.
             migrationBuilder.Sql("""
                 IF EXISTS (SELECT 1 FROM connectors WHERE [key] = N'subscriber')
                     THROW 50000, N'Connector key ''subscriber'' is reserved for the built-in pull Connector, but an authored Connector already uses it. Resolve that Connector before migrating.', 1;

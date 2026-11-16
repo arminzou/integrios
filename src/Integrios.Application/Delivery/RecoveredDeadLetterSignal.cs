@@ -3,8 +3,6 @@ using Microsoft.Extensions.Logging;
 
 namespace Integrios.Application.Delivery;
 
-// Push dispatch and the pull claim both reclaim expired leases, so both report a recovery that
-// dead-lettered its delivery the same way.
 internal static class RecoveredDeadLetterSignal
 {
     public static void Emit(ILogger logger, IntegriosMetrics metrics, RecoveredEventDeliveryDeadLetter recovered)

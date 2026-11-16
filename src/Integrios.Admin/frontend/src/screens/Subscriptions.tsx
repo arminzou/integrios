@@ -939,8 +939,6 @@ function SubscriptionForm({
   const headerRows = useFieldArray({ control: form.control, name: "headers" });
   const expression = form.watch("mapping");
   const successMode = form.watch("success_mode");
-  // A pull Destination's Subscriber claims the mapped payload itself, so its Subscription has no
-  // HTTP operation to author.
   const destinationId = form.watch("destination_id");
   const pull = destinations.data?.items.find((destination) => destination.id === destinationId)?.transport === "pull";
   // Delivery runs the mapping even when the request carries no body, so a mapping there could only

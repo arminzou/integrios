@@ -8,9 +8,6 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Integrios.FunctionalTests.Infrastructure;
 
-// Before the built-in subscriber Connector existed, `subscriber` was an ordinary authorable key. A
-// deployment holding such a Connector must stop at the seeding migration instead of having that
-// Connector silently become pull.
 public sealed class SubscriberConnectorSeedTests : IAsyncLifetime
 {
     private readonly FunctionalDatabase database = new(migrateOnStart: false);

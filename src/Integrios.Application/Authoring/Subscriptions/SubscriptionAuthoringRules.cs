@@ -34,8 +34,6 @@ internal static class SubscriptionAuthoringRules
             throw new SubscriptionValidationException(error, "mapping");
     }
 
-    // The Destination's transport decides whether a Subscription carries an HTTP operation: push
-    // defaults an absent one, and pull has none to store.
     public static HttpDeliveryConfiguration? HttpDeliveryFor(
         Connector connector,
         HttpDeliveryConfiguration? httpDelivery,

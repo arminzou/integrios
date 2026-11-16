@@ -5,8 +5,6 @@ using Integrios.Domain.ValueObjects;
 
 namespace Integrios.Infrastructure.Connectors;
 
-// Platform-owned Connectors that every deployment has. The model seeds them, so a migration writes
-// them; the manifest parser reserves their keys, so Admin can neither author nor change them.
 internal static class BuiltInConnectors
 {
     private static readonly DateTimeOffset SeededAt = new(2026, 11, 16, 0, 0, 0, TimeSpan.Zero);

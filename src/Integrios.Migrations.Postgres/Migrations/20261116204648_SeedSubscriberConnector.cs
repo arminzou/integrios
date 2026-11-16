@@ -11,7 +11,6 @@ namespace Integrios.Migrations.Postgres.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            // An authored Connector with this key would otherwise become pull without notice.
             migrationBuilder.Sql("""
                 DO $$
                 BEGIN
