@@ -229,25 +229,27 @@ see [Database backends](../docs/database-backends.md) for the queue-locking poli
 
 ## Running without containers
 
-Ingestion, Admin, and Worker can each run from `dotnet publish` output as an operating-system
-service. Each host reports start, stop, and readiness to its service manager, and does nothing
-different when started from a terminal or in a container. Build the Admin dashboard assets first
-(`npm ci` and `npm run build:assets` in `src/Integrios.Admin/frontend`), or Admin publishes without
-its dashboard.
+Ingestion, Admin, and Worker can each run as an operating-system service from one
+`dotnet publish src/Integrios` output, whose `integrios` executable starts the role named by its
+first argument. Each host reports start, stop, and readiness to its service manager, and does
+nothing different when started from a terminal or in a container. The publish does not include the
+Admin dashboard: build it (`npm ci` and `npm run build:assets` in `src/Integrios.Admin/frontend`),
+then copy `src/Integrios.Admin/wwwroot` into the publish folder as `wwwroot`.
 
 On Windows, download `integrios-<version>-win-x64.zip` from the GitHub release instead. It is a
 self-contained build with the dashboard, so the server needs no .NET runtime. Verify its build
 provenance with `gh attestation verify integrios-<version>-win-x64.zip --repo <owner>/<repo>`.
 
-Give each host its own ports, as the [Ports](#ports) table does: set `ASPNETCORE_URLS` on Ingestion
-and Admin, and `OperationalPort` on Ingestion and Admin and `WorkerMetricsPort` on the Worker.
-With the defaults, the hosts collide on one machine and only the first starts. The operational
+Give each host its own ports, as the [Ports](#ports) table does. Each role's `OperationalPort`
+already defaults to its port there. Set `ASPNETCORE_URLS` on Ingestion and Admin: both default to
+`http://localhost:5000`, so without it only the first of the two starts. The operational
 port listens on every interface, as a container needs; on a server, allow it through the firewall
 only for the local monitoring agent, because it serves `/health`, `/ready`, and metrics without
 authentication.
 
-- **Windows Service.** Register each host with `sc.exe create`, pointing `binPath` at its
-  executable. A host started as a Windows service reads `appsettings.json` from its own folder, and
+- **Windows Service.** Register each host with `sc.exe create`, pointing `binPath` at the one
+  `integrios.exe` followed by the role, such as `C:\integrios\integrios.exe worker`. A host started
+  as a Windows service reads its settings files from the folder that holds `integrios.exe`, and
   writes warnings and errors to the Windows Event Log (a service running under its own account
   rather than LocalSystem may need its event source registered by an administrator first, and
   writes nothing there until then); send traces to a collector with
@@ -255,12 +257,12 @@ authentication.
   down, less than the Worker's grace period, so stop the Worker before a planned restart. Attempts
   cut short are retried.
 
-  Put each service's secrets, such as its connection string and Tenant secrets, in an
-  `appsettings.Production.json` in that service's own folder, and limit the file to
-  Administrators, SYSTEM, and that service's account. Ingestion's file holds only `SourceSecrets`
+  Put each service's secrets, such as its connection string and Tenant secrets, in its role's
+  `appsettings.<role>.Production.json` in that folder, such as `appsettings.worker.Production.json`,
+  and limit the file to Administrators, SYSTEM, and that service's account. Ingestion's file holds only `SourceSecrets`
   and the Worker's only `DestinationSecrets`. Do not use service environment variables for
   secrets: Windows stores them in the service's registry key, which every local user can read.
-  When an upgrade installs into a new folder, copy the file and its permissions across.
+  When an upgrade installs into a new folder, copy the files and their permissions across.
 - **systemd.** Use `Type=notify` in the unit, so systemd waits for the host to report ready. Set
   `TimeoutStopSec` on the Worker's unit above `Integrios:Delivery:ShutdownGracePeriod`, so
   in-flight delivery attempts can finish on stop. Give each unit its secrets through

@@ -28,7 +28,7 @@ provider. Secret files placed there are ignored by Git; the quickstart uses unau
 delivery, so no secret values need to be added to its tracked documentation files.
 
 `make up` runs `database migrate`, then `database grant-runtime`, then a `bootstrap` one-shot (the
-`Integrios.Admin` image invoked with plain `bootstrap`) before the services start. Migration uses
+image's Admin role invoked with plain `bootstrap`) before the services start. Migration uses
 the database owner; Admin and Bootstrap use the control-plane principal; Ingestion and Worker use
 the data-plane principal. It creates only the first OperatorKey credential
 used below (bootstrap output, not migration-seeded data) and is idempotent, so re-running `make up`
@@ -217,7 +217,7 @@ defaults, and valid values across all three hosts, see the
 | `INTEGRIOS_ADMIN_RUNTIME_PASSWORD` | `admin_runtime_dev` | `grant-runtime`, Admin, Bootstrap | Local control-plane database password |
 | `INTEGRIOS_DATA_RUNTIME_PASSWORD` | `data_runtime_dev` | `grant-runtime`, Ingestion, Worker | Local data-plane database password |
 | `INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET`  | `operator_bootstrap_secret` | `bootstrap` service, Makefile bootstrap targets | Secret for the OperatorKey credential |
-| `DOTNET_ENVIRONMENT`                | `Development`            | Makefile bootstrap targets  | Selects `appsettings.Development.json` |
+| `DOTNET_ENVIRONMENT`                | `Development`            | Makefile bootstrap targets  | Selects `appsettings.admin.Development.json` |
 | `INTEGRIOS_ADMIN_OIDC_AUTHORITY` | empty | Admin | OIDC issuer; setting it enables OIDC dashboard sign-in |
 | `INTEGRIOS_ADMIN_OIDC_DISPLAY_NAME` | `OpenID Connect` | Admin | Provider label shown on the sign-in gate |
 | `INTEGRIOS_ADMIN_PASSWORD_ENABLED` | `true` | Admin | Enables Integrios-managed password sign-in; set false explicitly to disable |

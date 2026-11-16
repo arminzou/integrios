@@ -40,31 +40,28 @@ open until a body of work is complete costs nothing.
 
 ## What the default pipeline does
 
-The main and release flows publish images to GitHub Container Registry (GHCR) under:
+The main and release flows publish one image to GitHub Container Registry (GHCR) under:
 
 ```
-ghcr.io/<owner>/<repo>/ingestion
-ghcr.io/<owner>/<repo>/admin
-ghcr.io/<owner>/<repo>/worker
+ghcr.io/<owner>/<repo>
 ```
 
 Main images are tagged with the commit SHA, branch name, and `latest`. Release images are
 tagged with the commit SHA and, for `v*` tags, semantic-version tags. Each image includes
 an SBOM and build provenance attestation.
 
-The three services are separate images because each contains only its own host. Ingestion, Admin,
-and Worker compose different capabilities — Worker resolves delivery secrets and Admin never
-does — so keeping them in one image would reduce that separation to configuration. All three are
-built from a single repo-root `Dockerfile`, which selects the host through a `PROJECT` build
-argument; the base image pins and the Npgsql GSSAPI workaround therefore exist in exactly one
-place.
+The image holds all three roles. Its entrypoint is `/app/integrios`, and each container names its
+role as the first argument: `ingestion`, `admin`, or `worker`. Each role still composes only its
+own capabilities — Worker resolves delivery secrets and Admin never does. The image is built from
+a single repo-root `Dockerfile`, so the base image pins and the Npgsql GSSAPI workaround exist in
+exactly one place.
 
-**The published images are a matched set.** A given version tag assumes all three services run
-that same version against a database migrated to the schema they expect. Nothing at runtime
+**The roles are a matched set.** A given version tag assumes all three roles run that same
+version against a database migrated to the schema they expect. Nothing at runtime
 prevents mixing versions, and a release that changes the schema will misbehave if only some
 services are rolled forward. Deploy Ingestion, Admin, and Worker together, from the same tag or
-digest set, and run migrations before starting them. The deployment reference in
-`deploy/compose.yml` enforces this by resolving all three images from a single
+digest, and run migrations before starting them. The deployment reference in
+`deploy/compose.yml` enforces this by running every role from one image at a single
 `INTEGRIOS_VERSION`; keep that property if you adapt it.
 
 This coordinated rollout is required for Destination authentication capabilities such as
@@ -74,8 +71,8 @@ that their snapshotted authentication is unexecutable and will follow the normal
 
 Successful release runs retain a downloadable evidence artifact for 90 days. It contains
 the workflow and commit identity, .NET and dependency versions, exact verification
-commands, test logs and TRX results, resolved external image digests, and the published
-Ingestion, Admin, and Worker image digests.
+commands, test logs and TRX results, resolved external image digests, and the published image
+digest.
 
 Each release also attaches `integrios-<version>-win-x64.zip`, a self-contained Windows build
 cross-published on the Linux runner. The evidence records its SHA-256 and its build provenance
@@ -95,7 +92,7 @@ The workflow lives in one file you own in your fork. To publish elsewhere, edit 
 `package` job in `ci.yml`:
 
 - **Different GHCR namespace**: nothing to change. `images:` uses
-  <code v-pre>ghcr.io/${{ github.repository }}/&lt;service&gt;</code>, so your fork publishes under your own
+  <code v-pre>ghcr.io/${{ github.repository }}</code>, so your fork publishes under your own
   owner/repo automatically.
 - **A non-GHCR registry** (Docker Hub, a private registry, etc.): point the `Log in`
   step and the `images:` value at your registry, and supply credentials as repository
@@ -113,15 +110,15 @@ The workflow lives in one file you own in your fork. To publish elsewhere, edit 
     id: meta
     uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
     with:
-      images: registry.example.com/my-team/integrios/${{ matrix.service.name }}
+      images: registry.example.com/my-team/integrios
   ```
 
 - **Multi-arch images** (e.g. ARM hosts): add `platforms: linux/amd64,linux/arm64` to
   the `Build and push` step.
 
-## Consuming the images
+## Consuming the image
 
-Pull the published images by tag or digest from your registry and run them with your own
+Pull the published image by tag or digest from your registry and run it with your own
 orchestration. The repository's `compose.yml` is a working reference for how the services,
 database, and migrations fit together; adapt it (or translate it to your platform) for
 your environment.

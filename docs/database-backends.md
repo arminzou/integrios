@@ -17,7 +17,7 @@ Database__Provider=sqlserver
 ConnectionStrings__SqlServer=Server=sql.example;Database=integrios;User Id=integrios;Password=<secret>;Encrypt=True
 ```
 
-Before starting the services, run the matching Admin image once with `database migrate`. The
+Before starting the services, run `admin database migrate` once from the matching image. The
 command uses EF Core migrations for the selected provider and takes a database-level migration
 lock. The first EF-managed release requires an empty database and does not adopt schemas created by
 the former Flyway migration path; subsequent EF-managed releases migrate normally.

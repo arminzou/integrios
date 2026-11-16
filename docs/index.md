@@ -50,7 +50,7 @@ Explore guides for getting started with Integrios, understanding how it works, a
     <a href="./database-backends.html">Database backends</a>
     <p>PostgreSQL and SQL Server setup.</p>
     <a href="./ci-cd.html">CI and releases</a>
-    <p>Build, publish, and consume service images.</p>
+    <p>Build, publish, and consume the image.</p>
     <a href="https://github.com/arminzou/integrios/blob/main/deploy/README.md">Deployment guide</a>
     <p>Production runbook in the repository.</p>
   </section>
