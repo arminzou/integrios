@@ -165,8 +165,6 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     internal IPullDeliveryQueue PullQueue => DeliveryQueue;
     internal PullDeliveryClaimer PullClaimer => new(DeliveryQueue, new JsonataTransformEvaluator());
 
-    // Two pull Destinations on the built-in subscriber Connector. order.placed routes to A with a
-    // mapping, order.broken to A with a failing mapping, and order.shipped to B.
     public Task SeedPullDestinationsAsync()
     {
         Guid connectorId = Guid.NewGuid();

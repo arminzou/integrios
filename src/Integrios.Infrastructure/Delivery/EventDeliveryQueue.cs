@@ -91,8 +91,6 @@ internal sealed class EventDeliveryQueue(
         }
     }
 
-    // A null pullDestinationId is the push Worker's scope; a value scopes the claim to that pull
-    // Destination's rows, so neither claimer ever scans or takes the other's deliveries.
     private async Task<EventDeliveryClaimResult?> ClaimRowAsync(
         Guid? pullDestinationId,
         CancellationToken cancellationToken)
@@ -456,8 +454,6 @@ internal sealed class EventDeliveryQueue(
         return new(DeliveryFinalizationStatus.Applied, decision.Disposition);
     }
 
-    // Ownership is the AttemptId fence alone, as for push finalization: a lease that has expired but
-    // has not been reclaimed still belongs to its attempt, because reclaiming is what issues a new one.
     public async Task<PullLeaseRenewalResult> RenewAsync(PullAttemptOwner owner, CancellationToken cancellationToken)
     {
         await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
@@ -519,9 +515,6 @@ internal sealed class EventDeliveryQueue(
         return new(PullLeaseRenewalStatus.Renewed, leaseExpiresAt);
     }
 
-    // A settlement whose response was lost is retried by the Subscriber. Finding that attempt already
-    // completed with the same outcome answers AlreadyApplied, so the retry converges instead of
-    // reporting a lost lease it never had.
     public async Task<PullSettlementStatus> SettleAsync(
         PullAttemptOwner owner,
         PullSettlement settlement,
