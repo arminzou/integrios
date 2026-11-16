@@ -1,5 +1,6 @@
 using Dapper;
 using Integrios.Application.Delivery;
+using Integrios.Application.DeliveryApi;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
 using Integrios.Infrastructure.Data;
@@ -11,7 +12,7 @@ namespace Integrios.Infrastructure.Delivery;
 internal sealed class EventDeliveryQueue(
     IDbConnectionFactory connectionFactory,
     DeliveryExecutionOptions options,
-    DeliveryOutcomePolicy outcomePolicy) : IEventDeliveryQueue
+    DeliveryOutcomePolicy outcomePolicy) : IEventDeliveryQueue, IPullDeliveryQueue
 {
     private static readonly TimeSpan[] FinalizationRetryDelays =
     [
@@ -39,6 +40,61 @@ internal sealed class EventDeliveryQueue(
     }
 
     public async Task<EventDeliveryClaimResult?> ClaimNextWithRecoveryAsync(
+        CancellationToken cancellationToken) =>
+        await ClaimRowAsync(null, cancellationToken) switch
+        {
+            ClaimedRow claimed => new ClaimedEventDelivery(new EventDeliveryWorkItem(
+                claimed.Row.Id,
+                claimed.AttemptId,
+                claimed.AttemptNumber,
+                claimed.Row.EventId,
+                claimed.Row.SubscriptionId,
+                claimed.Row.DestinationId,
+                claimed.Row.TenantId,
+                claimed.Row.TenantSlug,
+                claimed.Row.PayloadJson ?? string.Empty,
+                claimed.Row.EventType ?? string.Empty,
+                claimed.Row.TopicName,
+                claimed.Row.AcceptedAt,
+                claimed.Row.MappingConfigSnapshot,
+                claimed.Row.ConnectorKey ?? string.Empty,
+                claimed.Row.HttpExecutionSnapshotJson ?? string.Empty,
+                claimed.Row.Traceparent)),
+            var other => other
+        };
+
+    public async Task<PullDeliveryWorkItem?> ClaimNextAsync(Guid destinationId, CancellationToken cancellationToken)
+    {
+        while (true)
+        {
+            switch (await ClaimRowAsync(destinationId, cancellationToken))
+            {
+                case null:
+                    return null;
+                case ClaimedRow claimed:
+                    return new PullDeliveryWorkItem(
+                        claimed.Row.Id,
+                        claimed.AttemptId,
+                        claimed.AttemptNumber,
+                        claimed.Row.EventId,
+                        claimed.Row.SubscriptionId,
+                        claimed.Row.PayloadJson ?? string.Empty,
+                        claimed.Row.EventType ?? string.Empty,
+                        claimed.Row.TopicName,
+                        claimed.Row.AcceptedAt,
+                        claimed.Row.MappingConfigSnapshot,
+                        claimed.LeaseExpiresAt,
+                        claimed.Row.Traceparent);
+                default:
+                    continue;
+            }
+        }
+    }
+
+    // A null pullDestinationId is the push Worker's scope; a value scopes the claim to that pull
+    // Destination's rows, so neither claimer ever scans or takes the other's deliveries.
+    private async Task<EventDeliveryClaimResult?> ClaimRowAsync(
+        Guid? pullDestinationId,
         CancellationToken cancellationToken)
     {
         await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
@@ -46,6 +102,13 @@ internal sealed class EventDeliveryQueue(
         bool sqlServer = connectionFactory.Provider == DatabaseProvider.SqlServer;
         string databaseNow = sqlServer ? "SYSUTCDATETIME()" : "now()";
         string claimable = EventDeliveryClaimability.Predicate(connectionFactory.Provider, "sd", databaseNow);
+        string scope = (pullDestinationId, sqlServer) switch
+        {
+            (null, true) => "sd.transport=N'http'",
+            (null, false) => "sd.transport = 'http'",
+            (_, true) => "sd.transport=N'pull' AND sd.destination_id=@DestinationId",
+            (_, false) => "sd.transport = 'pull' AND sd.destination_id = @DestinationId",
+        };
         string claimSql = sqlServer
             ? $"""
                 SELECT TOP (1)
@@ -63,7 +126,7 @@ internal sealed class EventDeliveryQueue(
                 JOIN events e ON e.id=sd.event_id
                 JOIN tenants tenant ON tenant.id=e.tenant_id
                 LEFT JOIN topics t ON t.id=e.topic_id
-                WHERE sd.transport=N'http' AND ({claimable})
+                WHERE {scope} AND ({claimable})
                 ORDER BY CASE WHEN sd.status=N'in_flight' THEN 0 ELSE 1 END,
                     CASE WHEN sd.lease_expires_at IS NULL THEN 1 ELSE 0 END, sd.lease_expires_at,
                     CASE WHEN sd.deliver_after IS NULL THEN 0 ELSE 1 END, sd.deliver_after,
@@ -94,7 +157,7 @@ internal sealed class EventDeliveryQueue(
                 JOIN events e ON e.id = sd.event_id
                 JOIN tenants tenant ON tenant.id = e.tenant_id
                 LEFT JOIN topics t ON t.id = e.topic_id
-                WHERE sd.transport = 'http' AND ({claimable})
+                WHERE {scope} AND ({claimable})
                 ORDER BY CASE WHEN sd.status = 'in_flight' THEN 0 ELSE 1 END,
                     sd.lease_expires_at NULLS LAST, sd.deliver_after NULLS FIRST, sd.created_at, sd.id
                 LIMIT 1 FOR UPDATE OF sd SKIP LOCKED;
@@ -103,6 +166,7 @@ internal sealed class EventDeliveryQueue(
         var row = await connection.QuerySingleOrDefaultAsync<DeliveryWorkRow>(
         new CommandDefinition(
             claimSql,
+            new { DestinationId = pullDestinationId },
             transaction: transaction,
             cancellationToken: cancellationToken));
 
@@ -228,23 +292,7 @@ internal sealed class EventDeliveryQueue(
 
         await transaction.CommitAsync(cancellationToken);
 
-        return new ClaimedEventDelivery(new EventDeliveryWorkItem(
-            row.Id,
-            attemptId,
-            attemptNumber,
-            row.EventId,
-            row.SubscriptionId,
-            row.DestinationId,
-            row.TenantId,
-            row.TenantSlug,
-            row.PayloadJson ?? string.Empty,
-            row.EventType ?? string.Empty,
-            row.TopicName,
-            row.AcceptedAt,
-            row.MappingConfigSnapshot,
-            row.ConnectorKey ?? string.Empty,
-            row.HttpExecutionSnapshotJson ?? string.Empty,
-            row.Traceparent));
+        return new ClaimedRow(row, attemptId, attemptNumber, row.DatabaseNow + options.LeaseDuration);
     }
 
     public async Task<DeliveryFinalizationResult> FinalizeAsync(
@@ -408,6 +456,120 @@ internal sealed class EventDeliveryQueue(
         return new(DeliveryFinalizationStatus.Applied, decision.Disposition);
     }
 
+    // Ownership is the AttemptId fence alone, as for push finalization: a lease that has expired but
+    // has not been reclaimed still belongs to its attempt, because reclaiming is what issues a new one.
+    public async Task<PullLeaseRenewalResult> RenewAsync(PullAttemptOwner owner, CancellationToken cancellationToken)
+    {
+        await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        bool sqlServer = connectionFactory.Provider == DatabaseProvider.SqlServer;
+
+        var lease = await connection.QuerySingleOrDefaultAsync<PullLeaseRow>(
+            new CommandDefinition(
+                sqlServer
+                ? """
+                SELECT d.status AS Status, d.active_attempt_id AS ActiveAttemptId, a.started_at AS StartedAt,
+                       TODATETIMEOFFSET(SYSUTCDATETIME(), '+00:00') AS DatabaseNow
+                FROM event_deliveries d WITH (UPDLOCK, ROWLOCK)
+                LEFT JOIN delivery_attempts a ON a.id = d.active_attempt_id AND a.event_delivery_id = d.id
+                WHERE d.id = @DeliveryId AND d.destination_id = @DestinationId AND d.transport = N'pull';
+                """
+                : """
+                SELECT d.status AS Status, d.active_attempt_id AS ActiveAttemptId, a.started_at AS StartedAt,
+                       now() AS DatabaseNow
+                FROM event_deliveries d
+                LEFT JOIN delivery_attempts a ON a.id = d.active_attempt_id AND a.event_delivery_id = d.id
+                WHERE d.id = @DeliveryId AND d.destination_id = @DestinationId AND d.transport = 'pull'
+                FOR UPDATE OF d;
+                """,
+                owner,
+                transaction,
+                cancellationToken: cancellationToken));
+
+        if (lease is null || lease.Status != "in_flight" || lease.ActiveAttemptId != owner.AttemptId
+            || lease.StartedAt is null)
+        {
+            await transaction.CommitAsync(cancellationToken);
+            return new(PullLeaseRenewalStatus.OwnershipLost, null);
+        }
+
+        DateTimeOffset ceiling = lease.StartedAt.Value + options.MaxAttemptDuration;
+        if (lease.DatabaseNow >= ceiling)
+        {
+            await transaction.CommitAsync(cancellationToken);
+            return new(PullLeaseRenewalStatus.MaxAttemptDurationReached, null);
+        }
+
+        DateTimeOffset leaseExpiresAt = lease.DatabaseNow + options.LeaseDuration;
+        if (leaseExpiresAt > ceiling)
+            leaseExpiresAt = ceiling;
+
+        await connection.ExecuteAsync(
+            new CommandDefinition(
+                """
+                UPDATE event_deliveries
+                SET lease_expires_at = @LeaseExpiresAt, updated_at = @DatabaseNow
+                WHERE id = @DeliveryId AND active_attempt_id = @AttemptId;
+                """,
+                new { owner.DeliveryId, owner.AttemptId, LeaseExpiresAt = leaseExpiresAt, lease.DatabaseNow },
+                transaction,
+                cancellationToken: cancellationToken));
+
+        await transaction.CommitAsync(cancellationToken);
+        return new(PullLeaseRenewalStatus.Renewed, leaseExpiresAt);
+    }
+
+    // A settlement whose response was lost is retried by the Subscriber. Finding that attempt already
+    // completed with the same outcome answers AlreadyApplied, so the retry converges instead of
+    // reporting a lost lease it never had.
+    public async Task<PullSettlementStatus> SettleAsync(
+        PullAttemptOwner owner,
+        PullSettlement settlement,
+        CancellationToken cancellationToken)
+    {
+        string? attemptStatus = await ReadPullAttemptStatusAsync(owner, cancellationToken);
+        if (attemptStatus == "in_progress")
+        {
+            DeliveryFinalizationResult result = await FinalizeAsync(
+                new DeliveryAttemptCompletion(
+                    owner.DeliveryId,
+                    owner.AttemptId,
+                    settlement.Succeeded,
+                    settlement.FailurePhase,
+                    RequestPayloadJson: null,
+                    ResponseStatusCode: null,
+                    ResponseBody: null,
+                    settlement.ErrorMessage,
+                    settlement.IsTerminal,
+                    settlement.RetryAfter),
+                cancellationToken);
+            if (result.Status == DeliveryFinalizationStatus.Applied)
+                return PullSettlementStatus.Applied;
+
+            attemptStatus = await ReadPullAttemptStatusAsync(owner, cancellationToken);
+        }
+
+        return attemptStatus == (settlement.Succeeded ? "succeeded" : "failed")
+            ? PullSettlementStatus.AlreadyApplied
+            : PullSettlementStatus.OwnershipLost;
+    }
+
+    private async Task<string?> ReadPullAttemptStatusAsync(PullAttemptOwner owner, CancellationToken cancellationToken)
+    {
+        await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
+        return await connection.QuerySingleOrDefaultAsync<string?>(
+            new CommandDefinition(
+                """
+                SELECT a.status
+                FROM event_deliveries d
+                JOIN delivery_attempts a ON a.event_delivery_id = d.id
+                WHERE d.id = @DeliveryId AND d.destination_id = @DestinationId AND d.transport = 'pull'
+                  AND a.id = @AttemptId;
+                """,
+                owner,
+                cancellationToken: cancellationToken));
+    }
+
     private static void ValidateCompletion(DeliveryAttemptCompletion completion)
     {
         if (completion.Succeeded && completion.FailurePhase is not null)
@@ -424,6 +586,7 @@ internal sealed class EventDeliveryQueue(
         DeliveryFailurePhase.Authentication => "authentication",
         DeliveryFailurePhase.RequestConstruction => "request_construction",
         DeliveryFailurePhase.Http => "http",
+        DeliveryFailurePhase.Subscriber => "subscriber",
         _ => throw new ArgumentOutOfRangeException(nameof(phase), phase, null)
     };
 
@@ -442,6 +605,20 @@ internal sealed class EventDeliveryQueue(
         public string Status { get; init; } = string.Empty;
         public Guid? ActiveAttemptId { get; init; }
         public int RetryCycleAttemptCount { get; init; }
+        public DateTimeOffset DatabaseNow { get; init; }
+    }
+
+    private sealed record ClaimedRow(
+        DeliveryWorkRow Row,
+        Guid AttemptId,
+        int AttemptNumber,
+        DateTimeOffset LeaseExpiresAt) : EventDeliveryClaimResult;
+
+    private sealed record PullLeaseRow
+    {
+        public string Status { get; init; } = string.Empty;
+        public Guid? ActiveAttemptId { get; init; }
+        public DateTimeOffset? StartedAt { get; init; }
         public DateTimeOffset DatabaseNow { get; init; }
     }
 

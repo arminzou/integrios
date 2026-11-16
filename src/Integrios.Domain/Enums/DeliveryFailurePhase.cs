@@ -6,5 +6,6 @@ public enum DeliveryFailurePhase
     SecretResolution = 1,
     Authentication = 2,
     RequestConstruction = 3,
-    Http = 4
+    Http = 4,
+    Subscriber = 5
 }

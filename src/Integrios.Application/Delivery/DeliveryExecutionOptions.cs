@@ -10,6 +10,10 @@ public sealed record DeliveryExecutionOptions(
 
     public int RetryMaxAttempts { get; init; } = RetryPolicy.DefaultMaxAttempts;
 
+    // shortcut: not bound from configuration yet; the delivery-api host binds
+    // Integrios:DeliveryApi:MaxAttemptDuration when it exists.
+    public TimeSpan MaxAttemptDuration { get; init; } = TimeSpan.FromMinutes(30);
+
     public static DeliveryExecutionOptions Default { get; } = new(
         TimeSpan.FromSeconds(30),
         TimeSpan.FromSeconds(45),
@@ -30,5 +34,7 @@ public sealed record DeliveryExecutionOptions(
             throw new InvalidOperationException("Integrios:Delivery:Retry:BaseDelay must be positive.");
         if (RetryMaxAttempts < 1)
             throw new InvalidOperationException("Integrios:Delivery:Retry:MaxAttempts must be at least 1.");
+        if (MaxAttemptDuration <= LeaseDuration)
+            throw new InvalidOperationException("Integrios:DeliveryApi:MaxAttemptDuration must be greater than LeaseDuration.");
     }
 }
