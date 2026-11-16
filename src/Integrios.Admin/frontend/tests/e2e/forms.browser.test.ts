@@ -503,6 +503,51 @@ describe("Create forms, filled through a real browser", () => {
     await view.close();
   }, 60_000);
 
+  it("sends a pull Destination on the built-in subscriber Connector with no configuration", async () => {
+    const { page: view, writes } = await open(`/tenants/${tenantId}/destinations`);
+    const subscriber = {
+      ...connector,
+      id: "cccccccc-cccc-cccc-cccc-cccccccccccc",
+      key: "subscriber",
+      name: "Subscriber",
+      direction: "destination",
+    };
+    await view.route("**/admin/connectors?*", (route) => route.fulfill({ json: page([connector, subscriber]) }));
+    await view.route(`**/admin/connectors/${subscriber.id}`, (route) =>
+      route.fulfill({
+        json: {
+          ...subscriber,
+          manifest_schema_version: 1,
+          manifest: {
+            manifest_schema_version: 1,
+            key: "subscriber",
+            contract_version: 1,
+            direction: "destination",
+            destination_configuration_schema: { type: "object", properties: {}, additionalProperties: false },
+            source_verification: { allow_unverified: true, schemes: [] },
+            destination_authentication: { allow_unauthenticated: true, schemes: [] },
+            presentation: { name: "Subscriber", event_types: [], authoring_presets: [] },
+          },
+        },
+      }),
+    );
+    await view.reload();
+
+    await view.click("text=New Destination");
+    const form = formNamed(view, "Create a Destination");
+    await choose(form.getByLabel("Connector"), /Subscriber/);
+    await form.getByText("This Connector requires no Destination configuration.").waitFor();
+    expect(await form.getByLabel("Base URI").count()).toBe(0);
+    await form.getByLabel("Name", { exact: true }).fill("orders-service");
+    await view.click("text=Create Destination");
+
+    const sent = await submitted(writes);
+    expect(sent.body.connector_id).toBe(subscriber.id);
+    expect(sent.body.configuration).toEqual({});
+    expect(sent.body.authentication).toBeNull();
+    await view.close();
+  }, 60_000);
+
   it("authors every constrained Destination scalar type and declared authentication", async () => {
     const { page: view, writes } = await open(`/tenants/${tenantId}/destinations`);
     const sourceOnly = {
