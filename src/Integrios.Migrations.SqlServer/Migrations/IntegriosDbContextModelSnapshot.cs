@@ -164,6 +164,10 @@ namespace Integrios.Migrations.SqlServer.Migrations
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("status");
 
+                    b.Property<bool?>("TerminalFailure")
+                        .HasColumnType("bit")
+                        .HasColumnName("terminal_failure");
+
                     b.HasKey("Id")
                         .HasName("delivery_attempts_pkey");
 
@@ -771,7 +775,6 @@ namespace Integrios.Migrations.SqlServer.Migrations
                         .HasColumnName("event_types");
 
                     b.Property<string>("HttpDelivery")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("http_delivery")
                         .HasDefaultValueSql("N'{\"body\": \"json\", \"method\": \"POST\", \"headers\": {}, \"version\": 1}'");

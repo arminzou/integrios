@@ -164,6 +164,10 @@ namespace Integrios.Migrations.Postgres.Migrations
                         .HasColumnType("text")
                         .HasColumnName("status");
 
+                    b.Property<bool?>("TerminalFailure")
+                        .HasColumnType("boolean")
+                        .HasColumnName("terminal_failure");
+
                     b.HasKey("Id")
                         .HasName("delivery_attempts_pkey");
 
@@ -748,7 +752,6 @@ namespace Integrios.Migrations.Postgres.Migrations
                         .HasColumnName("event_types");
 
                     b.Property<string>("HttpDelivery")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("jsonb")
                         .HasColumnName("http_delivery")
                         .HasDefaultValueSql("'{\"body\": \"json\", \"method\": \"POST\", \"headers\": {}, \"version\": 1}'::jsonb");

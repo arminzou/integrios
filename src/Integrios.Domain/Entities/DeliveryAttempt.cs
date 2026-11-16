@@ -17,4 +17,5 @@ public sealed record DeliveryAttempt
     public required DateTimeOffset StartedAt { get; init; }
     public DateTimeOffset? CompletedAt { get; init; }
     public DeliveryFailurePhase? FailurePhase { get; init; }
+    public bool? TerminalFailure { get; init; }
 }

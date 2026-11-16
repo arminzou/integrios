@@ -43,6 +43,7 @@ internal sealed class DeliveryAttemptConfiguration : IEntityTypeConfiguration<De
         entity.Property(e => e.CompletedAt).HasColumnName("completed_at");
         entity.Property(e => e.ErrorMessage).HasColumnName("error_message");
         entity.Property(e => e.FailurePhase).HasColumnName("failure_phase");
+        entity.Property(e => e.TerminalFailure).HasColumnName("terminal_failure");
         entity.Property(e => e.RequestPayload)
             .HasColumnType("jsonb")
             .HasColumnName("request_payload");
