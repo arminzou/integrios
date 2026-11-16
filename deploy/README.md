@@ -235,6 +235,10 @@ different when started from a terminal or in a container. Build the Admin dashbo
 (`npm ci` and `npm run build:assets` in `src/Integrios.Admin/frontend`), or Admin publishes without
 its dashboard.
 
+On Windows, download `integrios-<version>-win-x64.zip` from the GitHub release instead. It is a
+self-contained build with the dashboard, so the server needs no .NET runtime. Verify its build
+provenance with `gh attestation verify integrios-<version>-win-x64.zip --repo <owner>/<repo>`.
+
 Give each host its own ports, as the [Ports](#ports) table does: set `ASPNETCORE_URLS` on Ingestion
 and Admin, and `OperationalPort` on Ingestion and Admin and `WorkerMetricsPort` on the Worker.
 With the defaults, the hosts collide on one machine and only the first starts. The operational

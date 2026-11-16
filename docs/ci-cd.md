@@ -77,6 +77,10 @@ the workflow and commit identity, .NET and dependency versions, exact verificati
 commands, test logs and TRX results, resolved external image digests, and the published
 Ingestion, Admin, and Worker image digests.
 
+Each release also attaches `integrios-<version>-win-x64.zip`, a self-contained Windows build
+cross-published on the Linux runner. The evidence records its SHA-256 and its build provenance
+attestation under `windows-archive/`.
+
 The repository pins its .NET SDK, NuGet dependency graph, container versions, and
 GitHub Actions. Action references use release-version tags such as `@v7.0.1`;
 keep that form when adapting the workflow.
