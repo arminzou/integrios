@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/Integrios/Integrios.csproj" />
     <Project Path="src/Integrios.Ingestion/Integrios.Ingestion.csproj" />
     <Project Path="src/Integrios.Admin/Integrios.Admin.csproj" />
     <Project Path="src/Integrios.Domain/Integrios.Domain.csproj" />
@@ -11,6 +12,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Integrios.ArchitectureTests/Integrios.ArchitectureTests.csproj" />
+    <Project Path="tests/Integrios.UnitTests/Integrios.UnitTests.csproj" />
     <Project Path="tests/Integrios.Domain.UnitTests/Integrios.Domain.UnitTests.csproj" />
     <Project Path="tests/Integrios.Application.UnitTests/Integrios.Application.UnitTests.csproj" />
     <Project Path="tests/Integrios.Infrastructure.UnitTests/Integrios.Infrastructure.UnitTests.csproj" />

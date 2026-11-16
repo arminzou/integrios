@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>integrios</AssemblyName>
+    <RootNamespace>Integrios</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Integrios.UnitTests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Integrios.Admin\Integrios.Admin.csproj" />
+    <ProjectReference Include="..\Integrios.Ingestion\Integrios.Ingestion.csproj" />
+    <ProjectReference Include="..\Integrios.Worker\Integrios.Worker.csproj" />
+  </ItemGroup>
+
+</Project>
