@@ -15,6 +15,7 @@ using Integrios.Application.Ingestion;
 using Integrios.Application.Secrets;
 using Integrios.Application.Transforms;
 using Integrios.Infrastructure;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -70,6 +71,49 @@ public sealed class HostCompositionArchitectureTests
         [typeof(ITopicRepository)] = [Host.Admin],
         [typeof(ITransformEvaluator)] = [Host.Admin, Host.Worker, Host.Ingestion]
     };
+
+    [Fact]
+    public void EachRolesRealComposition_ResolvesExactlyTheApplicationPortsItOwns()
+    {
+        DirectoryInfo keyRing = Directory.CreateTempSubdirectory("integrios-architecture-");
+        try
+        {
+            AssertEachRoleResolvesOnlyItsPorts(
+            [
+                "--ConnectionStrings:Postgres=Host=localhost;Database=integrios;Username=integrios;Password=integrios",
+                "--Integrios:PublicIngestionBaseUri=https://ingestion.example.test",
+                $"--Integrios:Admin:DataProtection:KeyRingPath={keyRing.FullName}"
+            ]);
+        }
+        finally
+        {
+            keyRing.Delete(recursive: true);
+        }
+    }
+
+    private static void AssertEachRoleResolvesOnlyItsPorts(string[] args)
+    {
+        (Host Host, WebApplicationBuilder Builder)[] roles =
+        [
+            (Host.Admin, Admin.AdminRole.CreateBuilder(args).Builder),
+            (Host.Ingestion, Ingestion.IngestionRole.CreateBuilder(args).Builder),
+            (Host.Worker, Worker.WorkerRole.CreateBuilder(args).Builder)
+        ];
+
+        foreach ((Host host, WebApplicationBuilder builder) in roles)
+        {
+            using ServiceProvider provider = builder.Services.BuildServiceProvider();
+            using IServiceScope scope = provider.CreateScope();
+
+            foreach ((Type port, Host[] expectedOwners) in PortOwners)
+            {
+                bool resolves = scope.ServiceProvider.GetServices(port).Any();
+                (resolves == expectedOwners.Contains(host)).ShouldBeTrue(
+                    $"The {host} role's composition {(resolves ? "resolves" : "omits")} {port.FullName}, "
+                    + $"but PortOwners says it {(expectedOwners.Contains(host) ? "owns" : "must not resolve")} it.");
+            }
+        }
+    }
 
     [Fact]
     public void EveryApplicationHandler_IsRegisteredByExactlyOneProductionHost()
