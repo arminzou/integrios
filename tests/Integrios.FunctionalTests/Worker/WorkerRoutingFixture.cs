@@ -224,6 +224,15 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
             throw new InvalidOperationException($"Delivery {deliveryId} has no active attempt to backdate.");
     }
 
+    public async Task MoveDeliveryToDestinationAsync(Guid deliveryId, Guid destinationId)
+    {
+        int updated = await ExecuteAsync(
+            "UPDATE event_deliveries SET destination_id=@DestinationId WHERE id=@DeliveryId",
+            new { DeliveryId = deliveryId, DestinationId = destinationId });
+        if (updated != 1)
+            throw new InvalidOperationException($"Delivery {deliveryId} was not found.");
+    }
+
     public async Task MarkPullTransportAsync(Guid deliveryId)
     {
         int updated = await ExecuteAsync(

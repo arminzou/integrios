@@ -85,6 +85,16 @@ public sealed class PullDeliveryTests : IClassFixture<WorkerRoutingFixture>, IAs
     }
 
     [Fact]
+    public async Task PullClaim_NeverTakesAPushDeliveryEvenOnItsOwnDestination()
+    {
+        Guid pushDeliveryId = await fixture.FanoutSingleDeliveryAsync("payment.created");
+        await fixture.MoveDeliveryToDestinationAsync(pushDeliveryId, A);
+
+        (await ClaimAsync(A)).ShouldBeEmpty();
+        (await fixture.GetEventDeliveryAsync(pushDeliveryId)).LifetimeAttemptCount.ShouldBe(0);
+    }
+
+    [Fact]
     public async Task Claim_IsScopedToItsDestination()
     {
         Guid forB = await fixture.FanoutPullDeliveryAsync("order.shipped");
