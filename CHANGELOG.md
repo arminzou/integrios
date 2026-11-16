@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.12.0](https://github.com/arminzou/integrios/compare/v0.11.0...v0.12.0) (2026-11-16)
+
+
+### ⚠ BREAKING CHANGES
+
+* **infra:** The Azure reference takes one image parameter in place of adminImage, ingestionImage and workerImage. A parameter file that pins its own build sets image to one <registry>.azurecr.io/<repository>@sha256:<digest> reference; a release-based file needs no change.
+* **infra:** The ingestion, admin and worker images are replaced by one image, ghcr.io/<owner>/<repo>. Run it with the role as the first argument after the entrypoint, for example integrios ingestion, and start Admin's tools as integrios admin bootstrap or integrios admin database migrate. The /app/service entrypoint is gone.
+* **infra:** Rename each host's appsettings.json to appsettings.<role>.json (ingestion, admin or worker), and appsettings.<Environment>.json to appsettings.<role>.<Environment>.json. Replace WorkerMetricsPort with OperationalPort. Outside a container, Ingestion's operational port now defaults to 5232 and Admin's to 5151.
+
+### Features
+
+* **api:** check webhook verification settings when a Source is saved ([c4bccc9](https://github.com/arminzou/integrios/commit/c4bccc90d95cdb9230e4a638a5f048cccee1c57a))
+* **api:** verify webhooks that send a fixed token in a header ([#67](https://github.com/arminzou/integrios/issues/67)) ([c4bccc9](https://github.com/arminzou/integrios/commit/c4bccc90d95cdb9230e4a638a5f048cccee1c57a))
+* **infra:** attach a self-contained Windows archive to each release ([#78](https://github.com/arminzou/integrios/issues/78)) ([6d09f27](https://github.com/arminzou/integrios/commit/6d09f2736fe3cac157214acb68e008921ac06381))
+* **infra:** give each role its own settings files and operational port ([#75](https://github.com/arminzou/integrios/issues/75)) ([0aa7102](https://github.com/arminzou/integrios/commit/0aa7102ea72fe0bd37e5ecf1c7426c55b1c814fb))
+* **infra:** run hosts as Windows services and systemd units ([#68](https://github.com/arminzou/integrios/issues/68)) ([738f481](https://github.com/arminzou/integrios/commit/738f481eee7bad67a4ee694f542ca106c9afea22))
+* **infra:** run the Azure reference from the one image ([#77](https://github.com/arminzou/integrios/issues/77)) ([5a85996](https://github.com/arminzou/integrios/commit/5a859960dc6e9b3eadb76a6dfb76cc696555b7bb))
+* **infra:** ship one image that starts any role ([#76](https://github.com/arminzou/integrios/issues/76)) ([d1e6a1b](https://github.com/arminzou/integrios/commit/d1e6a1b3d29e637d9cd7d25afac967a549e21dd0))
+* **infra:** start each host as a role of one integrios executable ([#74](https://github.com/arminzou/integrios/issues/74)) ([303d2c6](https://github.com/arminzou/integrios/commit/303d2c61c3e9864f48fa5a49b6592d9c9bece115))
+
+
+### Bug Fixes
+
+* **deps:** Bump node ([5bc2b76](https://github.com/arminzou/integrios/commit/5bc2b762be322ccb5e13990833546b29ec695400))
+* **infra:** match the Prometheus exporter to OpenTelemetry 1.20 ([5c43313](https://github.com/arminzou/integrios/commit/5c433135b82d2a4982dadf4b4e4fc1b69206343e))
+* **infra:** ship .NET runtime 10.0.15 and keep it current ([#73](https://github.com/arminzou/integrios/issues/73)) ([3a832a1](https://github.com/arminzou/integrios/commit/3a832a1737c40cb11459d31028a5f5f25c444d67))
+* **infra:** stop reading the key-per-file directory on Windows ([738f481](https://github.com/arminzou/integrios/commit/738f481eee7bad67a4ee694f542ca106c9afea22))
+
 ## [0.11.0](https://github.com/arminzou/integrios/compare/v0.10.0...v0.11.0) (2026-09-28)
 
 
