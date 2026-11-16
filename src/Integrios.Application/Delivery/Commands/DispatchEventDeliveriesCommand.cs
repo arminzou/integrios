@@ -109,7 +109,11 @@ internal sealed class DispatchEventDeliveriesCommandHandler(
         if (snapshot.Request.Body == "json")
         {
             using Activity? transformActivity = ActivitySources.Application.StartActivity("delivery.transform");
-            (payload, string? error) = ApplyTransform(row);
+            (payload, string? error) = DeliveryMapping.Apply(
+                transformEvaluator,
+                row.MappingConfigSnapshot,
+                row.PayloadJson,
+                new TransformContext(row.EventType, row.TopicName, row.AcceptedAt));
             if (error is not null)
             {
                 transformActivity?.SetStatus(ActivityStatusCode.Error);
@@ -407,45 +411,6 @@ internal sealed class DispatchEventDeliveriesCommandHandler(
             >= 500 => "5xx",
             _ => "error"
         };
-
-    private (string? payload, string? error) ApplyTransform(EventDeliveryWorkItem row)
-    {
-        if (string.IsNullOrWhiteSpace(row.MappingConfigSnapshot))
-        {
-            return (row.PayloadJson, null);
-        }
-
-        try
-        {
-            using var doc = JsonDocument.Parse(row.MappingConfigSnapshot);
-            JsonElement root = doc.RootElement;
-            if (!root.TryGetProperty("engine", out JsonElement engineEl)
-                || !root.TryGetProperty("version", out JsonElement versionEl)
-                || !root.TryGetProperty("expression", out JsonElement expressionEl))
-            {
-                return (null, "Transform config is missing required fields (engine, version, expression).");
-            }
-
-            string engine = engineEl.GetString() ?? string.Empty;
-            string version = versionEl.GetString() ?? string.Empty;
-            string expression = expressionEl.GetString() ?? string.Empty;
-            var transform = new TransformSpec(engine, version, expression);
-            TransformContext context = new(row.EventType, row.TopicName, row.AcceptedAt);
-            string output = transformEvaluator.Evaluate(
-                transform,
-                row.PayloadJson,
-                context);
-            return (output, null);
-        }
-        catch (TransformEvaluationException ex)
-        {
-            return (null, ex.Message);
-        }
-        catch (Exception ex)
-        {
-            return (null, $"Unexpected transform error: {ex.Message}");
-        }
-    }
 
     private sealed class DeliveryPreparationException(
         DeliveryFailurePhase failurePhase,

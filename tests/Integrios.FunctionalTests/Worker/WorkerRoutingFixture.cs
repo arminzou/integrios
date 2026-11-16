@@ -7,6 +7,7 @@ using Dapper;
 using Integrios.Application;
 using Integrios.Application.Authoring.Subscriptions;
 using Integrios.Application.Delivery;
+using Integrios.Application.DeliveryApi;
 using Integrios.Application.Ingestion;
 using Integrios.Application.Secrets;
 using Integrios.Application.Transforms;
@@ -157,6 +158,82 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         if (processed != 1)
             throw new InvalidOperationException($"Expected one Event to fan out, but processed {processed}.");
         return (await GetEventDeliveriesAsync(eventId)).ShouldHaveSingleItem().Id;
+    }
+
+    internal static readonly Guid PullDestinationAId = Guid.Parse("cccccccc-0000-0000-0000-0000000000a1");
+    internal static readonly Guid PullDestinationBId = Guid.Parse("cccccccc-0000-0000-0000-0000000000b1");
+    internal IPullDeliveryQueue PullQueue => DeliveryQueue;
+    internal PullDeliveryClaimer PullClaimer => new(DeliveryQueue, new JsonataTransformEvaluator());
+
+    public Task SeedPullDestinationsAsync()
+    {
+        Guid connectorId = Guid.NewGuid();
+        return ExecuteAsync($$$"""
+            INSERT INTO connectors (id,{{{database.KeyColumn}}},contract_version,manifest_schema_version,name,direction,manifest,created_at,updated_at)
+            VALUES (@ConnectorId,'subscriber',1,1,'Subscriber','destination',{{{database.Json("@Manifest")}}},{{{database.Now}}},{{{database.Now}}});
+            INSERT INTO destinations (id,tenant_id,connector_id,name,configuration,status) VALUES
+                (@AId,@TenantId,@ConnectorId,'pull-a',{{{database.Json("@Empty")}}},'active'),
+                (@BId,@TenantId,@ConnectorId,'pull-b',{{{database.Json("@Empty")}}},'active');
+            INSERT INTO subscriptions (id,tenant_id,topic_id,name,event_types,destination_id,order_index,status,mapping_config) VALUES
+                (@A1,@TenantId,@TopicId,'to-pull-a',{{{database.Json("@PlacedRules")}}},@AId,2,'active',{{{database.Json("@Mapping")}}}),
+                (@A2,@TenantId,@TopicId,'to-pull-a-broken',{{{database.Json("@BrokenRules")}}},@AId,3,'active',{{{database.Json("@BrokenMapping")}}}),
+                (@B1,@TenantId,@TopicId,'to-pull-b',{{{database.Json("@ShippedRules")}}},@BId,4,'active',NULL);
+            """, new
+        {
+            ConnectorId = connectorId,
+            Manifest = TestConnectorManifest.Create("subscriber", "Subscriber", "destination"),
+            AId = PullDestinationAId,
+            BId = PullDestinationBId,
+            TenantId,
+            TopicId,
+            Empty = "{}",
+            A1 = Guid.NewGuid(),
+            A2 = Guid.NewGuid(),
+            B1 = Guid.NewGuid(),
+            PlacedRules = "[\"order.placed\"]",
+            BrokenRules = "[\"order.broken\"]",
+            ShippedRules = "[\"order.shipped\"]",
+            Mapping = """{"engine":"jsonata","version":"1","expression":"{\"mapped\": test}"}""",
+            BrokenMapping = """{"engine":"jsonata","version":"1","expression":"$error(\"forced\")"}""",
+        });
+    }
+
+    public async Task<Guid> FanoutPullDeliveryAsync(string eventType)
+    {
+        Guid eventId = await InsertEventAndOutboxAsync(eventType);
+        await RunFanoutBatchAsync();
+        return (await GetEventDeliveriesAsync(eventId)).ShouldHaveSingleItem().Id;
+    }
+
+    public async Task<DeliveryTransportState> GetDeliveryTransportAsync(Guid deliveryId) =>
+        (await QueryAsync<DeliveryTransportState>(
+            """
+            SELECT transport AS Transport, CASE WHEN http_execution_snapshot IS NULL THEN 0 ELSE 1 END AS HasSnapshot
+            FROM event_deliveries WHERE id=@DeliveryId
+            """, new { DeliveryId = deliveryId })).Single();
+
+    public async Task BackdateActiveAttemptAsync(Guid deliveryId, TimeSpan by)
+    {
+        string startedAt = database.Provider == "postgres"
+            ? "started_at - make_interval(secs => @Seconds)"
+            : "DATEADD(second, -@Seconds, started_at)";
+        int updated = await ExecuteAsync(
+            $"""
+            UPDATE delivery_attempts SET started_at = {startedAt}
+            WHERE id = (SELECT active_attempt_id FROM event_deliveries WHERE id=@DeliveryId)
+            """,
+            new { DeliveryId = deliveryId, Seconds = (int)by.TotalSeconds });
+        if (updated != 1)
+            throw new InvalidOperationException($"Delivery {deliveryId} has no active attempt to backdate.");
+    }
+
+    public async Task MarkPullTransportAsync(Guid deliveryId)
+    {
+        int updated = await ExecuteAsync(
+            "UPDATE event_deliveries SET transport='pull', http_execution_snapshot=NULL WHERE id=@DeliveryId",
+            new { DeliveryId = deliveryId });
+        if (updated != 1)
+            throw new InvalidOperationException($"Delivery {deliveryId} was not found.");
     }
 
     public async Task ForceLeaseExpiredAsync(Guid deliveryId)
@@ -896,6 +973,8 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     private sealed record SnapshotRow { public string HttpExecutionSnapshotJson { get; init; } = string.Empty; public string ConnectorKey { get; init; } = string.Empty; public string? MappingConfigJson { get; init; } }
     private sealed record SubscriptionIdentity { public Guid Id { get; init; } public Guid TopicId { get; init; } }
 }
+
+public sealed record DeliveryTransportState(string Transport, int HasSnapshot);
 
 public sealed record EventDeliveryState(
     Guid Id, Guid SubscriptionId, string Status, int LifetimeAttemptCount,

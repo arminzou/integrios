@@ -25,9 +25,13 @@ internal sealed class EventDeliveryConfiguration : IEntityTypeConfiguration<Even
                 "((status = 'in_flight' AND active_attempt_id IS NOT NULL AND lease_expires_at IS NOT NULL) "
                 + "OR (status IN ('pending', 'succeeded', 'dead_lettered') "
                 + "AND active_attempt_id IS NULL AND lease_expires_at IS NULL))");
+            table.HasCheckConstraint(
+                "ck_event_deliveries_transport_snapshot",
+                "((transport = 'http' AND http_execution_snapshot IS NOT NULL) "
+                + "OR (transport = 'pull' AND http_execution_snapshot IS NULL))");
         });
 
-        entity.HasIndex(e => new { e.Status, e.LeaseExpiresAt, e.DeliverAfter, e.CreatedAt }, "idx_event_deliveries_claimable").HasFilter("(status = ANY (ARRAY['pending'::text, 'in_flight'::text]))");
+        entity.HasIndex(e => new { e.Transport, e.Status, e.LeaseExpiresAt, e.DeliverAfter, e.CreatedAt }, "idx_event_deliveries_claimable").HasFilter("(status = ANY (ARRAY['pending'::text, 'in_flight'::text]))");
 
         entity.HasIndex(e => e.EventId, "idx_event_deliveries_event_id");
 
@@ -68,6 +72,9 @@ internal sealed class EventDeliveryConfiguration : IEntityTypeConfiguration<Even
             .HasDefaultValueSql("'pending'::text")
             .HasColumnName("status");
         entity.Property(e => e.SubscriptionId).HasColumnName("subscription_id");
+        entity.Property(e => e.Transport)
+            .HasDefaultValueSql("'http'::text")
+            .HasColumnName("transport");
         entity.Property(e => e.Traceparent).HasColumnName("traceparent");
         entity.Property(e => e.MappingConfigSnapshot)
             .HasColumnType("jsonb")

@@ -41,6 +41,8 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
             .HaveConversion<SnakeCaseEnumConverter<ConnectorDirection>>();
         configurationBuilder.Properties<EventDeliveryStatus>()
             .HaveConversion<SnakeCaseEnumConverter<EventDeliveryStatus>>();
+        configurationBuilder.Properties<DeliveryTransport>()
+            .HaveConversion<SnakeCaseEnumConverter<DeliveryTransport>>();
         configurationBuilder.Properties<SourceVerification>()
             .HaveConversion<StoredJsonConverter<SourceVerification>>();
         configurationBuilder.Properties<DestinationAuthentication>()
@@ -229,19 +231,20 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
             {
                 table.HasCheckConstraint(
                     "ck_event_deliveries_http_execution_snapshot_json",
-                    "ISJSON(http_execution_snapshot, VALUE) = 1");
+                    "http_execution_snapshot IS NULL OR ISJSON(http_execution_snapshot, VALUE) = 1");
                 table.HasCheckConstraint(
                     "ck_event_deliveries_mapping_config_snapshot_json",
                     "mapping_config_snapshot IS NULL OR ISJSON(mapping_config_snapshot, VALUE) = 1");
             });
             entity.HasIndex(
-                    e => new { e.Status, e.LeaseExpiresAt, e.DeliverAfter, e.CreatedAt },
+                    e => new { e.Transport, e.Status, e.LeaseExpiresAt, e.DeliverAfter, e.CreatedAt },
                     "idx_event_deliveries_claimable")
                 .HasFilter("(status IN (N'pending', N'in_flight'))");
             entity.Property(e => e.Id).HasDefaultValueSql(generatedGuid);
             entity.Property(e => e.CreatedAt).HasDefaultValueSql(currentTimestamp);
             entity.Property(e => e.HttpExecutionSnapshot).HasColumnType(jsonType);
             entity.Property(e => e.Status).HasDefaultValueSql(TextDefault("pending"));
+            entity.Property(e => e.Transport).HasDefaultValueSql(TextDefault("http"));
             entity.Property(e => e.MappingConfigSnapshot).HasColumnType(jsonType);
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql(currentTimestamp);
         });

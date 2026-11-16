@@ -25,7 +25,8 @@ public sealed class DeliveryStatusVocabularyTests
                 DeliveryFailurePhase.SecretResolution,
                 DeliveryFailurePhase.Authentication,
                 DeliveryFailurePhase.RequestConstruction,
-                DeliveryFailurePhase.Http
+                DeliveryFailurePhase.Http,
+                DeliveryFailurePhase.Subscriber
             ]);
     }
 }

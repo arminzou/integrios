@@ -17,7 +17,7 @@ namespace Integrios.Migrations.SqlServer.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.4")
+                .HasAnnotation("ProductVersion", "10.0.15")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
@@ -164,7 +164,7 @@ namespace Integrios.Migrations.SqlServer.Migrations
                         {
                             t.HasCheckConstraint("ck_delivery_attempts_completion", "((status = 'in_progress' AND completed_at IS NULL) OR (status <> 'in_progress' AND completed_at IS NOT NULL))");
 
-                            t.HasCheckConstraint("ck_delivery_attempts_failure_phase", "((status = 'failed' AND failure_phase IS NOT NULL AND failure_phase IN ('transform', 'secret_resolution', 'authentication', 'request_construction', 'http')) OR (status <> 'failed' AND failure_phase IS NULL))");
+                            t.HasCheckConstraint("ck_delivery_attempts_failure_phase", "((status = 'failed' AND failure_phase IS NOT NULL AND failure_phase IN ('transform', 'secret_resolution', 'authentication', 'request_construction', 'http', 'subscriber')) OR (status <> 'failed' AND failure_phase IS NULL))");
 
                             t.HasCheckConstraint("ck_delivery_attempts_number_positive", "attempt_number > 0");
 
@@ -389,7 +389,6 @@ namespace Integrios.Migrations.SqlServer.Migrations
                         .HasColumnName("failed_at");
 
                     b.Property<string>("HttpExecutionSnapshot")
-                        .IsRequired()
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("http_execution_snapshot");
 
@@ -432,6 +431,13 @@ namespace Integrios.Migrations.SqlServer.Migrations
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("traceparent");
 
+                    b.Property<string>("Transport")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("nvarchar(450)")
+                        .HasColumnName("transport")
+                        .HasDefaultValueSql("N'http'");
+
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("datetimeoffset")
@@ -444,7 +450,7 @@ namespace Integrios.Migrations.SqlServer.Migrations
                     b.HasAlternateKey("EventId", "SubscriptionId")
                         .HasName("uq_event_deliveries_event_subscription");
 
-                    b.HasIndex(new[] { "Status", "LeaseExpiresAt", "DeliverAfter", "CreatedAt" }, "idx_event_deliveries_claimable")
+                    b.HasIndex(new[] { "Transport", "Status", "LeaseExpiresAt", "DeliverAfter", "CreatedAt" }, "idx_event_deliveries_claimable")
                         .HasFilter("(status IN (N'pending', N'in_flight'))");
 
                     b.HasIndex(new[] { "EventId" }, "idx_event_deliveries_dead_lettered")
@@ -458,11 +464,13 @@ namespace Integrios.Migrations.SqlServer.Migrations
                         {
                             t.HasCheckConstraint("ck_event_deliveries_attempt_counts_nonnegative", "lifetime_attempt_count >= 0 AND retry_cycle_attempt_count >= 0 AND retry_cycle_attempt_count <= lifetime_attempt_count");
 
-                            t.HasCheckConstraint("ck_event_deliveries_http_execution_snapshot_json", "ISJSON(http_execution_snapshot, VALUE) = 1");
+                            t.HasCheckConstraint("ck_event_deliveries_http_execution_snapshot_json", "http_execution_snapshot IS NULL OR ISJSON(http_execution_snapshot, VALUE) = 1");
 
                             t.HasCheckConstraint("ck_event_deliveries_lease_state", "((status = 'in_flight' AND active_attempt_id IS NOT NULL AND lease_expires_at IS NOT NULL) OR (status IN ('pending', 'succeeded', 'dead_lettered') AND active_attempt_id IS NULL AND lease_expires_at IS NULL))");
 
                             t.HasCheckConstraint("ck_event_deliveries_mapping_config_snapshot_json", "mapping_config_snapshot IS NULL OR ISJSON(mapping_config_snapshot, VALUE) = 1");
+
+                            t.HasCheckConstraint("ck_event_deliveries_transport_snapshot", "((transport = 'http' AND http_execution_snapshot IS NOT NULL) OR (transport = 'pull' AND http_execution_snapshot IS NULL))");
                         });
                 });
 

@@ -22,5 +22,6 @@ public sealed record EventDelivery
     public required string ConnectorKey { get; init; }
     public Guid? ActiveAttemptId { get; init; }
     public DateTimeOffset? LeaseExpiresAt { get; init; }
-    public required JsonElement HttpExecutionSnapshot { get; init; }
+    public DeliveryTransport Transport { get; init; } = DeliveryTransport.Http;
+    public JsonElement? HttpExecutionSnapshot { get; init; }
 }

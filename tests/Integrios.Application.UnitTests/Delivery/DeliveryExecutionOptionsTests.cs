@@ -27,6 +27,17 @@ public sealed class DeliveryExecutionOptionsTests
         exception.Message.ShouldContain(expectedSetting, Case.Sensitive);
     }
 
+    [Fact]
+    public void Validate_AllowsPushLeaseLongerThanThePullAttemptCeiling()
+    {
+        DeliveryExecutionOptions options = DeliveryExecutionOptions.Default with
+        {
+            LeaseDuration = TimeSpan.FromHours(1)
+        };
+
+        Should.NotThrow(options.Validate);
+    }
+
     public static TheoryData<DeliveryExecutionOptions, string> InvalidOptions => new()
     {
         { new(TimeSpan.Zero, TimeSpan.FromSeconds(45), TimeSpan.FromMinutes(2), TimeSpan.FromSeconds(60)), "HttpTimeout" },

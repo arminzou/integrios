@@ -99,6 +99,17 @@ internal sealed class SqlServerOutboxFanout(IDbContextFactory<IntegriosDbContext
         {
             Destination destination = destinations[subscription.DestinationId];
             var connector = connectors[destination.ConnectorId];
+            if (Connector.TransportFor(connector.Key) == DeliveryTransport.Pull)
+            {
+                return new SubscriptionRoutingCandidate(
+                    subscription.Id,
+                    subscription.DestinationId,
+                    subscription.OrderIndex,
+                    subscription.EventTypes,
+                    subscription.MappingConfig?.GetRawText(),
+                    connector.Key,
+                    null);
+            }
             string baseUri = destination.Configuration.TryGetProperty("base_uri", out JsonElement value)
                 ? value.GetString() ?? string.Empty
                 : string.Empty;
@@ -138,9 +149,9 @@ internal sealed class SqlServerOutboxFanout(IDbContextFactory<IntegriosDbContext
                 USING (VALUES (@EventId, @SubscriptionId)) AS source(event_id, subscription_id)
                    ON target.event_id = source.event_id AND target.subscription_id = source.subscription_id
                 WHEN NOT MATCHED THEN
-                    INSERT (event_id, subscription_id, destination_id, connector_key,
+                    INSERT (event_id, subscription_id, destination_id, connector_key, transport,
                             http_execution_snapshot, mapping_config_snapshot, traceparent)
-                    VALUES (@EventId, @SubscriptionId, @DestinationId, @ConnectorKey,
+                    VALUES (@EventId, @SubscriptionId, @DestinationId, @ConnectorKey, @Transport,
                             @HttpExecutionSnapshotJson, @MappingConfigJson, @Traceparent)
                 OUTPUT CASE WHEN $action = 'INSERT' THEN 1 ELSE 0 END;
                 """,
@@ -150,6 +161,7 @@ internal sealed class SqlServerOutboxFanout(IDbContextFactory<IntegriosDbContext
                     target.SubscriptionId,
                     target.DestinationId,
                     target.ConnectorKey,
+                    Transport = Connector.TransportFor(target.ConnectorKey) == DeliveryTransport.Pull ? "pull" : "http",
                     target.HttpExecutionSnapshotJson,
                     target.MappingConfigJson,
                     Traceparent = traceparent,

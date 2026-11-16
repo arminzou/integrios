@@ -19,7 +19,8 @@ internal static class DestinationUseValidator
                 $"The Connector '{connector.Key}' does not permit Destination authoring.");
 
         ValidateConfiguration(destination.Configuration, connector.Manifest.DestinationConfigurationSchema);
-        ValidateDestinationBaseUri(destination.Configuration);
+        if (Connector.TransportFor(connector.Key) == DeliveryTransport.Http)
+            ValidateDestinationBaseUri(destination.Configuration);
 
         (string Scheme, JsonElement Config, JsonElement SecretRefs)? selection = RequireSelection(
             destination.Authentication is null

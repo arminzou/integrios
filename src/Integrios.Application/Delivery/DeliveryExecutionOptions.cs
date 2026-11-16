@@ -10,6 +10,10 @@ public sealed record DeliveryExecutionOptions(
 
     public int RetryMaxAttempts { get; init; } = RetryPolicy.DefaultMaxAttempts;
 
+    // shortcut: not bound from configuration yet; the delivery-api host binds
+    // Integrios:DeliveryApi:MaxAttemptDuration when it exists.
+    public TimeSpan MaxAttemptDuration { get; init; } = TimeSpan.FromMinutes(30);
+
     public static DeliveryExecutionOptions Default { get; } = new(
         TimeSpan.FromSeconds(30),
         TimeSpan.FromSeconds(45),

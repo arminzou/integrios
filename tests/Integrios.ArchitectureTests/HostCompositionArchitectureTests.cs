@@ -9,6 +9,7 @@ using Integrios.Application.Authoring.TenantApiKeys;
 using Integrios.Application.Authoring.Tenants;
 using Integrios.Application.Authoring.Topics;
 using Integrios.Application.Delivery;
+using Integrios.Application.DeliveryApi;
 using Integrios.Application.EventMonitoring;
 using Integrios.Application.Identity;
 using Integrios.Application.Ingestion;
@@ -26,6 +27,7 @@ public sealed class HostCompositionArchitectureTests
     private static readonly IReadOnlyDictionary<Type, Host[]> PortOwners = new Dictionary<Type, Host[]>
     {
         [typeof(IOperatorKeyLookup)] = [Host.Admin],
+        [typeof(IPullDeliveryQueue)] = [],
         [typeof(IOperatorKeyLifecycle)] = [Host.Admin],
         [typeof(ITenantApiKeyRepository)] = [Host.Admin],
         [typeof(IActiveTenantApiKeyLookup)] = [Host.Ingestion],
