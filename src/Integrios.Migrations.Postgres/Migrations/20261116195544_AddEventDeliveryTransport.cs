@@ -62,7 +62,6 @@ namespace Integrios.Migrations.Postgres.Migrations
                 table: "event_deliveries",
                 type: "jsonb",
                 nullable: false,
-                defaultValue: System.Text.Json.JsonDocument.Parse("", new System.Text.Json.JsonDocumentOptions()).RootElement,
                 oldClrType: typeof(JsonElement),
                 oldType: "jsonb",
                 oldNullable: true);
