@@ -2,6 +2,7 @@ using System.Text.Json;
 using Integrios.Application.Common;
 using Integrios.Application.Transforms;
 using Integrios.Domain.Entities;
+using Integrios.Domain.Enums;
 using Integrios.Domain.ValueObjects;
 
 namespace Integrios.Application.Authoring.Subscriptions;
@@ -11,13 +12,14 @@ internal static class SubscriptionAuthoringRules
     public static void Validate(
         IReadOnlyList<string>? eventTypes,
         JsonElement? transformConfig,
-        HttpDeliveryConfiguration httpDelivery,
+        HttpDeliveryConfiguration? httpDelivery,
         HttpSuccessRule? httpSuccess,
         ITransformEvaluator transformEvaluator)
     {
         ValidateEventTypes(eventTypes);
 
-        HttpDeliveryConfigurationRules.Validate(httpDelivery);
+        if (httpDelivery is not null)
+            HttpDeliveryConfigurationRules.Validate(httpDelivery);
         ValidateHttpSuccess(httpSuccess);
 
         if (transformConfig is null || transformConfig.Value.ValueKind == JsonValueKind.Null)
@@ -30,6 +32,21 @@ internal static class SubscriptionAuthoringRules
             out _);
         if (error is not null)
             throw new SubscriptionValidationException(error, "mapping");
+    }
+
+    // The Destination's transport decides whether a Subscription carries an HTTP operation: push
+    // defaults an absent one, and pull has none to store.
+    public static HttpDeliveryConfiguration? HttpDeliveryFor(
+        Connector connector,
+        HttpDeliveryConfiguration? httpDelivery,
+        HttpSuccessRule? httpSuccess)
+    {
+        if (Connector.TransportFor(connector.Key) == DeliveryTransport.Http)
+            return httpDelivery ?? HttpDeliveryConfiguration.Default;
+        if (httpDelivery is not null || httpSuccess is not null)
+            throw new SubscriptionValidationException(
+                "A Subscription to a pull Destination takes no http_delivery or http_success.");
+        return null;
     }
 
     private static void ValidateEventTypes(IReadOnlyList<string>? eventTypes)

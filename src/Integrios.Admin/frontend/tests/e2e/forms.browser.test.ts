@@ -711,6 +711,37 @@ describe("Create forms, filled through a real browser", () => {
     await view.close();
   }, 60_000);
 
+  it("sends a Subscription to a pull Destination with no HTTP operation", async () => {
+    const { page: view, writes } = await open(`/tenants/${tenantId}/subscriptions?topic_id=${topicId}`);
+    const pullDestination = {
+      ...destination,
+      id: "dddddddd-dddd-dddd-dddd-dddddddddddd",
+      name: "orders-service",
+      transport: "pull",
+    };
+    await view.route(
+      (url) => url.pathname.endsWith("/destinations"),
+      (route) => route.fulfill({ json: page([{ ...destination, transport: "http" }, pullDestination]) }),
+    );
+    await view.reload();
+
+    await view.click("text=New Subscription");
+    const form = formNamed(view, "Create a Subscription");
+    await form.getByLabel("Name").fill("to-orders-service");
+    await choose(form.getByLabel("Destination"), /orders-service/);
+    await form.getByRole("checkbox", { name: "order.created" }).check();
+    await form.getByRole("heading", { name: "Mapping" }).waitFor();
+    for (const control of ["Method", "Relative path (optional)", "Request body", "Success check"])
+      expect(await form.getByLabel(control).count()).toBe(0);
+    await view.click("text=Create Subscription");
+
+    const sent = await submitted(writes);
+    expect(sent.body.destination_id).toBe(pullDestination.id);
+    expect(sent.body.http_delivery).toBeNull();
+    expect(sent.body.http_success).toBeNull();
+    await view.close();
+  }, 60_000);
+
   it("steps a previewed mapping through the Subscription's own Events", async () => {
     const { page: view } = await open(`/tenants/${tenantId}/subscriptions?topic_id=${topicId}`);
     const samples = ["SO-1", "SO-2"].map((order, index) => ({

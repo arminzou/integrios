@@ -17,7 +17,7 @@ internal sealed class SubscriptionRepository(IntegriosDbContext context) : ISubs
         IReadOnlyList<string> eventTypes,
         Guid destinationId,
         JsonElement? transformConfig,
-        HttpDeliveryConfiguration httpDelivery,
+        HttpDeliveryConfiguration? httpDelivery,
         HttpSuccessRule? httpSuccess,
         int orderIndex,
         string? description,
@@ -81,7 +81,7 @@ internal sealed class SubscriptionRepository(IntegriosDbContext context) : ISubs
         IReadOnlyList<string> eventTypes,
         Guid destinationId,
         JsonElement? transformConfig,
-        HttpDeliveryConfiguration httpDelivery,
+        HttpDeliveryConfiguration? httpDelivery,
         HttpSuccessRule? httpSuccess,
         int orderIndex,
         string? description,
@@ -161,7 +161,8 @@ internal sealed class SubscriptionRepository(IntegriosDbContext context) : ISubs
             .Where(subscription =>
                 subscription.TenantId == tenantId
                 && subscription.DestinationId == destinationId
-                && subscription.Status == OperationalStatus.Active)
+                && subscription.Status == OperationalStatus.Active
+                && subscription.HttpDelivery != null)
             .Select(subscription => subscription.HttpDelivery!)
             .ToListAsync(cancellationToken);
 

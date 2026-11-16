@@ -217,6 +217,7 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
             entity.Property(e => e.CreatedAt).HasDefaultValueSql(currentTimestamp);
             entity.Property(e => e.HttpDelivery)
                 .HasDefaultValueSql(JsonDefault("{\"body\": \"json\", \"method\": \"POST\", \"headers\": {}, \"version\": 1}"))
+                .ValueGeneratedNever()
                 .HasColumnType(jsonType)
                 .IsRequired(false);
             entity.Property(e => e.EventTypes).HasColumnType(jsonType);
