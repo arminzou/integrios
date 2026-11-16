@@ -1,5 +1,8 @@
+using Integrios.Application.Delivery;
 using Integrios.Application.DeliveryApi;
+using Integrios.Application.Telemetry;
 using Integrios.FunctionalTests.Worker;
+using Integrios.Tests.Shared;
 
 namespace Integrios.FunctionalTests.DeliveryApi;
 
@@ -239,6 +242,25 @@ public sealed class PullDeliveryTests : IClassFixture<WorkerRoutingFixture>, IAs
             .ShouldBe(PullSettlementStatus.OwnershipLost);
         (await fixture.PullQueue.SettleAsync(Owner(A, second), PullSettlement.Ack(), CancellationToken.None))
             .ShouldBe(PullSettlementStatus.Applied);
+    }
+
+    [Fact]
+    public async Task RecoveredDeadLetter_IsLoggedAndCountedLikePush()
+    {
+        using var metrics = new MetricCollector(IntegriosMetrics.MeterName);
+        Guid deliveryId = await fixture.FanoutPullDeliveryAsync("order.placed");
+        for (int attempt = 1; attempt <= RetryPolicy.DefaultMaxAttempts; attempt++)
+        {
+            (await ClaimAsync(A)).ShouldHaveSingleItem();
+            await fixture.ForceLeaseExpiredAsync(deliveryId);
+        }
+
+        (await ClaimAsync(A)).ShouldBeEmpty();
+
+        (await fixture.GetEventDeliveryAsync(deliveryId)).Status.ShouldBe("dead_lettered");
+        metrics.ForInstrument("integrios_deliveries_dead_lettered")
+            .ShouldContain(measurement => Equals(measurement.Tag("connector_key"), "subscriber"));
+        fixture.PullClaimLogs.AnyMessageContains(deliveryId.ToString()).ShouldBeTrue();
     }
 
     [Fact]

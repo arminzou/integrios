@@ -10,6 +10,7 @@ using Integrios.Application.Delivery;
 using Integrios.Application.DeliveryApi;
 using Integrios.Application.Ingestion;
 using Integrios.Application.Secrets;
+using Integrios.Application.Telemetry;
 using Integrios.Application.Transforms;
 using Integrios.Domain.Entities;
 using Integrios.Domain.ValueObjects;
@@ -27,6 +28,7 @@ using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using Npgsql;
 using Respawn;
 
@@ -164,7 +166,12 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     internal static readonly Guid PullDestinationAId = Guid.Parse("cccccccc-0000-0000-0000-0000000000a1");
     internal static readonly Guid PullDestinationBId = Guid.Parse("cccccccc-0000-0000-0000-0000000000b1");
     internal IPullDeliveryQueue PullQueue => DeliveryQueue;
-    internal PullDeliveryClaimer PullClaimer => new(DeliveryQueue, new JsonataTransformEvaluator());
+    internal CapturingLoggerProvider PullClaimLogs { get; } = new();
+    internal PullDeliveryClaimer PullClaimer => new(
+        DeliveryQueue,
+        new JsonataTransformEvaluator(),
+        applicationProvider.GetRequiredService<IntegriosMetrics>(),
+        LoggerFactory.Create(logging => logging.AddProvider(PullClaimLogs)).CreateLogger<PullDeliveryClaimer>());
 
     public Task SeedPullDestinationsAsync()
     {

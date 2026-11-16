@@ -63,33 +63,24 @@ internal sealed class EventDeliveryQueue(
             var other => other
         };
 
-    public async Task<PullDeliveryWorkItem?> ClaimNextAsync(Guid destinationId, CancellationToken cancellationToken)
-    {
-        while (true)
+    public async Task<EventDeliveryClaimResult?> ClaimNextAsync(Guid destinationId, CancellationToken cancellationToken) =>
+        await ClaimRowAsync(destinationId, cancellationToken) switch
         {
-            switch (await ClaimRowAsync(destinationId, cancellationToken))
-            {
-                case null:
-                    return null;
-                case ClaimedRow claimed:
-                    return new PullDeliveryWorkItem(
-                        claimed.Row.Id,
-                        claimed.AttemptId,
-                        claimed.AttemptNumber,
-                        claimed.Row.EventId,
-                        claimed.Row.SubscriptionId,
-                        claimed.Row.PayloadJson ?? string.Empty,
-                        claimed.Row.EventType ?? string.Empty,
-                        claimed.Row.TopicName,
-                        claimed.Row.AcceptedAt,
-                        claimed.Row.MappingConfigSnapshot,
-                        claimed.LeaseExpiresAt,
-                        claimed.Row.Traceparent);
-                default:
-                    continue;
-            }
-        }
-    }
+            ClaimedRow claimed => new ClaimedPullDelivery(new PullDeliveryWorkItem(
+                claimed.Row.Id,
+                claimed.AttemptId,
+                claimed.AttemptNumber,
+                claimed.Row.EventId,
+                claimed.Row.SubscriptionId,
+                claimed.Row.PayloadJson ?? string.Empty,
+                claimed.Row.EventType ?? string.Empty,
+                claimed.Row.TopicName,
+                claimed.Row.AcceptedAt,
+                claimed.Row.MappingConfigSnapshot,
+                claimed.LeaseExpiresAt,
+                claimed.Row.Traceparent)),
+            var other => other
+        };
 
     private async Task<EventDeliveryClaimResult?> ClaimRowAsync(
         Guid? pullDestinationId,
