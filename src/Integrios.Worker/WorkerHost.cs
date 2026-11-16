@@ -6,7 +6,7 @@ using Integrios.Worker.Cli;
 
 namespace Integrios.Worker;
 
-public static class WorkerRole
+public static class WorkerHost
 {
     public const string Name = "worker";
     public const int DefaultOperationalPort = 5299;
@@ -43,7 +43,7 @@ public static class WorkerRole
 
     public static (WebApplicationBuilder Builder, int OperationalPort) CreateBuilder(string[] args)
     {
-        var builder = ServiceHosting.CreateBuilder(args, Name, typeof(WorkerRole).Assembly.GetName().Name!);
+        var builder = ServiceHosting.CreateBuilder(args, Name, typeof(WorkerHost).Assembly.GetName().Name!);
         builder.Logging.AddOperationalConsoleLogging(builder.Environment.IsDevelopment());
         bool secretCommand = SecretValidationCli.IsCommand(args);
 

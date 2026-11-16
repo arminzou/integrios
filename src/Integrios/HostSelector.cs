@@ -4,14 +4,14 @@ using Integrios.Worker;
 
 namespace Integrios;
 
-public static class RoleDispatch
+public static class HostSelector
 {
     public static readonly IReadOnlyDictionary<string, Func<string[], Task<int>>> Roles =
         new Dictionary<string, Func<string[], Task<int>>>(StringComparer.Ordinal)
         {
-            [IngestionRole.Name] = IngestionRole.RunAsync,
-            [AdminRole.Name] = AdminRole.RunAsync,
-            [WorkerRole.Name] = WorkerRole.RunAsync,
+            [IngestionHost.Name] = IngestionHost.RunAsync,
+            [AdminHost.Name] = AdminHost.RunAsync,
+            [WorkerHost.Name] = WorkerHost.RunAsync,
         };
 
     public static Task<int> RunAsync(string[] args, TextWriter error) => RunAsync(args, Roles, error);

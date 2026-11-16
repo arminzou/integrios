@@ -69,8 +69,9 @@ public sealed class DashboardShellTests(AdminApiFixture fixture)
             // A deployment with no human method still serves the shell and answers both browser
             // reads, so it reports "no sign-in method is configured" rather than a bare 404 or a
             // dead API.
-            using WebApplicationFactory<Program> withoutOidc = fixture.WebFactory.WithWebHostBuilder(
-                builder => builder.UseWebRoot(webRoot).UseSetting(OperatorPasswordOptions.EnabledKey, "false"));
+            using TestHostBuilder withoutOidc = fixture.WebFactory
+                .WithSetting(WebHostDefaults.WebRootKey, webRoot)
+                .WithSetting(OperatorPasswordOptions.EnabledKey, "false");
             using HttpClient unavailable = withoutOidc.CreateClient();
             using HttpResponseMessage unavailableRoot = await unavailable.GetAsync("/");
             unavailableRoot.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -87,12 +88,10 @@ public sealed class DashboardShellTests(AdminApiFixture fixture)
             options.GetProperty("oidc_enabled").GetBoolean().ShouldBeFalse();
             options.GetProperty("password_enabled").GetBoolean().ShouldBeFalse();
 
-            using WebApplicationFactory<Program> withOidc = fixture.WebFactory.WithWebHostBuilder(builder =>
-            {
-                builder.UseWebRoot(webRoot);
-                builder.UseSetting(OperatorOidcOptions.AuthorityKey, "https://oidc.example.test");
-                builder.UseSetting(OperatorOidcOptions.SectionKey + ":ClientId", "dashboard-test");
-            });
+            using TestHostBuilder withOidc = fixture.WebFactory
+                .WithSetting(WebHostDefaults.WebRootKey, webRoot)
+                .WithSetting(OperatorOidcOptions.AuthorityKey, "https://oidc.example.test")
+                .WithSetting(OperatorOidcOptions.SectionKey + ":ClientId", "dashboard-test");
             using HttpClient available = withOidc.CreateClient();
             foreach (string path in new[] { "/", "/tenants/overview" })
             {
@@ -102,11 +101,9 @@ public sealed class DashboardShellTests(AdminApiFixture fixture)
             }
 
 
-            using WebApplicationFactory<Program> withPassword = fixture.WebFactory.WithWebHostBuilder(builder =>
-            {
-                builder.UseWebRoot(webRoot);
-                builder.UseSetting(OperatorPasswordOptions.EnabledKey, "true");
-            });
+            using TestHostBuilder withPassword = fixture.WebFactory
+                .WithSetting(WebHostDefaults.WebRootKey, webRoot)
+                .WithSetting(OperatorPasswordOptions.EnabledKey, "true");
             using HttpClient passwordAvailable = withPassword.CreateClient();
             using HttpResponseMessage passwordRoot = await passwordAvailable.GetAsync("/");
             passwordRoot.StatusCode.ShouldBe(HttpStatusCode.OK);

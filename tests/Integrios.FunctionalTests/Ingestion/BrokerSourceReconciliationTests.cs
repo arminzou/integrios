@@ -1,9 +1,8 @@
-extern alias IngestionHost;
-
 using System.Data.Common;
 using System.Text.Json;
 using Azure.Messaging.ServiceBus;
 using Dapper;
+using Integrios.Ingestion;
 using Integrios.Tests.Shared;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
@@ -118,7 +117,7 @@ public sealed class BrokerSourceReconciliationFixture : IAsyncLifetime
         .Build();
     internal SeededBrokerSource Seeded { get; private set; } = null!;
 
-    private WebApplicationFactory<IngestionHost::Program> factory = null!;
+    private TestHostBuilder factory = null!;
 
     public async Task InitializeAsync()
     {
@@ -126,19 +125,14 @@ public sealed class BrokerSourceReconciliationFixture : IAsyncLifetime
         await ServiceBus.StartAsync();
         Seeded = await AzureServiceBusSourceTests.SeedAsync(Database, includeSource: false);
 
-        factory = new WebApplicationFactory<IngestionHost::Program>().WithWebHostBuilder(builder =>
-        {
-            builder.UseSetting("Integrios:BrokerSources:ReconcileSeconds", "1");
-            builder.UseSetting("Database:Provider", Database.Provider);
-            builder.UseSetting($"ConnectionStrings:{Database.ConnectionName}", Database.ConnectionString);
-            builder.ConfigureAppConfiguration((_, config) => config.AddConfiguration(Database.Configuration));
-            builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(
-                new Dictionary<string, string?>
-                {
-                    [$"SourceSecrets:{AzureServiceBusSourceTests.TenantSlug}:{AzureServiceBusSourceTests.SecretReference}"] =
-                        ServiceBus.GetConnectionString(),
-                }));
-        });
+        factory = new TestHostBuilder(IngestionHost.CreateBuilder, IngestionHost.ConfigurePipeline)
+            .WithSetting("Integrios:BrokerSources:ReconcileSeconds", "1")
+            .WithSetting("Database:Provider", Database.Provider)
+            .WithSetting($"ConnectionStrings:{Database.ConnectionName}", Database.ConnectionString)
+            .WithSettings(Database.Configuration)
+            .WithSetting(
+                $"SourceSecrets:{AzureServiceBusSourceTests.TenantSlug}:{AzureServiceBusSourceTests.SecretReference}",
+                ServiceBus.GetConnectionString());
 
         using HttpClient warmup = factory.CreateClient();
         using HttpResponseMessage response = await warmup.GetAsync("/health");

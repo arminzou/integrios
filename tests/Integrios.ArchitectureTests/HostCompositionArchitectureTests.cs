@@ -95,9 +95,9 @@ public sealed class HostCompositionArchitectureTests
     {
         (Host Host, WebApplicationBuilder Builder)[] roles =
         [
-            (Host.Admin, Admin.AdminRole.CreateBuilder(args).Builder),
-            (Host.Ingestion, Ingestion.IngestionRole.CreateBuilder(args).Builder),
-            (Host.Worker, Worker.WorkerRole.CreateBuilder(args).Builder)
+            (Host.Admin, Admin.AdminHost.CreateBuilder(args).Builder),
+            (Host.Ingestion, Ingestion.IngestionHost.CreateBuilder(args).Builder),
+            (Host.Worker, Worker.WorkerHost.CreateBuilder(args).Builder)
         ];
 
         foreach ((Host host, WebApplicationBuilder builder) in roles)

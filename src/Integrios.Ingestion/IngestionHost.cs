@@ -11,7 +11,7 @@ using Microsoft.AspNetCore.Authentication;
 
 namespace Integrios.Ingestion;
 
-public static class IngestionRole
+public static class IngestionHost
 {
     public const string Name = "ingestion";
     public const int DefaultOperationalPort = 5232;
@@ -32,22 +32,7 @@ public static class IngestionRole
                 return exitCode;
             }
 
-            app.UseRouting();
-            app.UseOperationalEndpointIsolation(operationalPort);
-            app.UseRequestCompletionLogging();
-            app.UseExceptionHandler();
-            app.UseStatusCodePages();
-
-            if (app.Environment.IsDevelopment())
-                app.MapOpenApi();
-
-            app.UseHttpsRedirection();
-            app.UseAuthentication();
-            app.UseAuthorization();
-
-            app.MapEndpoints(typeof(IngestionRole).Assembly);
-            app.MapOperationalEndpoints();
-
+            ConfigurePipeline(app, operationalPort);
             await app.RunAsync();
             return 0;
         }
@@ -58,9 +43,28 @@ public static class IngestionRole
         }
     }
 
+    public static void ConfigurePipeline(WebApplication app, int operationalPort)
+    {
+        app.UseRouting();
+        app.UseOperationalEndpointIsolation(operationalPort);
+        app.UseRequestCompletionLogging();
+        app.UseExceptionHandler();
+        app.UseStatusCodePages();
+
+        if (app.Environment.IsDevelopment())
+            app.MapOpenApi();
+
+        app.UseHttpsRedirection();
+        app.UseAuthentication();
+        app.UseAuthorization();
+
+        app.MapEndpoints(typeof(IngestionHost).Assembly);
+        app.MapOperationalEndpoints();
+    }
+
     public static (WebApplicationBuilder Builder, int OperationalPort) CreateBuilder(string[] args)
     {
-        var builder = ServiceHosting.CreateBuilder(args, Name, typeof(IngestionRole).Assembly.GetName().Name!);
+        var builder = ServiceHosting.CreateBuilder(args, Name, typeof(IngestionHost).Assembly.GetName().Name!);
         builder.Logging.AddOperationalConsoleLogging(builder.Environment.IsDevelopment());
         bool secretCommand = SourceSecretValidationCli.IsCommand(args);
 

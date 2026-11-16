@@ -27,10 +27,10 @@ dotnet test tests/Integrios.Ingestion.UnitTests/Integrios.Ingestion.UnitTests.cs
 # Run the full stack locally (services, Postgres, migrations)
 make up
 
-# Run one service
-dotnet run --project src/Integrios.Ingestion
-dotnet run --project src/Integrios.Admin
-dotnet run --project src/Integrios.Worker
+# Run one role from its own folder, so its development settings load
+cd src/Integrios.Ingestion && dotnet run --project ../Integrios --launch-profile ingestion
+cd src/Integrios.Admin && dotnet run --project ../Integrios --launch-profile admin
+cd src/Integrios.Worker && dotnet run --project ../Integrios --launch-profile worker
 
 # Apply C# formatting (per .editorconfig)
 dotnet format Integrios.slnx
@@ -48,7 +48,8 @@ walkthrough, and the [docs site guide](docs/ci-cd.md) to preview the public docu
 
 - `Integrios.slnx` is the solution entry point.
 - `src/Integrios` is the `integrios` executable that starts any role: `integrios ingestion`,
-  `integrios admin`, or `integrios worker`.
+  `integrios admin`, or `integrios worker`. It is the only executable; the three projects below are
+  host libraries it references, one per role.
 - `src/Integrios.Ingestion` owns intake, Tenant authentication, and the durable acceptance boundary.
   Data plane, port 5231.
 - `src/Integrios.Admin` owns Tenant management; Connector, Source, and Destination authoring; Topic

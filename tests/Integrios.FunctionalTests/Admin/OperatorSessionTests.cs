@@ -147,9 +147,9 @@ public sealed class OperatorSessionTests(OperatorSessionFixture fixture)
     {
         int productPort = GetAvailablePort();
         int operationalPort = GetAvailablePort();
-        using WebApplicationFactory<Program> host = fixture.PasswordHost.WithWebHostBuilder(
-            builder => builder.UseSetting("OperationalPort", operationalPort.ToString()));
-        host.UseKestrel(productPort);
+        using TestHostBuilder host = fixture.PasswordHost
+            .WithSetting("OperationalPort", operationalPort.ToString())
+            .WithKestrel(productPort);
         host.StartServer();
         string productAddress = host.Services.GetRequiredService<IServer>()
             .Features.Get<IServerAddressesFeature>()!.Addresses
@@ -259,8 +259,8 @@ public sealed class OperatorSessionTests(OperatorSessionFixture fixture)
     public async Task PasswordAttempts_AreLimitedPerEmailAndConnectionPeer()
     {
         var emailLogs = new CapturingLoggerProvider();
-        using WebApplicationFactory<Program> emailHost = fixture.PasswordHost.WithWebHostBuilder(
-            builder => builder.ConfigureLogging(logging => logging.AddProvider(emailLogs)));
+        using TestHostBuilder emailHost = fixture.PasswordHost.WithServices(
+            services => services.AddLogging(logging => logging.AddProvider(emailLogs)));
         AuthenticationOptions emailOptions = await GetAuthenticationOptionsAsync(emailHost);
         using HttpClient emailClient = Client(emailHost);
         for (int attempt = 0; attempt < OperatorPasswordRateLimiter.AttemptsPerEmail; attempt++)
@@ -286,8 +286,8 @@ public sealed class OperatorSessionTests(OperatorSessionFixture fixture)
         emailLogs.AnyMessageContains("wrong-password!!").ShouldBeFalse();
 
         var peerLogs = new CapturingLoggerProvider();
-        using WebApplicationFactory<Program> peerHost = fixture.PasswordHost.WithWebHostBuilder(
-            builder => builder.ConfigureLogging(logging => logging.AddProvider(peerLogs)));
+        using TestHostBuilder peerHost = fixture.PasswordHost.WithServices(
+            services => services.AddLogging(logging => logging.AddProvider(peerLogs)));
         AuthenticationOptions peerOptions = await GetAuthenticationOptionsAsync(peerHost);
         using HttpClient peerClient = Client(peerHost);
         for (int attempt = 0; attempt < OperatorPasswordRateLimiter.AttemptsPerPeer; attempt++)
@@ -511,7 +511,7 @@ public sealed class OperatorSessionTests(OperatorSessionFixture fixture)
     /// Drives the real authorization-code flow: Admin redirects to the provider, the provider
     /// redirects back with a code, and Admin exchanges it over the back channel before issuing its
     /// own cookie.
-    private async Task<OperatorSession> SignInAsync(WebApplicationFactory<Program> host, string? returnTo = null)
+    private async Task<OperatorSession> SignInAsync(TestHostBuilder host, string? returnTo = null)
     {
         using HttpClient client = Client(host);
         using var provider = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false });
@@ -552,7 +552,7 @@ public sealed class OperatorSessionTests(OperatorSessionFixture fixture)
     }
 
     private static async Task<OperatorSession> SignInWithPasswordAsync(
-        WebApplicationFactory<Program> host,
+        TestHostBuilder host,
         string email,
         string password,
         string? returnTo = null)
@@ -597,7 +597,7 @@ public sealed class OperatorSessionTests(OperatorSessionFixture fixture)
     }
 
     private static async Task<AuthenticationOptions> GetAuthenticationOptionsAsync(
-        WebApplicationFactory<Program> host)
+        TestHostBuilder host)
     {
         using HttpClient client = Client(host);
         return await GetAuthenticationOptionsAsync(client);
@@ -638,7 +638,7 @@ public sealed class OperatorSessionTests(OperatorSessionFixture fixture)
 
     /// The dashboard is HTTPS-only in production: the session and antiforgery cookies are both
     /// Secure, so the test must speak HTTPS rather than relax the host.
-    private static HttpClient Client(WebApplicationFactory<Program> host) =>
+    private static HttpClient Client(TestHostBuilder host) =>
         host.CreateClient(new WebApplicationFactoryClientOptions
         {
             AllowAutoRedirect = false,

@@ -21,7 +21,7 @@ public static class OperatorKeyCli
         }
 
         HostApplicationBuilder hostBuilder = Host.CreateApplicationBuilder();
-        hostBuilder.AddRoleSettingsFiles(AdminRole.Name);
+        hostBuilder.AddRoleSettingsFiles(AdminHost.Name);
         string? secret = hostBuilder.Configuration[RotationSecretConfigKey];
         if (string.IsNullOrWhiteSpace(secret))
         {

@@ -279,7 +279,7 @@ Development without containers, both hosts enable .NET User Secrets:
 
 ```bash
 dotnet user-secrets --project src/Integrios.Worker set "DestinationSecrets:acme:erp-api-key" "secret-value"
-dotnet run --project src/Integrios.Worker
+cd src/Integrios.Worker && dotnet run --project ../Integrios --launch-profile worker
 ```
 
 ### Supplying the files on other platforms

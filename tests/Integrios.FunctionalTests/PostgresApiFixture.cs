@@ -1,10 +1,9 @@
-extern alias IngestionHost;
-
 using System.Data.Common;
 using System.Security.Cryptography;
 using System.Text;
 using Dapper;
 using Integrios.Infrastructure.Data;
+using Integrios.Ingestion;
 using Integrios.Tests.Shared;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -25,7 +24,7 @@ public sealed class PostgresApiFixture : IAsyncLifetime
     private readonly FunctionalDatabase database = new();
     private Respawner respawner = null!;
 
-    public WebApplicationFactory<IngestionHost::Program> WebFactory { get; private set; } = null!;
+    public TestHostBuilder WebFactory { get; private set; } = null!;
     public string ConnectionString => database.ConnectionString;
     internal DbConnection CreateConnection() => database.CreateConnection();
     internal DbContextOptions<IntegriosDbContext> CreateOptions() => database.CreateOptions();
@@ -275,14 +274,11 @@ public sealed class PostgresApiFixture : IAsyncLifetime
         return (await connection.ExecuteScalarAsync<T>(sql, parameters))!;
     }
 
-    private WebApplicationFactory<IngestionHost::Program> BuildWebFactory() =>
-        new WebApplicationFactory<IngestionHost::Program>().WithWebHostBuilder(builder =>
-        {
-            builder.UseSetting("Database:Provider", database.Provider);
-            builder.UseSetting($"ConnectionStrings:{database.ConnectionName}", database.ConnectionString);
-            builder.ConfigureAppConfiguration((_, config) =>
-                config.AddConfiguration(database.Configuration));
-        });
+    private TestHostBuilder BuildWebFactory() =>
+        new TestHostBuilder(IngestionHost.CreateBuilder, IngestionHost.ConfigurePipeline)
+            .WithSetting("Database:Provider", database.Provider)
+            .WithSetting($"ConnectionStrings:{database.ConnectionName}", database.ConnectionString)
+            .WithSettings(database.Configuration);
 
     private static string Hash(string token) => "sha256:" + Convert.ToHexString(
         SHA256.HashData(Encoding.UTF8.GetBytes(token))).ToLowerInvariant();

@@ -120,7 +120,7 @@ need an interactive terminal. How you reach one depends on the deployment:
 | Deployment | Run a command |
 | --- | --- |
 | Docker Compose | `operator-user <command>` |
-| Source checkout | `dotnet run --project src/Integrios.Admin -- operator-user <command>` |
+| Source checkout | `cd src/Integrios.Admin && dotnet run --project ../Integrios -- admin operator-user <command>` |
 | Azure Container Apps | `az containerapp exec -g <resource-group> -n <prefix>-admin --command "/bin/sh"`, then `/app/integrios admin operator-user <command>` in that shell |
 
 On Azure Container Apps, the Admin app must have an active revision. Open a shell rather than

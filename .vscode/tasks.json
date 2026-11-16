@@ -16,32 +16,12 @@
       }
     },
     {
-      "label": "build-ingestion",
+      "label": "build-integrios",
       "command": "dotnet",
       "type": "process",
       "args": [
         "build",
-        "${workspaceFolder}/src/Integrios.Ingestion/Integrios.Ingestion.csproj"
-      ],
-      "problemMatcher": "$msCompile"
-    },
-    {
-      "label": "build-admin",
-      "command": "dotnet",
-      "type": "process",
-      "args": [
-        "build",
-        "${workspaceFolder}/src/Integrios.Admin/Integrios.Admin.csproj"
-      ],
-      "problemMatcher": "$msCompile"
-    },
-    {
-      "label": "build-worker",
-      "command": "dotnet",
-      "type": "process",
-      "args": [
-        "build",
-        "${workspaceFolder}/src/Integrios.Worker/Integrios.Worker.csproj"
+        "${workspaceFolder}/src/Integrios/Integrios.csproj"
       ],
       "problemMatcher": "$msCompile"
     },

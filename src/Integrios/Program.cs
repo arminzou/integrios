@@ -1,1 +1,1 @@
-return await Integrios.RoleDispatch.RunAsync(args, Console.Error);
+return await Integrios.HostSelector.RunAsync(args, Console.Error);

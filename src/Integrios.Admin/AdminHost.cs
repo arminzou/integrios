@@ -12,7 +12,7 @@ using Integrios.Infrastructure.Telemetry;
 
 namespace Integrios.Admin;
 
-public static class AdminRole
+public static class AdminHost
 {
     public const string Name = "admin";
     public const int DefaultOperationalPort = 5151;
@@ -27,10 +27,18 @@ public static class AdminRole
             return await OperatorUserCli.RunAsync(args);
         if (args is ["database", ..])
             return await DatabaseCli.RunAsync(args);
+        if (args is ["openapi", ..])
+            return await OpenApiCli.RunAsync(args);
 
         (WebApplicationBuilder builder, int operationalPort) = CreateBuilder(args);
         var app = builder.Build();
+        ConfigurePipeline(app, operationalPort);
+        await app.RunAsync();
+        return 0;
+    }
 
+    public static void ConfigurePipeline(WebApplication app, int operationalPort)
+    {
         app.UseRouting();
         app.UseOperationalEndpointIsolation(operationalPort);
         app.UseRequestCompletionLogging();
@@ -48,18 +56,15 @@ public static class AdminRole
         app.MapOperatorSessionEndpoints();
 
         var admin = app.MapGroup("/admin").RequireAuthorization(OperatorAuthentication.PolicyName);
-        admin.MapEndpoints(typeof(AdminRole).Assembly);
+        admin.MapEndpoints(typeof(AdminHost).Assembly);
 
         app.MapOperationalEndpoints();
         app.MapDashboard();
-
-        await app.RunAsync();
-        return 0;
     }
 
     public static (WebApplicationBuilder Builder, int OperationalPort) CreateBuilder(string[] args)
     {
-        var builder = ServiceHosting.CreateBuilder(args, Name, typeof(AdminRole).Assembly.GetName().Name!);
+        var builder = ServiceHosting.CreateBuilder(args, Name, typeof(AdminHost).Assembly.GetName().Name!);
         builder.Logging.AddOperationalConsoleLogging(builder.Environment.IsDevelopment());
         int operationalPort = builder.AddOperationalEndpoints(DefaultOperationalPort);
 

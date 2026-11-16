@@ -1,5 +1,3 @@
-extern alias IngestionHost;
-
 using System.Net;
 
 namespace Integrios.FunctionalTests.Ingestion;

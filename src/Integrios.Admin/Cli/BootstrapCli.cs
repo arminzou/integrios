@@ -25,7 +25,7 @@ public static class BootstrapCli
         }
 
         HostApplicationBuilder hostBuilder = Host.CreateApplicationBuilder();
-        hostBuilder.AddRoleSettingsFiles(AdminRole.Name);
+        hostBuilder.AddRoleSettingsFiles(AdminHost.Name);
         hostBuilder.Services.AddAdminApplicationServices();
         hostBuilder.Services.AddAdminInfrastructureServices(hostBuilder.Configuration);
 

@@ -8,9 +8,7 @@ using Integrios.Infrastructure.Hosting;
 using Integrios.Tests.Shared;
 using MediatR;
 using Microsoft.AspNetCore.DataProtection;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -33,20 +31,20 @@ public sealed class OperatorSessionFixture : IAsyncLifetime
     private Respawner respawner = null!;
 
     internal MockOidcProvider Provider => provider;
-    public WebApplicationFactory<Program> AliceHost { get; private set; } = null!;
-    public WebApplicationFactory<Program> BobHost { get; private set; } = null!;
-    public WebApplicationFactory<Program> PasswordHost { get; private set; } = null!;
-    public WebApplicationFactory<Program> PasswordReplica { get; private set; } = null!;
-    public WebApplicationFactory<Program> BothHost { get; private set; } = null!;
+    public TestHostBuilder AliceHost { get; private set; } = null!;
+    public TestHostBuilder BobHost { get; private set; } = null!;
+    public TestHostBuilder PasswordHost { get; private set; } = null!;
+    public TestHostBuilder PasswordReplica { get; private set; } = null!;
+    public TestHostBuilder BothHost { get; private set; } = null!;
 
     /// A second host on the same issuer and the same Data Protection key ring, standing in for a
     /// second Admin replica behind one address.
-    public WebApplicationFactory<Program> AliceReplica { get; private set; } = null!;
+    public TestHostBuilder AliceReplica { get; private set; } = null!;
 
     /// A password host whose configured key ring differs from every other host's. Both hosts share
     /// a process and content root, so without honoring the configured path they would fall back to
     /// the same default key store and the replica tests could not tell the difference.
-    public WebApplicationFactory<Program> PasswordOtherKeyRing { get; private set; } = null!;
+    public TestHostBuilder PasswordOtherKeyRing { get; private set; } = null!;
 
     public TimeSpan ConfiguredLifetime => TimeSpan.FromHours(8);
 
@@ -130,32 +128,33 @@ public sealed class OperatorSessionFixture : IAsyncLifetime
         return await services.GetRequiredService<ISender>().Send(request);
     }
 
-    private WebApplicationFactory<Program> BuildHost(
+    private TestHostBuilder BuildHost(
         string? issuerId,
         bool passwordEnabled,
-        string? keyRing = null) =>
-        new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
-        {
-            builder.UseSetting("Database:Provider", database.Provider);
-            builder.UseSetting($"ConnectionStrings:{database.ConnectionName}", database.ConnectionString);
-            builder.UseSetting(AdminDataProtection.KeyRingPathKey, keyRing ?? keyRingPath);
-            if (issuerId is not null)
-            {
-                builder.UseSetting(OperatorOidcOptions.AuthorityKey, provider.Authority(issuerId));
-                builder.UseSetting(OperatorOidcOptions.SectionKey + ":ClientId", MockOidcProvider.ClientId);
-                builder.UseSetting(OperatorOidcOptions.SectionKey + ":ClientSecret", MockOidcProvider.ClientSecret);
-                builder.UseSetting(OperatorOidcOptions.SectionKey + ":DisplayName", "Test SSO");
-            }
+        string? keyRing = null)
+    {
+        TestHostBuilder host = new TestHostBuilder(AdminHost.CreateBuilder, AdminHost.ConfigurePipeline)
+            .WithSetting("Database:Provider", database.Provider)
+            .WithSetting($"ConnectionStrings:{database.ConnectionName}", database.ConnectionString)
+            .WithSetting(AdminDataProtection.KeyRingPathKey, keyRing ?? keyRingPath)
             // The containerized provider is reached over plain HTTP inside the test network only.
-            builder.UseSetting(OperatorOidcOptions.SectionKey + ":RequireHttpsMetadata", "false");
-            builder.UseSetting(OperatorPasswordOptions.EnabledKey, passwordEnabled.ToString());
-            builder.UseSetting(OperatorSessionOptions.LifetimeKey, "08:00:00");
-            builder.ConfigureAppConfiguration((_, config) => config.AddConfiguration(database.Configuration));
-            builder.ConfigureServices(services =>
+            .WithSetting(OperatorOidcOptions.SectionKey + ":RequireHttpsMetadata", "false")
+            .WithSetting(OperatorPasswordOptions.EnabledKey, passwordEnabled.ToString())
+            .WithSetting(OperatorSessionOptions.LifetimeKey, "08:00:00")
+            .WithSettings(database.Configuration)
+            .WithServices(services =>
             {
                 services.RemoveAll<PublicIngestionBaseUri>();
                 services.AddSingleton(PublicIngestionBaseUri.Parse(
                     "https://ingestion.example.test/proxy/integrios", allowHttp: false));
             });
-        });
+        if (issuerId is null)
+            return host;
+
+        return host
+            .WithSetting(OperatorOidcOptions.AuthorityKey, provider.Authority(issuerId))
+            .WithSetting(OperatorOidcOptions.SectionKey + ":ClientId", MockOidcProvider.ClientId)
+            .WithSetting(OperatorOidcOptions.SectionKey + ":ClientSecret", MockOidcProvider.ClientSecret)
+            .WithSetting(OperatorOidcOptions.SectionKey + ":DisplayName", "Test SSO");
+    }
 }

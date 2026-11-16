@@ -4,9 +4,7 @@ using Integrios.Application.Transforms;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
 using Integrios.Domain.ValueObjects;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Extensions.Configuration;
+using Integrios.Tests.Shared;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Integrios.Ingestion.UnitTests;
@@ -27,13 +25,23 @@ public sealed class IngestionApiFixture : IDisposable
     public StubSourceEndpointResolver SourceEndpointResolver { get; } = new();
     public StubBrokerSourceReader BrokerSourceReader { get; } = new();
     public StubTenantApiKeyUseRecorder TenantApiKeyUse { get; } = new();
-    public WebApplicationFactory<Program> Factory { get; }
+    public TestHostBuilder Factory { get; }
 
     public IngestionApiFixture()
     {
-        Factory = new CustomApiFactory(
-            TenantApiKeyRepository, EventAcceptance, EventLookup, EventApiSourceResolver, SourceEndpointResolver,
-            BrokerSourceReader, TenantApiKeyUse);
+        Factory = new TestHostBuilder(IngestionHost.CreateBuilder, IngestionHost.ConfigurePipeline)
+            .WithSetting("ConnectionStrings:Postgres", "Host=localhost;Database=test;Username=test;Password=test")
+            .WithSetting($"SourceSecrets:{WebhookTenantSlug}:{WebhookSecretReference}", WebhookSecretValue)
+            .WithServices(services =>
+            {
+                services.AddSingleton<IActiveTenantApiKeyLookup>(TenantApiKeyRepository);
+                services.AddSingleton<IEventAcceptance>(EventAcceptance);
+                services.AddSingleton<ITenantEventLookup>(EventLookup);
+                services.AddSingleton<IEventApiSourceResolver>(EventApiSourceResolver);
+                services.AddSingleton<ISourceEndpointResolver>(SourceEndpointResolver);
+                services.AddSingleton<IBrokerSourceReader>(BrokerSourceReader);
+                services.AddSingleton<ITenantApiKeyUseRecorder>(TenantApiKeyUse);
+            });
     }
 
     public void Reset()
@@ -55,39 +63,6 @@ public sealed class IngestionApiFixture : IDisposable
     public void Dispose()
     {
         Factory.Dispose();
-    }
-}
-
-internal sealed class CustomApiFactory(
-    StubActiveTenantApiKeyLookup tenantApiKeyRepository,
-    StubEventAcceptance eventAcceptance,
-    StubTenantEventLookup eventLookup,
-    StubEventApiSourceResolver eventApiSourceResolver,
-    StubSourceEndpointResolver sourceEndpointResolver,
-    StubBrokerSourceReader BrokerSourceReader,
-    StubTenantApiKeyUseRecorder tenantApiKeyUseRecorder) : WebApplicationFactory<Program>
-{
-    protected override void ConfigureWebHost(IWebHostBuilder builder)
-    {
-        builder.ConfigureAppConfiguration((_, config) =>
-            config.AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["ConnectionStrings:Postgres"] =
-                    "Host=localhost;Database=test;Username=test;Password=test",
-                [$"SourceSecrets:{IngestionApiFixture.WebhookTenantSlug}:{IngestionApiFixture.WebhookSecretReference}"] =
-                    IngestionApiFixture.WebhookSecretValue
-            }));
-
-        builder.ConfigureServices(services =>
-        {
-            services.AddSingleton<IActiveTenantApiKeyLookup>(tenantApiKeyRepository);
-            services.AddSingleton<IEventAcceptance>(eventAcceptance);
-            services.AddSingleton<ITenantEventLookup>(eventLookup);
-            services.AddSingleton<IEventApiSourceResolver>(eventApiSourceResolver);
-            services.AddSingleton<ISourceEndpointResolver>(sourceEndpointResolver);
-            services.AddSingleton<IBrokerSourceReader>(BrokerSourceReader);
-            services.AddSingleton<ITenantApiKeyUseRecorder>(tenantApiKeyUseRecorder);
-        });
     }
 }
 

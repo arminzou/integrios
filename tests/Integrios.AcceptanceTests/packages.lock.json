@@ -238,6 +238,16 @@
           "Microsoft.IdentityModel.Protocols.OpenIdConnect": "8.19.2"
         }
       },
+      "Microsoft.AspNetCore.Mvc.Testing": {
+        "type": "Transitive",
+        "resolved": "10.0.14",
+        "contentHash": "l3eFye4Bv4oGT1Ag8pFtZ6WM0LhR9PkNiDH1AYitZW2LAaFWl1FgF4Dj7wY4Fp/BqCZ4LLkBGLw+NE/CA5k6mQ==",
+        "dependencies": {
+          "Microsoft.AspNetCore.TestHost": "10.0.14",
+          "Microsoft.Extensions.DependencyModel": "10.0.14",
+          "Microsoft.Extensions.Hosting": "10.0.14"
+        }
+      },
       "Microsoft.AspNetCore.OpenApi": {
         "type": "Transitive",
         "resolved": "10.0.14",
@@ -245,6 +255,11 @@
         "dependencies": {
           "Microsoft.OpenApi": "[2.12.2, 3.0.0)"
         }
+      },
+      "Microsoft.AspNetCore.TestHost": {
+        "type": "Transitive",
+        "resolved": "10.0.14",
+        "contentHash": "u4AX1M5Uzmw7V3NCdJJO4ITwH0DDDufyzmVlksE4QguVd23Co8adaREMp2VahlRB5f/rmtaFYVJIA1iIFnchmQ=="
       },
       "Microsoft.Azure.Amqp": {
         "type": "Transitive",
@@ -444,6 +459,11 @@
         "type": "Transitive",
         "resolved": "10.0.14",
         "contentHash": "QtpQzuSZVyTPCuHW058yCs9Nj0394uUkNyFHS813nOmK9UgUdBdaprJ5PPsBgsQIpxADTsTkbaMMonykem6qdw=="
+      },
+      "Microsoft.Extensions.DependencyModel": {
+        "type": "Transitive",
+        "resolved": "10.0.14",
+        "contentHash": "N8OcqM0370wSXMJ3ZxO66rSElHrIgxvpfUn0vV7zRj7NvKo0nfwgEoTmC3Yz3860o60IaQ4KIPyeLIGX9EeNWA=="
       },
       "Microsoft.Extensions.Diagnostics": {
         "type": "Transitive",
@@ -991,6 +1011,14 @@
           "xunit.extensibility.core": "[2.9.3]"
         }
       },
+      "integrios": {
+        "type": "Project",
+        "dependencies": {
+          "Integrios.Admin": "[0.11.0, )",
+          "Integrios.Ingestion": "[0.11.0, )",
+          "Integrios.Worker": "[0.11.0, )"
+        }
+      },
       "integrios.admin": {
         "type": "Project",
         "dependencies": {
@@ -1043,6 +1071,16 @@
           "System.Security.Cryptography.Pkcs": "[9.0.22, )"
         }
       },
+      "integrios.ingestion": {
+        "type": "Project",
+        "dependencies": {
+          "Integrios.Application": "[0.11.0, )",
+          "Integrios.Domain": "[0.11.0, )",
+          "Integrios.Infrastructure": "[0.11.0, )",
+          "Microsoft.AspNetCore.OpenApi": "[10.0.14, )",
+          "Microsoft.OpenApi": "[2.13.0, )"
+        }
+      },
       "integrios.migrations.postgres": {
         "type": "Project",
         "dependencies": {
@@ -1061,7 +1099,16 @@
         "type": "Project",
         "dependencies": {
           "Integrios.Application": "[0.11.0, )",
-          "Integrios.Domain": "[0.11.0, )"
+          "Integrios.Domain": "[0.11.0, )",
+          "Microsoft.AspNetCore.Mvc.Testing": "[10.0.14, )"
+        }
+      },
+      "integrios.worker": {
+        "type": "Project",
+        "dependencies": {
+          "Integrios.Application": "[0.11.0, )",
+          "Integrios.Domain": "[0.11.0, )",
+          "Integrios.Infrastructure": "[0.11.0, )"
         }
       }
     }

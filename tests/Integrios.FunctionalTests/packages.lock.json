@@ -1124,7 +1124,8 @@
         "type": "Project",
         "dependencies": {
           "Integrios.Application": "[0.11.0, )",
-          "Integrios.Domain": "[0.11.0, )"
+          "Integrios.Domain": "[0.11.0, )",
+          "Microsoft.AspNetCore.Mvc.Testing": "[10.0.14, )"
         }
       }
     }

@@ -5,9 +5,9 @@
       "name": "Ingestion",
       "type": "coreclr",
       "request": "launch",
-      "preLaunchTask": "build-ingestion",
-      "program": "${workspaceFolder}/src/Integrios.Ingestion/bin/Debug/net10.0/Integrios.Ingestion.dll",
-      "args": [],
+      "preLaunchTask": "build-integrios",
+      "program": "${workspaceFolder}/src/Integrios/bin/Debug/net10.0/integrios.dll",
+      "args": ["ingestion"],
       "cwd": "${workspaceFolder}/src/Integrios.Ingestion",
       "env": {
         "ASPNETCORE_ENVIRONMENT": "Development",
@@ -19,9 +19,9 @@
       "name": "Admin",
       "type": "coreclr",
       "request": "launch",
-      "preLaunchTask": "build-admin",
-      "program": "${workspaceFolder}/src/Integrios.Admin/bin/Debug/net10.0/Integrios.Admin.dll",
-      "args": [],
+      "preLaunchTask": "build-integrios",
+      "program": "${workspaceFolder}/src/Integrios/bin/Debug/net10.0/integrios.dll",
+      "args": ["admin"],
       "cwd": "${workspaceFolder}/src/Integrios.Admin",
       "env": {
         "ASPNETCORE_ENVIRONMENT": "Development",
@@ -33,9 +33,9 @@
       "name": "Worker",
       "type": "coreclr",
       "request": "launch",
-      "preLaunchTask": "build-worker",
-      "program": "${workspaceFolder}/src/Integrios.Worker/bin/Debug/net10.0/Integrios.Worker.dll",
-      "args": [],
+      "preLaunchTask": "build-integrios",
+      "program": "${workspaceFolder}/src/Integrios/bin/Debug/net10.0/integrios.dll",
+      "args": ["worker"],
       "cwd": "${workspaceFolder}/src/Integrios.Worker",
       "env": {
         "DOTNET_ENVIRONMENT": "Development"
