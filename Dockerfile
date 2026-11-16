@@ -1,7 +1,7 @@
 # Base image tags stay literal rather than build arguments: the release evidence step resolves
 # external image digests by reading FROM lines out of this file and skips anything containing a
 # variable reference, so parameterizing them would silently drop both bases from that record.
-FROM node:22.22.0-bookworm-slim AS node
+FROM node:22.23.5-bookworm-slim AS node
 FROM mcr.microsoft.com/dotnet/sdk:10.0.404 AS build
 WORKDIR /src
 COPY Integrios.slnx .
