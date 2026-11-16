@@ -121,6 +121,20 @@ services:
     ports:
       - "${INTEGRIOS_WORKER_METRICS_PORT:-5299}:5299"
 
+  delivery-api:
+    <<: *integrios-image
+    entrypoint: ["/app/integrios", "delivery-api"]
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+    environment:
+      ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=data_runtime;Password=${INTEGRIOS_DATA_RUNTIME_PASSWORD:-data_runtime_dev}
+      DOTNET_ENVIRONMENT: Development
+    # Subscribers on this machine only; set INTEGRIOS_DELIVERY_API_BIND=0.0.0.0 to accept remote ones.
+    ports:
+      - "${INTEGRIOS_DELIVERY_API_BIND:-127.0.0.1}:${INTEGRIOS_DELIVERY_API_PORT:-5241}:8080"
+      - "${INTEGRIOS_DELIVERY_API_OPERATIONAL_PORT:-5242}:5299"
+
   mocksink:
     image: wiremock/wiremock:3.13.1
     command: ["--global-response-templating"]

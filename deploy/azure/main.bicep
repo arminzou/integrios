@@ -25,6 +25,8 @@ param operatorKeySecret string
 @minLength(1)
 param adminAllowedCidrs array
 param ingestionExternal bool = true
+// Internal by default: only apps in the environment reach Delivery API. Set true for remote Subscribers.
+param deliveryApiExternal bool = false
 param adminPasswordEnabled bool = true
 
 @description('Optional OpenID Connect issuer for Operator dashboard sign-in, for example https://login.microsoftonline.com/<tenant-id>/v2.0.')
@@ -116,11 +118,15 @@ var ingestionCollectorContainer = union(collectorContainer, {
 var workerCollectorContainer = union(collectorContainer, {
   env: concat(collectorContainer.env, [{ name: 'AZURE_CLIENT_ID', value: workerIdentity.properties.clientId }])
 })
+var deliveryApiCollectorContainer = union(collectorContainer, {
+  env: concat(collectorContainer.env, [{ name: 'AZURE_CLIENT_ID', value: deliveryApiIdentity.properties.clientId }])
+})
 
 var appNames = {
   admin: '${namePrefix}-admin'
   ingestion: '${namePrefix}-ingestion'
   worker: '${namePrefix}-worker'
+  deliveryApi: '${namePrefix}-delivery-api'
 }
 var jobNames = {
   migrate: '${namePrefix}-migrate'
@@ -159,6 +165,7 @@ var databaseServerFqdn = useSqlServer ? sqlServer!.properties.fullyQualifiedDoma
 var adminDatabaseEnvironment = databaseEnvironment(databaseProvider, databaseServerFqdn, adminIdentity.name, adminIdentity.properties.clientId)
 var ingestionDatabaseEnvironment = databaseEnvironment(databaseProvider, databaseServerFqdn, ingestionIdentity.name, ingestionIdentity.properties.clientId)
 var workerDatabaseEnvironment = databaseEnvironment(databaseProvider, databaseServerFqdn, workerIdentity.name, workerIdentity.properties.clientId)
+var deliveryApiDatabaseEnvironment = databaseEnvironment(databaseProvider, databaseServerFqdn, deliveryApiIdentity.name, deliveryApiIdentity.properties.clientId)
 var migrateDatabaseEnvironment = databaseEnvironment(databaseProvider, databaseServerFqdn, migrateIdentity.name, migrateIdentity.properties.clientId)
 var bootstrapDatabaseEnvironment = databaseEnvironment(databaseProvider, databaseServerFqdn, bootstrapIdentity.name, bootstrapIdentity.properties.clientId)
 // Worker and the secret-validation job share Worker's identity and its Destination-secret vault.
@@ -599,6 +606,10 @@ resource workerIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-0
   name: 'id-${namePrefix}-worker'
   location: location
 }
+resource deliveryApiIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
+  name: 'id-${namePrefix}-delivery-api'
+  location: location
+}
 resource migrateIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
   name: 'id-${namePrefix}-migrate'
   location: location
@@ -617,6 +628,7 @@ module acrPull 'acr-pull.bicep' = {
       adminIdentity.properties.principalId
       ingestionIdentity.properties.principalId
       workerIdentity.properties.principalId
+      deliveryApiIdentity.properties.principalId
       migrateIdentity.properties.principalId
       bootstrapIdentity.properties.principalId
     ]
@@ -790,6 +802,45 @@ resource worker 'Microsoft.App/containerApps@2025-07-01' = {
   dependsOn: [acrPull, workerDestinationSecrets]
 }
 
+// Reads no Tenant secrets, so it has no vault access.
+resource deliveryApi 'Microsoft.App/containerApps@2025-07-01' = {
+  name: appNames.deliveryApi
+  location: location
+  identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: { '${deliveryApiIdentity.id}': {} }
+  }
+  properties: {
+    managedEnvironmentId: environment.id
+    configuration: {
+      activeRevisionsMode: 'Single'
+      ingress: {
+        external: deliveryApiExternal
+        targetPort: 8080
+        transport: 'http'
+        allowInsecure: false
+      }
+      registries: [{ server: registryServer, identity: deliveryApiIdentity.id }]
+      secrets: []
+    }
+    template: {
+      containers: [{
+        name: 'delivery-api'
+        image: image
+        args: ['delivery-api']
+        env: concat(deliveryApiDatabaseEnvironment, telemetryEnvironment)
+        resources: { cpu: json('0.5'), memory: '1Gi' }
+        probes: [
+          { type: 'Liveness', httpGet: { path: '/health', port: 5299, scheme: 'HTTP' }, initialDelaySeconds: 10, periodSeconds: 30 }
+          { type: 'Readiness', httpGet: { path: '/ready', port: 5299, scheme: 'HTTP' }, initialDelaySeconds: 10, periodSeconds: 10 }
+        ]
+      }, deliveryApiCollectorContainer]
+      scale: { minReplicas: runtimeReplicaCount, maxReplicas: max(runtimeReplicaCount, 1) }
+    }
+  }
+  dependsOn: [acrPull]
+}
+
 resource migrateJob 'Microsoft.App/jobs@2025-07-01' = {
   name: jobNames.migrate
   location: location
@@ -853,6 +904,10 @@ resource grantRuntimeJob 'Microsoft.App/jobs@2025-07-01' = {
           { name: 'Database__RuntimePrincipals__3__Scope', value: 'data-plane' }
           { name: 'Database__RuntimePrincipals__3__EntraClientId', value: workerIdentity.properties.clientId }
           { name: 'Database__RuntimePrincipals__3__EntraObjectId', value: workerIdentity.properties.principalId }
+          { name: 'Database__RuntimePrincipals__4__Name', value: deliveryApiIdentity.name }
+          { name: 'Database__RuntimePrincipals__4__Scope', value: 'data-plane' }
+          { name: 'Database__RuntimePrincipals__4__EntraClientId', value: deliveryApiIdentity.properties.clientId }
+          { name: 'Database__RuntimePrincipals__4__EntraObjectId', value: deliveryApiIdentity.properties.principalId }
         ])
         resources: { cpu: json('0.5'), memory: '1Gi' }
       }]
@@ -927,6 +982,7 @@ module telemetryPublisher 'telemetry-publisher.bicep' = {
       adminIdentity.properties.principalId
       ingestionIdentity.properties.principalId
       workerIdentity.properties.principalId
+      deliveryApiIdentity.properties.principalId
     ]
   }
 }
@@ -940,6 +996,7 @@ output adminOidcRedirectUris object = {
   signedOut: 'https://${admin.properties.configuration.ingress.fqdn}/auth/signed-out'
 }
 output ingestionFqdn string = ingestion.properties.configuration.ingress.fqdn
+output deliveryApiFqdn string = deliveryApi.properties.configuration.ingress.fqdn
 output deploymentSettingsVault string = vault.name
 output secretVaults object = {
   source: sourceSecretsVault.name

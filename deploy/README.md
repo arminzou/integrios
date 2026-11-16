@@ -23,8 +23,8 @@ docker compose run --rm admin operator-user create \
 Set `INTEGRIOS_ADMIN_RUNTIME_PASSWORD` and `INTEGRIOS_DATA_RUNTIME_PASSWORD` in `.env` to strong,
 unique values. Startup order is enforced by `depends_on`: `postgres` becomes healthy, `migrate`
 runs EF Core migrations as the database owner, `grant-runtime` creates or updates the two runtime
-principals, `bootstrap` runs as the control-plane principal, then `ingestion`, `admin`, and `worker`
-start with their matching scope. Existing volumes are upgraded in place; no principal is dropped.
+principals, `bootstrap` runs as the control-plane principal, then `ingestion`, `admin`, `worker`,
+and `delivery-api` start with their matching scope. Existing volumes are upgraded in place; no principal is dropped.
 
 `operator-user create` prompts for a masked, confirmed password and creates an Operator account;
 run it again for each person who needs one. For an OIDC-only or API-only deployment, explicitly set
@@ -44,7 +44,7 @@ global_operator_key:<secret>
 ```
 
 Admin and Bootstrap use the `control-plane` database scope, which includes Operator-authentication
-tables. Ingestion and Worker use the `data-plane` scope, which excludes those tables. Both scopes
+tables. Ingestion, Worker, and Delivery API use the `data-plane` scope, which excludes those tables. Both scopes
 allow ordinary row access to the other application tables; this is a database boundary, not a
 per-table Worker read-only grant.
 
@@ -204,7 +204,8 @@ the application services start.
 ## Using a managed Postgres
 
 Remove the `postgres` service from `compose.yml`, then point `ConnectionStrings__Postgres` in
-`migrate`, `grant-runtime`, `bootstrap`, `ingestion`, `admin`, and `worker` at your database. Keep
+`migrate`, `grant-runtime`, `bootstrap`, `ingestion`, `admin`, `worker`, and `delivery-api` at your
+database. Keep
 the migration connection on the schema owner. Configure both `Database__RuntimePrincipals` entries
 on `grant-runtime` with unique Password values or existing-principal grant-only mode; never put
 secret values in command-line configuration.
@@ -212,7 +213,7 @@ secret values in command-line configuration.
 ## Using SQL Server 2022+
 
 Use an externally managed SQL Server 2022 or later, remove the bundled `postgres` service. On
-`migrate`, `grant-runtime`, `bootstrap`, `ingestion`, `admin`, and `worker`, replace the
+`migrate`, `grant-runtime`, `bootstrap`, `ingestion`, `admin`, `worker`, and `delivery-api`, replace the
 PostgreSQL connection setting with:
 
 ```yaml
@@ -229,7 +230,7 @@ see [Database backends](../docs/database-backends.md) for the queue-locking poli
 
 ## Running without containers
 
-Ingestion, Admin, and Worker can each run as an operating-system service from one
+Ingestion, Admin, Worker, and Delivery API can each run as an operating-system service from one
 `dotnet publish src/Integrios` output, whose `integrios` executable starts the role named by its
 first argument. Each host reports start, stop, and readiness to its service manager, and does
 nothing different when started from a terminal or in a container. The publish does not include the
@@ -242,7 +243,9 @@ provenance with `gh attestation verify integrios-<version>-win-x64.zip --repo <o
 
 Give each host its own ports, as the [Ports](#ports) table does. Each role's `OperationalPort`
 already defaults to its port there. Set `ASPNETCORE_URLS` on Ingestion and Admin: both default to
-`http://localhost:5000`, so without it only the first of the two starts. The operational
+`http://localhost:5000`, so without it only the first of the two starts. Delivery API listens on
+`http://localhost:5241`, so only Subscribers on the same server reach it; set `ASPNETCORE_URLS`
+such as `http://0.0.0.0:5241` to accept remote Subscribers. The operational
 port listens on every interface, as a container needs; on a server, allow it through the firewall
 only for the local monitoring agent, because it serves `/health`, `/ready`, and metrics without
 authentication.
@@ -283,9 +286,11 @@ works the same in every deployment.
 | admin   | 5150 | Tenant and config management (control plane) |
 | admin   | 5151 (loopback only) | Operational: `/health`, `/ready`, metrics |
 | worker  | 5299 (loopback only) | Operational: `/health`, `/ready`, metrics |
+| delivery-api | 5241 (loopback only by default) | Pull Subscriber API (data plane); set `INTEGRIOS_DELIVERY_API_BIND=0.0.0.0` for remote Subscribers |
+| delivery-api | 5242 (loopback only) | Operational: `/health`, `/ready`, metrics |
 
 The worker exposes no product HTTP port — only its operational listener. Every operational port is
 bound to `127.0.0.1`, not the container's external interface; override the host-side port with
-`INTEGRIOS_INGESTION_OPERATIONAL_PORT`, `INTEGRIOS_ADMIN_OPERATIONAL_PORT`, or
-`INTEGRIOS_WORKER_METRICS_PORT` in `.env`. See [Observability](../docs/observability.md) for what
+`INTEGRIOS_INGESTION_OPERATIONAL_PORT`, `INTEGRIOS_ADMIN_OPERATIONAL_PORT`,
+`INTEGRIOS_WORKER_METRICS_PORT`, or `INTEGRIOS_DELIVERY_API_OPERATIONAL_PORT` in `.env`. See [Observability](../docs/observability.md) for what
 each operational endpoint returns.

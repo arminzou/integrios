@@ -87,7 +87,8 @@ processing starts.
 
 Delivery API settles pull deliveries with the same lease, retry, and dead-letter settings as the
 Worker, so set `Integrios:Delivery:LeaseDuration` and the `Integrios:Delivery:Retry` keys to the
-same values for both roles. Invalid values stop Delivery API startup and never affect the Worker.
+same values for both roles. An invalid `MaxAttemptDuration` stops only Delivery API startup;
+the Worker does not read this setting.
 
 | Configuration key | Environment variable | Default | Constraint |
 |---|---|---|---|

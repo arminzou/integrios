@@ -31,6 +31,7 @@ make up
 cd src/Integrios.Ingestion && dotnet run --project ../Integrios --launch-profile ingestion
 cd src/Integrios.Admin && dotnet run --project ../Integrios --launch-profile admin
 cd src/Integrios.Worker && dotnet run --project ../Integrios --launch-profile worker
+cd src/Integrios.DeliveryApi && dotnet run --project ../Integrios --launch-profile delivery-api
 
 # Apply C# formatting (per .editorconfig)
 dotnet format Integrios.slnx
@@ -48,14 +49,16 @@ walkthrough, and the [docs site guide](docs/ci-cd.md) to preview the public docu
 
 - `Integrios.slnx` is the solution entry point.
 - `src/Integrios` is the `integrios` executable that starts any role: `integrios ingestion`,
-  `integrios admin`, or `integrios worker`. It is the only executable; the three projects below are
-  host libraries it references, one per role.
+  `integrios admin`, `integrios worker`, or `integrios delivery-api`. It is the only executable; the
+  four projects below are host libraries it references, one per role.
 - `src/Integrios.Ingestion` owns intake, Tenant authentication, and the durable acceptance boundary.
   Data plane, port 5231.
 - `src/Integrios.Admin` owns Tenant management; Connector, Source, and Destination authoring; Topic
   and Subscription management; and it serves the Operator dashboard. Control plane, port 5150.
 - `src/Integrios.Worker` owns outbox polling, fanout to Subscriptions, delivery, and retry and
   dead-letter behavior.
+- `src/Integrios.DeliveryApi` owns pull delivery: Subscribers claim and settle deliveries for a
+  pull Destination through it. Data plane, port 5241, loopback only by default.
 - `src/Integrios.Application` holds the use cases: commands, queries, their handlers, and the ports
   they need, grouped by responsibility (such as `Authoring`, `Ingestion`, `Delivery`) and then by
   capability.

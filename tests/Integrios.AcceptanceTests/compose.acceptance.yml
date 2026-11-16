@@ -56,6 +56,12 @@ services:
       Integrios__Worker__FanoutLoop__IdlePollInterval: "00:00:00.250"
       Integrios__Worker__DeliveryLoop__IdlePollInterval: "00:00:00.250"
       Integrios__Delivery__Retry__BaseDelay: "00:00:02"
+  delivery-api:
+    image: ${INTEGRIOS_IMAGE}
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_RESOURCE_ATTRIBUTES: deployment.environment.name=acceptance
+      OTEL_TRACES_SAMPLER: always_on
   mocksink:
     image: wiremock/wiremock:3.13.1
     command: ["--global-response-templating"]
