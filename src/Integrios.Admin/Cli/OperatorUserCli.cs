@@ -2,6 +2,7 @@ using System.Text;
 using Integrios.Application;
 using Integrios.Application.Identity;
 using Integrios.Infrastructure;
+using Integrios.Infrastructure.Hosting;
 using MediatR;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
@@ -279,6 +280,7 @@ public static class OperatorUserCli
     private static async Task<T> SendAsync<T>(IRequest<T> request)
     {
         HostApplicationBuilder hostBuilder = Host.CreateApplicationBuilder();
+        hostBuilder.AddRoleSettingsFiles(AdminRole.Name);
         hostBuilder.Logging.ClearProviders();
         hostBuilder.Services.AddAdminApplicationServices();
         hostBuilder.Services.AddAdminInfrastructureServices(hostBuilder.Configuration);

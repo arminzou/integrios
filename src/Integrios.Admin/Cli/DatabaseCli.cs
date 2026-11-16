@@ -1,5 +1,6 @@
 using Integrios.Infrastructure;
 using Integrios.Infrastructure.Data;
+using Integrios.Infrastructure.Hosting;
 using Microsoft.Extensions.Hosting;
 
 namespace Integrios.Admin.Cli;
@@ -27,6 +28,7 @@ public static class DatabaseCli
         }
 
         HostApplicationBuilder hostBuilder = Host.CreateApplicationBuilder();
+        hostBuilder.AddRoleSettingsFiles(AdminRole.Name);
         hostBuilder.Services.AddAdminInfrastructureServices(hostBuilder.Configuration);
 
         using IHost host = hostBuilder.Build();

@@ -13,6 +13,9 @@ namespace Integrios.Ingestion;
 
 public static class IngestionRole
 {
+    public const string Name = "ingestion";
+    public const int DefaultOperationalPort = 5232;
+
     public static async Task<int> RunAsync(string[] args)
     {
         bool secretCommand = SourceSecretValidationCli.IsCommand(args);
@@ -57,12 +60,12 @@ public static class IngestionRole
 
     public static (WebApplicationBuilder Builder, int OperationalPort) CreateBuilder(string[] args)
     {
-        var builder = ServiceHosting.CreateBuilder(args, typeof(IngestionRole).Assembly.GetName().Name!);
+        var builder = ServiceHosting.CreateBuilder(args, Name, typeof(IngestionRole).Assembly.GetName().Name!);
         builder.Logging.AddOperationalConsoleLogging(builder.Environment.IsDevelopment());
         bool secretCommand = SourceSecretValidationCli.IsCommand(args);
 
         builder.Configuration.AddSecretConfigurationSources();
-        int operationalPort = builder.AddOperationalEndpoints("OperationalPort");
+        int operationalPort = builder.AddOperationalEndpoints(DefaultOperationalPort);
 
         builder.Services.ConfigureHttpJsonOptions(options =>
             options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower);

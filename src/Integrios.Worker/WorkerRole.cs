@@ -8,6 +8,9 @@ namespace Integrios.Worker;
 
 public static class WorkerRole
 {
+    public const string Name = "worker";
+    public const int DefaultOperationalPort = 5299;
+
     public static async Task<int> RunAsync(string[] args)
     {
         bool secretCommand = SecretValidationCli.IsCommand(args);
@@ -40,12 +43,12 @@ public static class WorkerRole
 
     public static (WebApplicationBuilder Builder, int OperationalPort) CreateBuilder(string[] args)
     {
-        var builder = ServiceHosting.CreateBuilder(args, typeof(WorkerRole).Assembly.GetName().Name!);
+        var builder = ServiceHosting.CreateBuilder(args, Name, typeof(WorkerRole).Assembly.GetName().Name!);
         builder.Logging.AddOperationalConsoleLogging(builder.Environment.IsDevelopment());
         bool secretCommand = SecretValidationCli.IsCommand(args);
 
         builder.Configuration.AddSecretConfigurationSources();
-        int operationalPort = builder.AddOperationalEndpoints("WorkerMetricsPort", operationalOnly: true);
+        int operationalPort = builder.AddOperationalEndpoints(DefaultOperationalPort, operationalOnly: true);
 
         builder.Services.AddWorkerApplicationServices();
         builder.Services.AddWorkerInfrastructureServices(builder.Configuration);
