@@ -159,6 +159,15 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         return (await GetEventDeliveriesAsync(eventId)).ShouldHaveSingleItem().Id;
     }
 
+    public async Task MarkPullTransportAsync(Guid deliveryId)
+    {
+        int updated = await ExecuteAsync(
+            "UPDATE event_deliveries SET transport='pull', http_execution_snapshot=NULL WHERE id=@DeliveryId",
+            new { DeliveryId = deliveryId });
+        if (updated != 1)
+            throw new InvalidOperationException($"Delivery {deliveryId} was not found.");
+    }
+
     public async Task ForceLeaseExpiredAsync(Guid deliveryId)
     {
         int updated = await ExecuteAsync(

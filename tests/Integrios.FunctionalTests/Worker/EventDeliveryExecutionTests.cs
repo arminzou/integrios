@@ -44,6 +44,20 @@ public sealed class EventDeliveryExecutionTests : IClassFixture<WorkerRoutingFix
     }
 
     [Fact]
+    public async Task ClaimNext_NeverClaimsPullDelivery()
+    {
+        Guid deliveryId = await fixture.FanoutSingleDeliveryAsync();
+        await fixture.MarkPullTransportAsync(deliveryId);
+
+        (await fixture.DeliveryQueue.ClaimNextWithRecoveryAsync(CancellationToken.None)).ShouldBeNull();
+
+        EventDeliveryState delivery = await fixture.GetEventDeliveryAsync(deliveryId);
+        delivery.Status.ShouldBe("pending");
+        delivery.LifetimeAttemptCount.ShouldBe(0);
+        (await fixture.GetDeliveryAttemptsAsync(deliveryId)).ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task ClaimNext_CompetingClaimsProduceOneOwnerAndOneAttempt()
     {
         Guid deliveryId = await fixture.FanoutSingleDeliveryAsync();

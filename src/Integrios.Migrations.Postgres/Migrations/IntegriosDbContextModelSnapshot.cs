@@ -19,7 +19,7 @@ namespace Integrios.Migrations.Postgres.Migrations
 #pragma warning disable 612, 618
             modelBuilder
                 .HasAnnotation("Npgsql:CollationDefinition:case_insensitive", "und-u-ks-level2,und-u-ks-level2,icu,False")
-                .HasAnnotation("ProductVersion", "10.0.4")
+                .HasAnnotation("ProductVersion", "10.0.15")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -374,7 +374,7 @@ namespace Integrios.Migrations.Postgres.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("failed_at");
 
-                    b.Property<JsonElement>("HttpExecutionSnapshot")
+                    b.Property<JsonElement?>("HttpExecutionSnapshot")
                         .HasColumnType("jsonb")
                         .HasColumnName("http_execution_snapshot");
 
@@ -417,6 +417,13 @@ namespace Integrios.Migrations.Postgres.Migrations
                         .HasColumnType("text")
                         .HasColumnName("traceparent");
 
+                    b.Property<string>("Transport")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasColumnName("transport")
+                        .HasDefaultValueSql("'http'::text");
+
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -429,7 +436,7 @@ namespace Integrios.Migrations.Postgres.Migrations
                     b.HasAlternateKey("EventId", "SubscriptionId")
                         .HasName("uq_event_deliveries_event_subscription");
 
-                    b.HasIndex(new[] { "Status", "LeaseExpiresAt", "DeliverAfter", "CreatedAt" }, "idx_event_deliveries_claimable")
+                    b.HasIndex(new[] { "Transport", "Status", "LeaseExpiresAt", "DeliverAfter", "CreatedAt" }, "idx_event_deliveries_claimable")
                         .HasFilter("(status = ANY (ARRAY['pending'::text, 'in_flight'::text]))");
 
                     b.HasIndex(new[] { "EventId" }, "idx_event_deliveries_dead_lettered")
@@ -444,6 +451,8 @@ namespace Integrios.Migrations.Postgres.Migrations
                             t.HasCheckConstraint("ck_event_deliveries_attempt_counts_nonnegative", "lifetime_attempt_count >= 0 AND retry_cycle_attempt_count >= 0 AND retry_cycle_attempt_count <= lifetime_attempt_count");
 
                             t.HasCheckConstraint("ck_event_deliveries_lease_state", "((status = 'in_flight' AND active_attempt_id IS NOT NULL AND lease_expires_at IS NOT NULL) OR (status IN ('pending', 'succeeded', 'dead_lettered') AND active_attempt_id IS NULL AND lease_expires_at IS NULL))");
+
+                            t.HasCheckConstraint("ck_event_deliveries_transport_snapshot", "((transport = 'http' AND http_execution_snapshot IS NOT NULL) OR (transport = 'pull' AND http_execution_snapshot IS NULL))");
                         });
                 });
 

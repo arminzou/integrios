@@ -63,7 +63,7 @@ internal sealed class EventDeliveryQueue(
                 JOIN events e ON e.id=sd.event_id
                 JOIN tenants tenant ON tenant.id=e.tenant_id
                 LEFT JOIN topics t ON t.id=e.topic_id
-                WHERE {claimable}
+                WHERE sd.transport=N'http' AND ({claimable})
                 ORDER BY CASE WHEN sd.status=N'in_flight' THEN 0 ELSE 1 END,
                     CASE WHEN sd.lease_expires_at IS NULL THEN 1 ELSE 0 END, sd.lease_expires_at,
                     CASE WHEN sd.deliver_after IS NULL THEN 0 ELSE 1 END, sd.deliver_after,
@@ -94,7 +94,7 @@ internal sealed class EventDeliveryQueue(
                 JOIN events e ON e.id = sd.event_id
                 JOIN tenants tenant ON tenant.id = e.tenant_id
                 LEFT JOIN topics t ON t.id = e.topic_id
-                WHERE {claimable}
+                WHERE sd.transport = 'http' AND ({claimable})
                 ORDER BY CASE WHEN sd.status = 'in_flight' THEN 0 ELSE 1 END,
                     sd.lease_expires_at NULLS LAST, sd.deliver_after NULLS FIRST, sd.created_at, sd.id
                 LIMIT 1 FOR UPDATE OF sd SKIP LOCKED;
