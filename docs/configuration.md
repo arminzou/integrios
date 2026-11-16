@@ -1,8 +1,8 @@
 # Runtime configuration reference
 
-Admin, Ingestion, and Worker use standard .NET configuration. Each role reads `appsettings.json`,
+Admin, Ingestion, Worker, and Delivery API use standard .NET configuration. Each role reads `appsettings.json`,
 then `appsettings.<role>.json`, then `appsettings.<Environment>.json`, then
-`appsettings.<role>.<Environment>.json`, where the role is `ingestion`, `admin`, or `worker`. The
+`appsettings.<role>.<Environment>.json`, where the role is `ingestion`, `admin`, `worker`, or `delivery-api`. The
 repository ships `appsettings.<role>.json` with non-secret defaults where present and
 `appsettings.<role>.Development.json` with local-only values. Environment variables override those
 files, and command-line arguments override both. For a hierarchical key, replace each `:` with `__`:
@@ -20,9 +20,9 @@ runtime keys below; see [the deployment example](https://github.com/arminzou/int
 
 | Configuration key | Environment variable | Reader | Default or required value | Valid values and effect |
 |---|---|---|---|---|
-| `Database:Provider` | `Database__Provider` | All three | `postgres` | `postgres` or `sqlserver` (case-insensitive). Selects the matching connection string. |
-| `OperationalPort` | `OperationalPort` | All three | `5232` Ingestion, `5151` Admin, `5299` Worker; the container image sets `5299` for every role | TCP port 1–65535 for `/health`, `/ready`, and `/metrics`. |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | same | All three | Unset: no trace export | If set, an absolute HTTP(S) URI. Metrics remain available on the operational port. |
+| `Database:Provider` | `Database__Provider` | All four | `postgres` | `postgres` or `sqlserver` (case-insensitive). Selects the matching connection string. |
+| `OperationalPort` | `OperationalPort` | All four | `5232` Ingestion, `5151` Admin, `5299` Worker, `5242` Delivery API; the container image sets `5299` for every role | TCP port 1–65535 for `/health`, `/ready`, and `/metrics`. |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | same | All four | Unset: no trace export | If set, an absolute HTTP(S) URI. Metrics remain available on the operational port. |
 | `Integrios:PublicIngestionBaseUri` | `Integrios__PublicIngestionBaseUri` | Admin | Required; Development file uses `http://localhost:5231` | Absolute HTTP(S) origin, optionally with a path prefix; no user info, query, or fragment. HTTPS required outside Development. Used to show webhook callback URLs. |
 | `Integrios:Admin:TraceUrlTemplate` | `Integrios__Admin__TraceUrlTemplate` | Admin | Unset: show a copyable trace ID only | Absolute HTTP(S) URI, no user info, with `{trace_id}` exactly once. |
 | `Integrios:Admin:DataProtection:KeyRingPath` | `Integrios__Admin__DataProtection__KeyRingPath` | Admin | Required; Development file uses `../../artifacts/data-protection` | Writable directory shared by Admin replicas to preserve browser sessions. |
@@ -34,12 +34,12 @@ their detailed validation belongs to .NET or OpenTelemetry rather than Integrios
 
 | Setting / environment variable | Reader | Default or requirement |
 |---|---|---|
-| `DOTNET_ENVIRONMENT` | All three | .NET defaults to `Production`; the dev Compose stack sets `Development` and loads each role's `appsettings.<role>.Development.json`. |
-| `ASPNETCORE_URLS`, `ASPNETCORE_HTTP_PORTS`, `ASPNETCORE_HTTPS_PORTS` | Admin, Ingestion | Product listener; without one, the host uses `http://localhost:5000`. The operational listener uses its separate port. Worker serves only its operational listener. |
-| `Logging:LogLevel:*` / `Logging__LogLevel__*` | All three | Role-specific levels in `appsettings.<role>.json`; override individual categories through configuration. |
-| `AllowedHosts` | Admin, Ingestion | `*` in their `appsettings.<role>.json` files; restrict for an exposed deployment. |
-| `OTEL_TRACES_SAMPLER`, `OTEL_TRACES_SAMPLER_ARG` | All three | Standard trace sampling settings; see [observability](observability.md#traces). |
-| `OTEL_RESOURCE_ATTRIBUTES` | All three | Unset; adds deployment-owned trace and metric resource attributes. |
+| `DOTNET_ENVIRONMENT` | All four | .NET defaults to `Production`; the dev Compose stack sets `Development` and loads each role's `appsettings.<role>.Development.json`. |
+| `ASPNETCORE_URLS`, `ASPNETCORE_HTTP_PORTS`, `ASPNETCORE_HTTPS_PORTS` | Admin, Ingestion, Delivery API | Product listener; without one, Admin and Ingestion use `http://localhost:5000` and Delivery API uses `http://localhost:5241`, which only local Subscribers can reach. Set one, such as `http://0.0.0.0:5241`, to accept remote Subscribers. The operational listener uses its separate port. Worker serves only its operational listener. |
+| `Logging:LogLevel:*` / `Logging__LogLevel__*` | All four | Role-specific levels in `appsettings.<role>.json`; override individual categories through configuration. |
+| `AllowedHosts` | Admin, Ingestion, Delivery API | `*` in their `appsettings.<role>.json` files; restrict for an exposed deployment. |
+| `OTEL_TRACES_SAMPLER`, `OTEL_TRACES_SAMPLER_ARG` | All four | Standard trace sampling settings; see [observability](observability.md#traces). |
+| `OTEL_RESOURCE_ATTRIBUTES` | All four | Unset; adds deployment-owned trace and metric resource attributes. |
 | `ASPNETCORE_FORWARDEDHEADERS_ENABLED` | Admin behind a proxy | Set to `true` when forwarded HTTPS scheme is needed for dashboard sign-in. |
 
 ## Admin dashboard and sign-in
@@ -73,15 +73,25 @@ processing starts.
 |---|---|---|---|
 | `Integrios:Delivery:HttpTimeout` | `Integrios__Delivery__HttpTimeout` | `00:00:30` | Positive; less than `AttemptDeadline`. |
 | `Integrios:Delivery:AttemptDeadline` | `Integrios__Delivery__AttemptDeadline` | `00:00:45` | Greater than `HttpTimeout`; less than `LeaseDuration` and `ShutdownGracePeriod`. |
-| `Integrios:Delivery:LeaseDuration` | `Integrios__Delivery__LeaseDuration` | `00:02:00` | Greater than `AttemptDeadline`. |
+| `Integrios:Delivery:LeaseDuration` | `Integrios__Delivery__LeaseDuration` | `00:02:00` | Greater than `AttemptDeadline`. Delivery API also reads it for pull leases. |
 | `Integrios:Delivery:ShutdownGracePeriod` | `Integrios__Delivery__ShutdownGracePeriod` | `00:01:00` | Greater than `AttemptDeadline`. |
-| `Integrios:Delivery:Retry:BaseDelay` | `Integrios__Delivery__Retry__BaseDelay` | `00:00:30` | Positive. |
-| `Integrios:Delivery:Retry:MaxAttempts` | `Integrios__Delivery__Retry__MaxAttempts` | `3` | Integer at least 1. |
+| `Integrios:Delivery:Retry:BaseDelay` | `Integrios__Delivery__Retry__BaseDelay` | `00:00:30` | Positive. Delivery API also reads it. |
+| `Integrios:Delivery:Retry:MaxAttempts` | `Integrios__Delivery__Retry__MaxAttempts` | `3` | Integer at least 1. Delivery API also reads it. |
 | `Integrios:Worker:FanoutLoop:BatchSize` | `Integrios__Worker__FanoutLoop__BatchSize` | `10` | Positive integer. |
 | `Integrios:Worker:FanoutLoop:IdlePollInterval` | `Integrios__Worker__FanoutLoop__IdlePollInterval` | `00:00:02` | Positive `TimeSpan`. |
 | `Integrios:Worker:DeliveryLoop:BatchSize` | `Integrios__Worker__DeliveryLoop__BatchSize` | `25` | Positive integer. |
 | `Integrios:Worker:DeliveryLoop:IdlePollInterval` | `Integrios__Worker__DeliveryLoop__IdlePollInterval` | `00:00:02` | Positive `TimeSpan`. |
 | `Integrios:Worker:HistoryRetention:Period` | `Integrios__Worker__HistoryRetention__Period` | Unset: disabled | `TimeSpan` of at least seven days. Enabling deletion requires reviewing [retention behavior](https://github.com/arminzou/integrios/blob/main/deploy/README.md#completed-history-retention). |
+
+## Delivery API
+
+Delivery API settles pull deliveries with the same lease, retry, and dead-letter settings as the
+Worker, so set `Integrios:Delivery:LeaseDuration` and the `Integrios:Delivery:Retry` keys to the
+same values for both roles. Invalid values stop Delivery API startup and never affect the Worker.
+
+| Configuration key | Environment variable | Default | Constraint |
+|---|---|---|---|
+| `Integrios:DeliveryApi:MaxAttemptDuration` | `Integrios__DeliveryApi__MaxAttemptDuration` | `00:30:00` | `TimeSpan` greater than `Integrios:Delivery:LeaseDuration`. Caps how long a Subscriber can renew one attempt's lease. |
 
 ## Credentials and Tenant secret sources
 
@@ -92,9 +102,9 @@ defaults only. Do not put deployment credentials in `secrets/sources` or
 
 | Configuration key | Environment variable | Reader | Requirement |
 |---|---|---|---|
-| `ConnectionStrings:Postgres` | `ConnectionStrings__Postgres` | All three and Admin setup commands | Non-blank when `Database:Provider=postgres`. |
-| `ConnectionStrings:SqlServer` | `ConnectionStrings__SqlServer` | All three and Admin setup commands | Non-blank when `Database:Provider=sqlserver`. |
-| `Database:Postgres:Authentication` | `Database__Postgres__Authentication` | All three and Admin setup commands | `Password` (default) or `AzureEntra`; AzureEntra requires a username and a password-free connection string. |
+| `ConnectionStrings:Postgres` | `ConnectionStrings__Postgres` | All four and Admin setup commands | Non-blank when `Database:Provider=postgres`. |
+| `ConnectionStrings:SqlServer` | `ConnectionStrings__SqlServer` | All four and Admin setup commands | Non-blank when `Database:Provider=sqlserver`. |
+| `Database:Postgres:Authentication` | `Database__Postgres__Authentication` | All four and Admin setup commands | `Password` (default) or `AzureEntra`; AzureEntra requires a username and a password-free connection string. |
 | `Database:RuntimePrincipals:<index>:Name` | `Database__RuntimePrincipals__<index>__Name` | Admin `database grant-runtime` | Required principal name. |
 | `Database:RuntimePrincipals:<index>:Scope` | `Database__RuntimePrincipals__<index>__Scope` | Admin `database grant-runtime` | `control-plane` or `data-plane`. |
 | `Database:RuntimePrincipals:<index>:Password` | `Database__RuntimePrincipals__<index>__Password` | Admin `database grant-runtime` | Optional; sets or replaces the password on every run. Printable ASCII without spaces, `;`, or quotes; at most 128 characters on SQL Server. Omit credential keys for grant-only mode. |

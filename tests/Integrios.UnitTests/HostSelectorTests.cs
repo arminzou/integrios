@@ -1,4 +1,5 @@
 using Integrios.Admin;
+using Integrios.DeliveryApi;
 using Integrios.Ingestion;
 using Integrios.Worker;
 
@@ -19,13 +20,14 @@ public sealed class HostSelectorTests
         int exitCode = await HostSelector.RunAsync(args, error);
 
         exitCode.ShouldBe(2);
-        error.ToString().ShouldContain("Roles: ingestion, admin, worker");
+        error.ToString().ShouldContain("Roles: ingestion, admin, worker, delivery-api");
     }
 
     [Theory]
     [InlineData(new[] { "worker", "secrets", "validate", "--all" }, "worker", new[] { "secrets", "validate", "--all" })]
     [InlineData(new[] { "admin", "bootstrap" }, "admin", new[] { "bootstrap" })]
     [InlineData(new[] { "ingestion" }, "ingestion", new string[0])]
+    [InlineData(new[] { "delivery-api", "--OperationalPort=6000" }, "delivery-api", new[] { "--OperationalPort=6000" })]
     public async Task AKnownRole_RunsThatRoleWithTheArgumentsAfterIt(
         string[] args, string expectedRole, string[] expectedArgs)
     {
@@ -55,6 +57,7 @@ public sealed class HostSelectorTests
             ["ingestion"] = IngestionHost.RunAsync,
             ["admin"] = AdminHost.RunAsync,
             ["worker"] = WorkerHost.RunAsync,
+            ["delivery-api"] = DeliveryApiHost.RunAsync,
         }, ignoreOrder: true);
     }
 }

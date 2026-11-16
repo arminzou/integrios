@@ -21,6 +21,16 @@
         "ASPNETCORE_ENVIRONMENT": "Development"
       }
     },
+    "delivery-api": {
+      "commandName": "Project",
+      "commandLineArgs": "delivery-api",
+      "dotnetRunMessages": true,
+      "launchBrowser": false,
+      "applicationUrl": "http://localhost:5241",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    },
     "worker": {
       "commandName": "Project",
       "commandLineArgs": "worker",

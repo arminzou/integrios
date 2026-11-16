@@ -1,4 +1,5 @@
 using Integrios.Admin;
+using Integrios.DeliveryApi;
 using Integrios.Ingestion;
 using Integrios.Worker;
 
@@ -12,6 +13,7 @@ public static class HostSelector
             [IngestionHost.Name] = IngestionHost.RunAsync,
             [AdminHost.Name] = AdminHost.RunAsync,
             [WorkerHost.Name] = WorkerHost.RunAsync,
+            [DeliveryApiHost.Name] = DeliveryApiHost.RunAsync,
         };
 
     public static Task<int> RunAsync(string[] args, TextWriter error) => RunAsync(args, Roles, error);

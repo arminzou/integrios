@@ -16,7 +16,8 @@ public static class OperationalEndpointExtensions
     public static int AddOperationalEndpoints(
         this WebApplicationBuilder builder,
         int defaultPort,
-        bool operationalOnly = false)
+        bool operationalOnly = false,
+        string defaultProductUrl = "http://localhost:5000")
     {
         int port = builder.Configuration.GetValue(PortConfigurationKey, defaultPort);
         if (port is < 1 or > 65535)
@@ -25,7 +26,7 @@ public static class OperationalEndpointExtensions
         if (operationalOnly)
             builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
         else
-            builder.WebHost.UseUrls([.. ConfiguredProductUrls(builder), $"http://0.0.0.0:{port}"]);
+            builder.WebHost.UseUrls([.. ConfiguredProductUrls(builder, defaultProductUrl), $"http://0.0.0.0:{port}"]);
 
         builder.Services.AddHealthChecks()
             .AddCheck<DatabaseReadinessHealthCheck>(
@@ -81,7 +82,7 @@ public static class OperationalEndpointExtensions
         return app;
     }
 
-    private static IEnumerable<string> ConfiguredProductUrls(WebApplicationBuilder builder)
+    private static IEnumerable<string> ConfiguredProductUrls(WebApplicationBuilder builder, string defaultProductUrl)
     {
         string? urls = builder.WebHost.GetSetting(WebHostDefaults.ServerUrlsKey);
         if (!string.IsNullOrWhiteSpace(urls))
@@ -90,7 +91,7 @@ public static class OperationalEndpointExtensions
         var configured = new List<string>();
         AddPorts(configured, builder.WebHost.GetSetting(WebHostDefaults.HttpPortsKey), "http");
         AddPorts(configured, builder.WebHost.GetSetting(WebHostDefaults.HttpsPortsKey), "https");
-        return configured.Count == 0 ? ["http://localhost:5000"] : configured;
+        return configured.Count == 0 ? [defaultProductUrl] : configured;
     }
 
     private static void AddPorts(List<string> urls, string? ports, string scheme)
