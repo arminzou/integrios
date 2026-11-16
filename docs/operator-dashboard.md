@@ -113,7 +113,7 @@ to an existing OIDC User uses User.Id.
 
 ## Run the Operator CLI
 
-Every `operator-user` command runs in the Admin image or project, connected to the deployment
+Every `operator-user` command runs as the Admin role, from the image or the project, connected to the deployment
 database with Admin's own database settings. Password commands prompt with masked input, so they
 need an interactive terminal. How you reach one depends on the deployment:
 
@@ -121,7 +121,7 @@ need an interactive terminal. How you reach one depends on the deployment:
 | --- | --- |
 | Docker Compose | `operator-user <command>` |
 | Source checkout | `dotnet run --project src/Integrios.Admin -- operator-user <command>` |
-| Azure Container Apps | `az containerapp exec -g <resource-group> -n <prefix>-admin --command "/bin/sh"`, then `/app/service operator-user <command>` in that shell |
+| Azure Container Apps | `az containerapp exec -g <resource-group> -n <prefix>-admin --command "/bin/sh"`, then `/app/integrios admin operator-user <command>` in that shell |
 
 On Azure Container Apps, the Admin app must have an active revision. Open a shell rather than
 passing the command through `--command`: exec splits that value on spaces and ignores quotes, so an

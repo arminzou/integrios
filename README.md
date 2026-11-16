@@ -62,7 +62,7 @@ Read the [Integrios documentation](https://arminzou.github.io/integrios/).
   may carry, and what each one is validated against
 - [Architecture](https://arminzou.github.io/integrios/architecture.html): design, processing flow, and platform concepts
 - [Observability](https://arminzou.github.io/integrios/observability.html): metrics, traces, logs, and OTLP export
-- [CI/CD](https://arminzou.github.io/integrios/ci-cd.html): the pipeline and published images
+- [CI/CD](https://arminzou.github.io/integrios/ci-cd.html): the pipeline and the published image
 - [Contributing](CONTRIBUTING.md)
 
 ## Tech Stack
@@ -73,7 +73,7 @@ Read the [Integrios documentation](https://arminzou.github.io/integrios/).
 | Database           | PostgreSQL (default) or SQL Server 2022+                                          |
 | Event backbone     | Database-backed transactional outbox and work queues                             |
 | Observability      | OpenTelemetry (OTLP-capable); Prometheus + Grafana for local dev; bring your own backend |
-| Deployment         | Docker / Compose; container images on GHCR                                        |
+| Deployment         | Docker / Compose; one container image on GHCR                                     |
 
 ## Use Cases
 

@@ -15,7 +15,7 @@ these routes.
 |---|---|---|
 | Ingestion | http://localhost:5232 | 5299 (`OperationalPort`) |
 | Admin | http://localhost:5151 | 5299 (`OperationalPort`) |
-| Worker | http://localhost:5299 | 5299 (`WorkerMetricsPort`) |
+| Worker | http://localhost:5299 | 5299 (`OperationalPort`) |
 
 The operational listener is for probes and scraping within the deployment network. The local
 Compose stack publishes the Admin and Ingestion operational ports for development; production

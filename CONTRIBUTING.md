@@ -47,6 +47,8 @@ walkthrough, and the [docs site guide](docs/ci-cd.md) to preview the public docu
 ## Project layout
 
 - `Integrios.slnx` is the solution entry point.
+- `src/Integrios` is the `integrios` executable that starts any role: `integrios ingestion`,
+  `integrios admin`, or `integrios worker`.
 - `src/Integrios.Ingestion` owns intake, Tenant authentication, and the durable acceptance boundary.
   Data plane, port 5231.
 - `src/Integrios.Admin` owns Tenant management; Connector, Source, and Destination authoring; Topic
@@ -61,7 +63,8 @@ walkthrough, and the [docs site guide](docs/ci-cd.md) to preview the public docu
 - `src/Integrios.Domain` holds entities, enums, and value objects.
 - `src/Integrios.Migrations.Postgres/` and `src/Integrios.Migrations.SqlServer/` hold the
   provider-specific EF Core migrations.
-- `tests/` holds the xUnit test projects; a project's name states what it needs to run.
+- `tests/` holds the xUnit test projects, including `tests/Integrios.UnitTests` for the `integrios`
+  executable; a project's name states what it needs to run.
 - `docs/` holds the public documentation and is the source of the public site.
 - The development Compose stack includes WireMock as a controllable local sink for testing and
   demos. It is not part of the deployable product.
@@ -70,7 +73,7 @@ walkthrough, and the [docs site guide](docs/ci-cd.md) to preview the public docu
 
 A test project's name states what it needs to run. `Integrios.<Layer>.UnitTests` needs nothing;
 `Integrios.FunctionalTests` starts databases and a message-broker emulator through Testcontainers;
-`Integrios.AcceptanceTests` builds every service image, composes the packaged deployment, and drives
+`Integrios.AcceptanceTests` builds the image, composes the packaged deployment, and drives
 the dashboard's golden journey against it in Chromium, so it also needs Node and `npm ci` plus
 `npx playwright install chromium` in `src/Integrios.Admin/frontend`. Cost follows that ordering, and
 acceptance dominates a run of everything.
