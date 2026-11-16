@@ -1,7 +1,8 @@
 # Operator dashboard instructions
 
-The repository-root `AGENTS.md` governs the whole solution and also applies here. This file adds
-durable rules for the Operator dashboard SPA under `src/Integrios.Admin/frontend`.
+The repository-root `AGENTS.md` routes to [RULES.md](../../../RULES.md), whose requirements also
+apply here. This file adds durable rules for the Operator dashboard SPA under
+`src/Integrios.Admin/frontend`.
 
 ## Commands
 
