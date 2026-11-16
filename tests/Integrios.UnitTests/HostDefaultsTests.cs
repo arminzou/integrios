@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Builder;
 
 namespace Integrios.UnitTests;
 
-public sealed class RoleDefaultsTests : IDisposable
+public sealed class HostDefaultsTests : IDisposable
 {
     private readonly DirectoryInfo keyRing = Directory.CreateTempSubdirectory("integrios-role-defaults-");
 
@@ -16,9 +16,9 @@ public sealed class RoleDefaultsTests : IDisposable
     {
         (string Role, int Port, int Default)[] roles =
         [
-            (IngestionRole.Name, IngestionRole.CreateBuilder(Args()).OperationalPort, IngestionRole.DefaultOperationalPort),
-            (AdminRole.Name, AdminRole.CreateBuilder(Args()).OperationalPort, AdminRole.DefaultOperationalPort),
-            (WorkerRole.Name, WorkerRole.CreateBuilder(Args()).OperationalPort, WorkerRole.DefaultOperationalPort),
+            (IngestionHost.Name, IngestionHost.CreateBuilder(Args()).OperationalPort, IngestionHost.DefaultOperationalPort),
+            (AdminHost.Name, AdminHost.CreateBuilder(Args()).OperationalPort, AdminHost.DefaultOperationalPort),
+            (WorkerHost.Name, WorkerHost.CreateBuilder(Args()).OperationalPort, WorkerHost.DefaultOperationalPort),
         ];
 
         foreach ((string role, int port, int defaultPort) in roles)
@@ -31,9 +31,9 @@ public sealed class RoleDefaultsTests : IDisposable
     {
         (string Expected, WebApplicationBuilder Builder)[] roles =
         [
-            ("Integrios.Ingestion", IngestionRole.CreateBuilder(Args()).Builder),
-            ("Integrios.Admin", AdminRole.CreateBuilder(Args()).Builder),
-            ("Integrios.Worker", WorkerRole.CreateBuilder(Args()).Builder),
+            ("Integrios.Ingestion", IngestionHost.CreateBuilder(Args()).Builder),
+            ("Integrios.Admin", AdminHost.CreateBuilder(Args()).Builder),
+            ("Integrios.Worker", WorkerHost.CreateBuilder(Args()).Builder),
         ];
 
         foreach ((string expected, WebApplicationBuilder builder) in roles)

@@ -4,7 +4,7 @@ using Integrios.Worker;
 
 namespace Integrios.UnitTests;
 
-public sealed class RoleDispatchTests
+public sealed class HostSelectorTests
 {
     [Theory]
     [InlineData]
@@ -16,7 +16,7 @@ public sealed class RoleDispatchTests
     {
         var error = new StringWriter();
 
-        int exitCode = await RoleDispatch.RunAsync(args, error);
+        int exitCode = await HostSelector.RunAsync(args, error);
 
         exitCode.ShouldBe(2);
         error.ToString().ShouldContain("Roles: ingestion, admin, worker");
@@ -31,7 +31,7 @@ public sealed class RoleDispatchTests
     {
         string? ranRole = null;
         string[]? ranWith = null;
-        var roles = RoleDispatch.Roles.Keys.ToDictionary(
+        var roles = HostSelector.Roles.Keys.ToDictionary(
             name => name,
             name => (Func<string[], Task<int>>)(roleArgs =>
             {
@@ -40,7 +40,7 @@ public sealed class RoleDispatchTests
                 return Task.FromResult(7);
             }));
 
-        int exitCode = await RoleDispatch.RunAsync(args, roles, TextWriter.Null);
+        int exitCode = await HostSelector.RunAsync(args, roles, TextWriter.Null);
 
         exitCode.ShouldBe(7);
         ranRole.ShouldBe(expectedRole);
@@ -50,11 +50,11 @@ public sealed class RoleDispatchTests
     [Fact]
     public void EachRoleName_StartsItsOwnRole()
     {
-        RoleDispatch.Roles.ShouldBe(new Dictionary<string, Func<string[], Task<int>>>
+        HostSelector.Roles.ShouldBe(new Dictionary<string, Func<string[], Task<int>>>
         {
-            ["ingestion"] = IngestionRole.RunAsync,
-            ["admin"] = AdminRole.RunAsync,
-            ["worker"] = WorkerRole.RunAsync,
+            ["ingestion"] = IngestionHost.RunAsync,
+            ["admin"] = AdminHost.RunAsync,
+            ["worker"] = WorkerHost.RunAsync,
         }, ignoreOrder: true);
     }
 }

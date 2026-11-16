@@ -31,9 +31,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Integrios.Admin\Integrios.Admin.csproj" />
-    <ProjectReference Include="..\..\src\Integrios.Ingestion\Integrios.Ingestion.csproj">
-      <Aliases>IngestionHost</Aliases>
-    </ProjectReference>
+    <ProjectReference Include="..\..\src\Integrios.Ingestion\Integrios.Ingestion.csproj" />
     <ProjectReference Include="..\..\src\Integrios.Application\Integrios.Application.csproj" />
     <ProjectReference Include="..\..\src\Integrios.Domain\Integrios.Domain.csproj" />
     <ProjectReference Include="..\..\src\Integrios.Infrastructure\Integrios.Infrastructure.csproj" />

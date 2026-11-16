@@ -7,8 +7,6 @@ using Integrios.Admin;
 using Integrios.Application.Authoring.OperatorKeys;
 using Integrios.Infrastructure.Data;
 using Integrios.Tests.Shared;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -30,7 +28,7 @@ public sealed class AdminApiFixture : IAsyncLifetime
         "integrios-admin-keys-" + Guid.NewGuid().ToString("N"));
     private Respawner respawner = null!;
 
-    public WebApplicationFactory<Program> WebFactory { get; private set; } = null!;
+    public TestHostBuilder WebFactory { get; private set; } = null!;
     public string ConnectionString => database.ConnectionString;
     internal DbConnection CreateConnection() => database.CreateConnection();
     internal string Json(string parameter) => database.Json(parameter);
@@ -222,19 +220,16 @@ public sealed class AdminApiFixture : IAsyncLifetime
 
     }
 
-    private WebApplicationFactory<Program> BuildWebFactory() =>
-        new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
-        {
-            builder.UseSetting("Database:Provider", database.Provider);
-            builder.UseSetting($"ConnectionStrings:{database.ConnectionName}", database.ConnectionString);
-            builder.UseSetting(AdminDataProtection.KeyRingPathKey, keyRingPath);
-            builder.ConfigureAppConfiguration((_, config) =>
-                config.AddConfiguration(database.Configuration));
-            builder.ConfigureServices(services =>
+    private TestHostBuilder BuildWebFactory() =>
+        new TestHostBuilder(AdminHost.CreateBuilder, AdminHost.ConfigurePipeline)
+            .WithSetting("Database:Provider", database.Provider)
+            .WithSetting($"ConnectionStrings:{database.ConnectionName}", database.ConnectionString)
+            .WithSetting(AdminDataProtection.KeyRingPathKey, keyRingPath)
+            .WithSettings(database.Configuration)
+            .WithServices(services =>
             {
                 services.RemoveAll<PublicIngestionBaseUri>();
                 services.AddSingleton(PublicIngestionBaseUri.Parse(
                     "https://ingestion.example.test/proxy/integrios", allowHttp: false));
             });
-        });
 }

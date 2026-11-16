@@ -280,7 +280,7 @@ public static class OperatorUserCli
     private static async Task<T> SendAsync<T>(IRequest<T> request)
     {
         HostApplicationBuilder hostBuilder = Host.CreateApplicationBuilder();
-        hostBuilder.AddRoleSettingsFiles(AdminRole.Name);
+        hostBuilder.AddRoleSettingsFiles(AdminHost.Name);
         hostBuilder.Logging.ClearProviders();
         hostBuilder.Services.AddAdminApplicationServices();
         hostBuilder.Services.AddAdminInfrastructureServices(hostBuilder.Configuration);

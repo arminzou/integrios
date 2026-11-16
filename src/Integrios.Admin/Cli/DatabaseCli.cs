@@ -28,7 +28,7 @@ public static class DatabaseCli
         }
 
         HostApplicationBuilder hostBuilder = Host.CreateApplicationBuilder();
-        hostBuilder.AddRoleSettingsFiles(AdminRole.Name);
+        hostBuilder.AddRoleSettingsFiles(AdminHost.Name);
         hostBuilder.Services.AddAdminInfrastructureServices(hostBuilder.Configuration);
 
         using IHost host = hostBuilder.Build();

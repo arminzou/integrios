@@ -24,8 +24,8 @@ npx vitest run -t "applies the summary window"
 npx vitest run tests/e2e/forms.browser.test.ts
 ```
 
-`generate:api` builds `Integrios.Admin.csproj`, so it requires the .NET SDK. The development proxy
-targets `http://localhost:5150` unless `INTEGRIOS_ADMIN_ORIGIN` overrides it.
+`generate:api` runs `integrios admin openapi` from `src/Integrios`, so it requires the .NET SDK.
+The development proxy targets `http://localhost:5150` unless `INTEGRIOS_ADMIN_ORIGIN` overrides it.
 
 ## Vocabulary
 

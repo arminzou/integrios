@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Integrios.Admin;
 using Npgsql;
 using Testcontainers.PostgreSql;
 
@@ -93,7 +94,6 @@ public sealed class DatabaseLifecycleFixture : IAsyncLifetime
         string operation,
         IReadOnlyDictionary<string, string?>? environment = null)
     {
-        string adminAssembly = typeof(Integrios.Admin.Cli.BootstrapCli).Assembly.Location;
         var startInfo = new ProcessStartInfo("dotnet")
         {
             RedirectStandardOutput = true,
@@ -101,7 +101,8 @@ public sealed class DatabaseLifecycleFixture : IAsyncLifetime
             UseShellExecute = false,
         };
 
-        startInfo.ArgumentList.Add(adminAssembly);
+        startInfo.ArgumentList.Add(typeof(HostSelector).Assembly.Location);
+        startInfo.ArgumentList.Add(AdminHost.Name);
         foreach (string argument in arguments)
             startInfo.ArgumentList.Add(argument);
         startInfo.Environment["ConnectionStrings__Postgres"] = database.ConnectionString;

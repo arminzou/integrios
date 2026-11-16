@@ -68,8 +68,8 @@ internal sealed class AzureServiceBusReceiver(
         }
     }
 
-    // WebApplicationFactory<Program>-hosted tests can observe the hosted-service lifecycle more than
-    // once against the same instance, and reconciliation itself runs concurrently with shutdown;
+    // In-process test hosts can observe the hosted-service lifecycle more than once against the same
+    // instance, and reconciliation itself runs concurrently with shutdown;
     // the gate is the single writer lock over `active`.
     private async Task ReconcileAsync(CancellationToken cancellationToken)
     {

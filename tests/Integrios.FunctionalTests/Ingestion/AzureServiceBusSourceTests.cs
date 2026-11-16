@@ -1,11 +1,10 @@
-extern alias IngestionHost;
-
 using System.Collections.Concurrent;
 using System.Data.Common;
 using System.Text.Json;
 using Azure.Messaging.ServiceBus;
 using Dapper;
 using Integrios.Application.Ingestion;
+using Integrios.Ingestion;
 using Integrios.Tests.Shared;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
@@ -335,7 +334,7 @@ public sealed class AzureServiceBusSourceFixture : IAsyncLifetime
     internal Guid TenantId { get; private set; }
     internal Guid TopicSourceId { get; } = Guid.NewGuid();
 
-    private WebApplicationFactory<IngestionHost::Program> factory = null!;
+    private TestHostBuilder factory = null!;
 
     public async Task InitializeAsync()
     {
@@ -347,18 +346,14 @@ public sealed class AzureServiceBusSourceFixture : IAsyncLifetime
             Database, seeded, TopicSourceId,
             AzureServiceBusSourceTests.TopicSourceConfigurationJson());
 
-        factory = new WebApplicationFactory<IngestionHost::Program>().WithWebHostBuilder(builder =>
-        {
-            builder.UseSetting("Database:Provider", Database.Provider);
-            builder.UseSetting($"ConnectionStrings:{Database.ConnectionName}", Database.ConnectionString);
-            builder.ConfigureAppConfiguration((_, config) => config.AddConfiguration(Database.Configuration));
-            builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(
-                new Dictionary<string, string?>
-                {
-                    [$"SourceSecrets:{AzureServiceBusSourceTests.TenantSlug}:{AzureServiceBusSourceTests.SecretReference}"] =
-                        ServiceBus.GetConnectionString(),
-                }));
-            builder.ConfigureServices(services =>
+        factory = new TestHostBuilder(IngestionHost.CreateBuilder, IngestionHost.ConfigurePipeline)
+            .WithSetting("Database:Provider", Database.Provider)
+            .WithSetting($"ConnectionStrings:{Database.ConnectionName}", Database.ConnectionString)
+            .WithSettings(Database.Configuration)
+            .WithSetting(
+                $"SourceSecrets:{AzureServiceBusSourceTests.TenantSlug}:{AzureServiceBusSourceTests.SecretReference}",
+                ServiceBus.GetConnectionString())
+            .WithServices(services =>
             {
                 ServiceDescriptor registration = services.Single(service => service.ServiceType == typeof(IEventAcceptance));
                 services.Remove(registration);
@@ -367,7 +362,6 @@ public sealed class AzureServiceBusSourceFixture : IAsyncLifetime
                 services.AddSingleton<IEventAcceptance>(provider =>
                     provider.GetRequiredService<FaultInjectingEventAcceptance>());
             });
-        });
 
         // Force lazy host construction so the queue processor is connected before publication.
         using HttpClient warmup = factory.CreateClient();
