@@ -2,6 +2,7 @@ using System.Data.Common;
 using System.Text.Json;
 using Integrios.Application;
 using Integrios.Application.Authoring.Connectors;
+using Integrios.Domain.Entities;
 using Integrios.Infrastructure;
 using Integrios.Infrastructure.Data;
 using MediatR;
@@ -21,6 +22,7 @@ internal sealed class FunctionalDatabase : IAsyncDisposable
     private readonly PostgreSqlContainer? postgres;
     private readonly MsSqlContainer? sqlServer;
     private readonly bool migrateOnStart;
+    private IReadOnlyList<Connector> migratedConnectors = [];
 
     // migrateOnStart: false leaves the database empty so a caller can walk the migration history
     // itself. Only the data-migration test needs it; everything else wants a migrated database.
@@ -80,6 +82,19 @@ internal sealed class FunctionalDatabase : IAsyncDisposable
             .AddAdminInfrastructureServices(Configuration)
             .BuildServiceProvider();
         await provider.MigrateDatabaseAsync();
+
+        await using var context = new IntegriosDbContext(CreateOptions());
+        migratedConnectors = await context.Connectors.AsNoTracking().ToListAsync();
+    }
+
+    // Respawn clears connectors, including the built-in rows the migrations seed, so every reset
+    // puts back exactly what migrating wrote.
+    public async Task ResetAsync(Respawner respawner, DbConnection connection)
+    {
+        await respawner.ResetAsync(connection);
+        await using var context = new IntegriosDbContext(CreateOptions());
+        context.Connectors.AddRange(migratedConnectors);
+        await context.SaveChangesAsync();
     }
 
     public DbConnection CreateConnection() => postgres is not null

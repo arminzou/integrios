@@ -123,7 +123,7 @@ public sealed class DatabaseProviderFixture : IAsyncLifetime
     public async Task ResetAsync()
     {
         await using DbConnection connection = await OpenAsync();
-        await respawner.ResetAsync(connection);
+        await Database.ResetAsync(respawner, connection);
     }
 
     internal async Task<DbConnection> OpenAsync()

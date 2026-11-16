@@ -14,6 +14,7 @@ using Integrios.Application.Transforms;
 using Integrios.Domain.Entities;
 using Integrios.Domain.ValueObjects;
 using Integrios.Infrastructure;
+using Integrios.Infrastructure.Connectors;
 using Integrios.Infrastructure.Data;
 using Integrios.Infrastructure.Delivery;
 using Integrios.Infrastructure.Events;
@@ -129,7 +130,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         dbContext.ChangeTracker.Clear();
         await using DbConnection connection = database.CreateConnection();
         await connection.OpenAsync();
-        await respawner.ResetAsync(connection);
+        await database.ResetAsync(respawner, connection);
         await SeedRoutingDataAsync(connection);
     }
 
@@ -167,10 +168,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
 
     public Task SeedPullDestinationsAsync()
     {
-        Guid connectorId = Guid.NewGuid();
         return ExecuteAsync($$$"""
-            INSERT INTO connectors (id,{{{database.KeyColumn}}},contract_version,manifest_schema_version,name,direction,manifest,created_at,updated_at)
-            VALUES (@ConnectorId,'subscriber',1,1,'Subscriber','destination',{{{database.Json("@Manifest")}}},{{{database.Now}}},{{{database.Now}}});
             INSERT INTO destinations (id,tenant_id,connector_id,name,configuration,status) VALUES
                 (@AId,@TenantId,@ConnectorId,'pull-a',{{{database.Json("@Empty")}}},'active'),
                 (@BId,@TenantId,@ConnectorId,'pull-b',{{{database.Json("@Empty")}}},'active');
@@ -180,8 +178,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
                 (@B1,@TenantId,@TopicId,'to-pull-b',{{{database.Json("@ShippedRules")}}},@BId,4,'active',NULL);
             """, new
         {
-            ConnectorId = connectorId,
-            Manifest = TestConnectorManifest.Create("subscriber", "Subscriber", "destination"),
+            ConnectorId = BuiltInConnectors.Subscriber.Id,
             AId = PullDestinationAId,
             BId = PullDestinationBId,
             TenantId,

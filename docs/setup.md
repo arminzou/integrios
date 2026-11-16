@@ -32,9 +32,9 @@ image's Admin role invoked with plain `bootstrap`) before the services start. Mi
 the database owner; Admin and Bootstrap use the control-plane principal; Ingestion and Worker use
 the data-plane principal. It creates only the first OperatorKey credential
 used below (bootstrap output, not migration-seeded data) and is idempotent, so re-running `make up`
-against an existing EF-managed database is safe. A fresh deployment contains zero Connectors until
-the Operator applies a manifest. The dev credential
-`global_operator_key:operator_bootstrap_secret` comes from `INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET` in `.env`.
+against an existing EF-managed database is safe. A fresh deployment contains only the built-in
+`subscriber` Connector, which migrations provision, until the Operator applies a manifest. The dev
+credential `global_operator_key:operator_bootstrap_secret` comes from `INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET` in `.env`.
 
 Password login is enabled by default, and OIDC can be configured independently. See
 [Operator dashboard access](operator-dashboard.md) for credential management and recovery.
