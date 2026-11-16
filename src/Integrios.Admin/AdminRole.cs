@@ -14,6 +14,9 @@ namespace Integrios.Admin;
 
 public static class AdminRole
 {
+    public const string Name = "admin";
+    public const int DefaultOperationalPort = 5151;
+
     public static async Task<int> RunAsync(string[] args)
     {
         if (args is ["bootstrap", ..])
@@ -56,9 +59,9 @@ public static class AdminRole
 
     public static (WebApplicationBuilder Builder, int OperationalPort) CreateBuilder(string[] args)
     {
-        var builder = ServiceHosting.CreateBuilder(args, typeof(AdminRole).Assembly.GetName().Name!);
+        var builder = ServiceHosting.CreateBuilder(args, Name, typeof(AdminRole).Assembly.GetName().Name!);
         builder.Logging.AddOperationalConsoleLogging(builder.Environment.IsDevelopment());
-        int operationalPort = builder.AddOperationalEndpoints("OperationalPort");
+        int operationalPort = builder.AddOperationalEndpoints(DefaultOperationalPort);
 
         builder.Services.AddSingleton(PublicIngestionBaseUri.Parse(
             builder.Configuration[PublicIngestionBaseUri.ConfigurationKey],

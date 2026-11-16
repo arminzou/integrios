@@ -31,7 +31,7 @@ db-info:
 
 # --- Admin bootstrap ---
 # DOTNET_ENVIRONMENT and INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET are exported above
-# so appsettings.Development.json and the dev OperatorKey secret are picked up.
+# so appsettings.admin.Development.json and the dev OperatorKey secret are picked up.
 
 # Create the first global OperatorKey (no-op if a live one already exists).
 bootstrap:

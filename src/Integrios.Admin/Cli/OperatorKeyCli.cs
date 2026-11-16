@@ -1,6 +1,7 @@
 using Integrios.Application;
 using Integrios.Application.Authoring.OperatorKeys;
 using Integrios.Infrastructure;
+using Integrios.Infrastructure.Hosting;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -20,6 +21,7 @@ public static class OperatorKeyCli
         }
 
         HostApplicationBuilder hostBuilder = Host.CreateApplicationBuilder();
+        hostBuilder.AddRoleSettingsFiles(AdminRole.Name);
         string? secret = hostBuilder.Configuration[RotationSecretConfigKey];
         if (string.IsNullOrWhiteSpace(secret))
         {

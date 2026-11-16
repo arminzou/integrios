@@ -11,16 +11,16 @@ namespace Integrios.Infrastructure.Hosting;
 
 public static class OperationalEndpointExtensions
 {
-    public const int DefaultPort = 5299;
+    public const string PortConfigurationKey = "OperationalPort";
 
     public static int AddOperationalEndpoints(
         this WebApplicationBuilder builder,
-        string portConfigurationKey,
+        int defaultPort,
         bool operationalOnly = false)
     {
-        int port = builder.Configuration.GetValue(portConfigurationKey, DefaultPort);
+        int port = builder.Configuration.GetValue(PortConfigurationKey, defaultPort);
         if (port is < 1 or > 65535)
-            throw new InvalidOperationException($"{portConfigurationKey} must be a valid TCP port.");
+            throw new InvalidOperationException($"{PortConfigurationKey} must be a valid TCP port.");
 
         if (operationalOnly)
             builder.WebHost.UseUrls($"http://0.0.0.0:{port}");

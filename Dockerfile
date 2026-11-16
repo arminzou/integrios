@@ -66,7 +66,9 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # Every host is an ASP.NET application. Admin and Ingestion use HTTP_PORT for product traffic;
-# all three hosts use 5299 for probes and Prometheus scraping.
+# all three hosts use 5299 for probes and Prometheus scraping. Each role has its own default
+# operational port so one of each fits on a single server; a container has its own network, so the
+# image sets one port for every role and the deployment definitions keep probing 5299.
 ARG HTTP_PORT=8080
 
 WORKDIR /app
@@ -78,6 +80,7 @@ COPY --from=dashboard /dashboard ./wwwroot
 # Empty key-per-file configuration root. Ingestion and Worker read it at startup when an operator
 # mounts one process's own directory over it; Admin never reads it.
 RUN mkdir -p /run/secrets/integrios
-ENV ASPNETCORE_HTTP_PORTS=${HTTP_PORT}
+ENV ASPNETCORE_HTTP_PORTS=${HTTP_PORT} \
+    OperationalPort=5299
 EXPOSE ${HTTP_PORT} 5299
 ENTRYPOINT ["/app/service"]

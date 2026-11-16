@@ -9,9 +9,9 @@ public static class RoleDispatch
     public static readonly IReadOnlyDictionary<string, Func<string[], Task<int>>> Roles =
         new Dictionary<string, Func<string[], Task<int>>>(StringComparer.Ordinal)
         {
-            ["ingestion"] = IngestionRole.RunAsync,
-            ["admin"] = AdminRole.RunAsync,
-            ["worker"] = WorkerRole.RunAsync,
+            [IngestionRole.Name] = IngestionRole.RunAsync,
+            [AdminRole.Name] = AdminRole.RunAsync,
+            [WorkerRole.Name] = WorkerRole.RunAsync,
         };
 
     public static Task<int> RunAsync(string[] args, TextWriter error) => RunAsync(args, Roles, error);
