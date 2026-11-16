@@ -10,6 +10,11 @@ namespace Integrios.Migrations.SqlServer.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.Sql("""
+                IF EXISTS (SELECT 1 FROM connectors WHERE [key] = 'subscriber')
+                    THROW 51000, 'Connector key ''subscriber'' is reserved for the built-in pull Connector, but an authored Connector already uses it. Resolve that Connector before migrating.', 1;
+                """);
+
             migrationBuilder.DropIndex(
                 name: "idx_event_deliveries_claimable",
                 table: "event_deliveries");

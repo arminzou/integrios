@@ -34,7 +34,5 @@ public sealed record DeliveryExecutionOptions(
             throw new InvalidOperationException("Integrios:Delivery:Retry:BaseDelay must be positive.");
         if (RetryMaxAttempts < 1)
             throw new InvalidOperationException("Integrios:Delivery:Retry:MaxAttempts must be at least 1.");
-        if (MaxAttemptDuration <= LeaseDuration)
-            throw new InvalidOperationException("Integrios:DeliveryApi:MaxAttemptDuration must be greater than LeaseDuration.");
     }
 }
