@@ -5,6 +5,11 @@ namespace Integrios.Domain.Entities;
 
 public sealed record Connector
 {
+    public const string SubscriberConnectorKey = "subscriber";
+
+    public static DeliveryTransport TransportFor(string connectorKey) =>
+        connectorKey == SubscriberConnectorKey ? DeliveryTransport.Pull : DeliveryTransport.Http;
+
     public required Guid Id { get; init; }
     public required string Key { get; init; }
     public required int ContractVersion { get; init; }

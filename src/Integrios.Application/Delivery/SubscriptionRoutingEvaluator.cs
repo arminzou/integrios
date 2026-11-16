@@ -27,11 +27,11 @@ public sealed record SubscriptionRoutingCandidate(
     IReadOnlyList<string> EventTypes,
     string? MappingConfigJson,
     string ConnectorKey,
-    string HttpExecutionSnapshotJson);
+    string? HttpExecutionSnapshotJson);
 
 public sealed record SubscriptionFanoutTarget(
     Guid SubscriptionId,
     Guid DestinationId,
     string? MappingConfigJson,
     string ConnectorKey,
-    string HttpExecutionSnapshotJson);
+    string? HttpExecutionSnapshotJson);

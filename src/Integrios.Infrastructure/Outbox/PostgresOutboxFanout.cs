@@ -144,8 +144,10 @@ internal sealed class PostgresOutboxFanout(IDbContextFactory<IntegriosDbContext>
                 JsonSerializer.Deserialize<string[]>(row.EventTypesJson, StoredJson.Options) ?? [],
                 row.MappingConfigJson,
                 row.ConnectorKey,
-                BuildHttpExecutionSnapshotJson(
-                    row.DestinationUrl, row.HttpDeliveryJson, row.DestinationAuthJson, row.HttpSuccessJson)))
+                Connector.TransportFor(row.ConnectorKey) == DeliveryTransport.Pull
+                    ? null
+                    : BuildHttpExecutionSnapshotJson(
+                        row.DestinationUrl, row.HttpDeliveryJson, row.DestinationAuthJson, row.HttpSuccessJson)))
             .ToList();
     }
 
@@ -191,6 +193,7 @@ internal sealed class PostgresOutboxFanout(IDbContextFactory<IntegriosDbContext>
                     subscription_id,
                     destination_id,
                     connector_key,
+                    transport,
                     http_execution_snapshot,
                     mapping_config_snapshot,
                     traceparent)
@@ -199,6 +202,7 @@ internal sealed class PostgresOutboxFanout(IDbContextFactory<IntegriosDbContext>
                     @SubscriptionId,
                     @DestinationId,
                     @ConnectorKey,
+                    @Transport,
                     @HttpExecutionSnapshotJson::jsonb,
                     @MappingConfigJson::jsonb,
                     @Traceparent)
@@ -210,6 +214,7 @@ internal sealed class PostgresOutboxFanout(IDbContextFactory<IntegriosDbContext>
                     target.SubscriptionId,
                     target.DestinationId,
                     target.ConnectorKey,
+                    Transport = Connector.TransportFor(target.ConnectorKey) == DeliveryTransport.Pull ? "pull" : "http",
                     target.HttpExecutionSnapshotJson,
                     target.MappingConfigJson,
                     Traceparent = traceparent
