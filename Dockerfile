@@ -20,7 +20,7 @@
 ARG DASHBOARD=none
 
 FROM node:22.22.0-bookworm-slim AS node
-FROM mcr.microsoft.com/dotnet/sdk:10.0.102 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0.404 AS build
 ARG PROJECT
 WORKDIR /src
 COPY Integrios.slnx .
@@ -54,12 +54,12 @@ RUN npm run build:assets && mv /src/src/Integrios.Admin/wwwroot /dashboard
 # Only the Admin image builds or carries dashboard assets. BuildKit builds a stage only when the
 # selected target depends on it, so the aliases below mean the Node stage above is never built for
 # Ingestion or Worker -- those hosts stay independent of Node, and their `/dashboard` is empty.
-FROM mcr.microsoft.com/dotnet/aspnet:10.0.10 AS dashboard-none
+FROM mcr.microsoft.com/dotnet/aspnet:10.0.15 AS dashboard-none
 RUN mkdir -p /dashboard
 FROM dashboard-build AS dashboard-admin
 FROM dashboard-${DASHBOARD} AS dashboard
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0.10
+FROM mcr.microsoft.com/dotnet/aspnet:10.0.15
 # Npgsql probes for Kerberos/GSSAPI on connect; the slim base image omits it.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends libgssapi-krb5-2 \

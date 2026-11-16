@@ -29,3 +29,34 @@ updates:
     ignore:
       - dependency-name: "*"
         update-types: [version-update:semver-major]
+
+  # The image bundles the .NET runtime, so a runtime patch reaches Operators
+  # only as an Integrios release. `fix` makes release-please cut a patch release for it.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: fix
+      include: scope
+    groups:
+      base-images:
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: "*"
+        update-types: [version-update:semver-major]
+
+  - package-ecosystem: dotnet-sdk
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: fix
+      include: scope
+    ignore:
+      - dependency-name: "*"
+        update-types: [version-update:semver-major]
+      # The pin is the minimum SDK. Holding it on the 1xx band keeps a machine with only a 1xx SDK
+      # building; CI and the image build on the newest band, which global.json's latestFeature allows.
+      - dependency-name: "*"
+        versions: [">= 10.0.200"]
