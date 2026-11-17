@@ -807,6 +807,32 @@ describe("Event inspector", () => {
     expect(screen.queryByRole("button", { name: /Show all/ })).toBeNull();
   });
 
+  it("reads a Subscriber's reported failure without inventing an HTTP exchange", async () => {
+    const nacked = {
+      attempt_id: "88888888-0000-0000-0000-000000000002",
+      event_delivery_id: deliveryId,
+      subscription_id: subscriptionId,
+      destination_id: "88888888-8888-8888-8888-888888888888",
+      attempt_number: 1,
+      status: "failed",
+      failure_phase: "subscriber",
+      response_status_code: null,
+      error_message: "provider unavailable",
+      started_at: "2026-09-01T10:00:00Z",
+      completed_at: "2026-09-01T10:00:05Z",
+    };
+    stubHttp(respondFor(page([]), { ...detail("pending"), delivery_attempts: [nacked] }));
+
+    renderScreen(<EventsScreen tenantId={tenantId} selectedEventId={eventId} />);
+    const timeline = await screen.findByRole("list", { name: "Every delivery attempt for this Event" });
+
+    const detailLine = within(timeline).getByText(
+      (_, element) => element?.tagName === "P" && element.textContent === "during subscriber. provider unavailable",
+    );
+    expect(detailLine).toBeTruthy();
+    expect(within(timeline).queryByText(/HTTP/)).toBeNull();
+  });
+
   it("renders an in-progress Delivery attempt neutrally, not as a failure", async () => {
     // A worker leases an attempt as "in_progress" before it finishes, and a dead lease can leave one
     // stuck there indefinitely. Neither is a failure, and the timeline must not guess otherwise.

@@ -305,6 +305,23 @@ describe("A selected Destination", () => {
     const panel = await screen.findByRole("complementary", { name: "Destination detail" });
     const link = await within(panel).findByRole("link", { name: "Manage Subscriber keys" });
     expect(link.getAttribute("href")).toBe(`/tenants/${tenantId}/destinations/${destinationId}/subscriber-keys`);
+    expect(within(panel).getByText("Never polled")).toBeTruthy();
+  });
+
+  it("shows when a Subscriber last polled a pull Destination", async () => {
+    const subscriber = { ...connector, key: "subscriber", name: "Subscriber", direction: "destination" };
+    stubHttp(({ url }) => {
+      if (url.pathname.endsWith(`/destinations/${destinationId}`))
+        return { status: 200, body: { ...destination, last_polled_at: "2026-11-16T09:30:00Z" } };
+      if (url.pathname.endsWith("/connectors")) return { status: 200, body: page([subscriber]) };
+      return { status: 200, body: page([]) };
+    });
+    renderScreen(<DestinationsScreen tenantId={tenantId} selectedDestinationId={destinationId} />);
+
+    const panel = await screen.findByRole("complementary", { name: "Destination detail" });
+    const term = await within(panel).findByText("Last Subscriber poll");
+    expect(term.nextElementSibling?.querySelector("time")?.getAttribute("datetime")).toBe("2026-11-16T09:30:00Z");
+    expect(within(panel).queryByText("Never polled")).toBeNull();
   });
 
   it("offers Activate, not Deactivate, once it is inactive", async () => {

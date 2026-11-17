@@ -48,7 +48,7 @@ import {
 } from "../ui/layout";
 import { environmentsIn, useConnectorOptions, useDestinationOptions } from "../ui/options";
 import { StatusBadge } from "../ui/status";
-import { Day } from "../ui/time";
+import { Day, Timestamp } from "../ui/time";
 
 /// Destinations is the authoring pattern every other capability copies. Its parts, in the order they
 /// appear below:
@@ -862,6 +862,7 @@ function DestinationInspector({ tenantId, destinationId }: { tenantId: string; d
   if (!destination.data) return <Inspector label="Destination detail">Loading…</Inspector>;
 
   const current = destination.data;
+  const pull = connectors.data?.items.find((connector) => connector.id === current.connector_id)?.key === "subscriber";
   return (
     <Inspector label="Destination detail">
       {/* The identity on the left, the state that qualifies it on the right: the two things an
@@ -894,6 +895,13 @@ function DestinationInspector({ tenantId, destinationId }: { tenantId: string; d
         <dd>{current.environment ?? "—"}</dd>
         <dt>Destination authentication</dt>
         <dd>{current.authentication ? current.authentication.scheme : "Not configured"}</dd>
+        {/* A stopped Subscriber and a quiet queue look the same from the deliveries alone. */}
+        {pull ? (
+          <>
+            <dt>Last Subscriber poll</dt>
+            <dd>{current.last_polled_at ? <Timestamp value={current.last_polled_at} /> : "Never polled"}</dd>
+          </>
+        ) : null}
       </Details>
 
       <section className="flex min-w-0 flex-col gap-2 border-b pb-3.5">
@@ -904,7 +912,7 @@ function DestinationInspector({ tenantId, destinationId }: { tenantId: string; d
         </p>
       </section>
 
-      {connectors.data?.items.find((connector) => connector.id === current.connector_id)?.key === "subscriber" ? (
+      {pull ? (
         <Link to={`/tenants/${tenantId}/destinations/${destinationId}/subscriber-keys`}>Manage Subscriber keys</Link>
       ) : null}
 
