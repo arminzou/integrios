@@ -47,7 +47,8 @@ verification skill is present, they also run its control-helper regression check
 
 The application jobs start independently after selection. The functional matrix contains PostgreSQL
 and adds SQL Server for provider-sensitive changes. Tests within each project are not filtered.
-Release-please's same-repository metadata PR selects docs and helpers only; main and tag runs still
+Release-please's same-repository PR selects docs and helpers only when every changed file is a
+known release-metadata output. Additional files follow normal selection. Main and tag runs still
 perform comprehensive verification.
 
 A new push cancels older runs for the same PR. Main, nightly, manual, and tag runs have separate

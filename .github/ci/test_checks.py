@@ -59,6 +59,10 @@ class SelectionTests(unittest.TestCase):
         self.assert_selected(["CHANGELOG.md"], "docs")
         plan = select_checks(["deploy/compose.yml"], "pull_request", True)
         self.assertEqual({name for name, enabled in plan.items() if enabled}, {"docs", "helpers"})
+        self.assertEqual(
+            select_checks(["VERSION", "new-package/file.cs"], "pull_request", True),
+            dict.fromkeys(CHECKS, True),
+        )
 
     def test_real_diff_includes_deleted_and_renamed_paths(self):
         script = Path(__file__).with_name("checks.py").resolve()

@@ -12,7 +12,11 @@ CHECKS = ("verify", "frontend", "postgres", "sqlserver", "docs", "helpers")
 def select_checks(paths, event, release_pr=False):
     if event != "pull_request" or not paths:
         return dict.fromkeys(CHECKS, True)
-    if release_pr:
+    release_files = {
+        "CHANGELOG.md", "VERSION", ".release-please-manifest.json",
+        "deploy/compose.yml", "deploy/azure/main.example.bicepparam",
+    }
+    if release_pr and all(path in release_files for path in paths):
         # Release metadata renders already-verified commits; the tag still runs every gate.
         return {name: name in ("docs", "helpers") for name in CHECKS}
 
