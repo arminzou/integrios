@@ -6,6 +6,8 @@ using System.Text.Json;
 using Integrios.DeliveryApi;
 using Integrios.FunctionalTests.Worker;
 using Integrios.Tests.Shared;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Integrios.FunctionalTests.DeliveryApi;
 
@@ -282,6 +284,24 @@ public sealed class DeliveryProtocolTests : IClassFixture<WorkerRoutingFixture>,
         foreach (string action in new[] { "renew", "ack", "nack", "fail" })
             (await anonymous.PostAsync($"{attempt}/{action}", null)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
         (await fixture.GetLastPolledAtAsync(A)).ShouldBeNull();
+    }
+
+    [Theory]
+    [InlineData("""{"max":"a","wait_seconds":1}""")]
+    [InlineData("")]
+    public async Task Claim_RejectsUnreadableBodiesWithoutLoggingAnError(string body)
+    {
+        var logs = new CapturingLoggerProvider();
+        using TestHostBuilder logged = host.WithServices(services => services.AddSingleton<ILoggerProvider>(logs));
+        using HttpClient client = logged.CreateClient();
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", await fixture.SeedSubscriberKeyAsync(A));
+
+        HttpResponseMessage response = await client.PostAsync(
+            "/delivery/v1/claims", new StringContent(body, System.Text.Encoding.UTF8, "application/json"));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        logs.Records.ShouldNotContain(record => record.Level >= LogLevel.Error);
     }
 
     [Theory]
