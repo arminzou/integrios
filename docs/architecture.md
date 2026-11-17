@@ -234,6 +234,18 @@ success, so a Subscriber whose response was lost can retry it safely. Pull attem
 same delivery history as push attempts, with failure phase `subscriber` and the Subscriber's error
 text in place of an HTTP status.
 
+`Integrios.Subscriber` is an unpublished .NET SDK preview for generic-host processes. It has no
+dependency on server projects. `AddIntegriosSubscriber<THandler>` registers a scoped handler,
+SubscriberKey, Delivery API address, and concurrency limit. Each claim loop holds one delivery
+at a time, renews at a third of the remaining lease, and cancels the handler on lease loss or
+host shutdown. `DeliveryResult.Ack` acknowledges completion, `DeliveryResult.Retry` requests a
+retry, and `PermanentDeliveryFailureException` dead-letters the delivery. Other exceptions nack
+under the platform's retry policy. The SDK retries transport failures with backoff and limits
+renewal and settlement requests to the known lease expiry.
+
+Cancellation is cooperative and cannot undo external effects. Subscribers still own safe
+repetition and reconciliation when work completes but its acknowledgement is lost.
+
 ## Scaling and observability
 
 Ingestion instances are stateless and Worker replicas safely claim disjoint work with PostgreSQL

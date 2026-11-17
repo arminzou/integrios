@@ -78,7 +78,9 @@ public sealed class ProjectArchitectureTests
             ["Integrios.Admin"] = ["Integrios.Application", "Integrios.Domain", "Integrios.Infrastructure", "Integrios.Migrations.Postgres", "Integrios.Migrations.SqlServer"],
             ["Integrios.Ingestion"] = ["Integrios.Application", "Integrios.Domain", "Integrios.Infrastructure"],
             ["Integrios.Worker"] = ["Integrios.Application", "Integrios.Domain", "Integrios.Infrastructure"],
-            ["Integrios.DeliveryApi"] = ["Integrios.Application", "Integrios.Domain", "Integrios.Infrastructure"]
+            ["Integrios.DeliveryApi"] = ["Integrios.Application", "Integrios.Domain", "Integrios.Infrastructure"],
+            // The SDK ships to Subscriber teams and speaks only the wire protocol.
+            ["Integrios.Subscriber"] = []
         };
 
         foreach ((string projectName, string[] expectedReferences) in allowedProjectReferences)
