@@ -10,7 +10,8 @@ doctor, cleanup, and the helpers are described in [../SKILL.md](../SKILL.md); `$
 - A run started with `$V/control.sh up` (add `--dashboard` for browser features), and its env loaded
   with `source artifacts/verify/<run>/state/env`.
 - `$V/control.sh doctor` passes.
-- Seeded data comes from `eval "$($V/seed-delivery.sh)"`, which makes a new Tenant per call.
+- Seeded data comes from `eval "$($V/seed-delivery.sh)"`, which makes a new Tenant per call, or
+  `eval "$($V/seed-pull.sh)"`, which adds a pull Destination and its SubscriberKey.
 - Never drive an instance this run did not start, including a `make up` stack on the default ports.
 
 ## Driving conventions
@@ -52,10 +53,7 @@ and `Gotchas`.
   a Destination in the dashboard and the Admin API.
 - [Subscriptions](./subscriptions.md) covers creating, activating, and deactivating a Subscription
   in the dashboard and the Admin API.
+- [Pull delivery](./pull-delivery.md) covers a Subscriber claiming from the `delivery-api` role
+  through the `Integrios.Subscriber` SDK or raw HTTP, and every SDK outcome.
 - [Database CLI](./database-cli.md) covers `integrios admin database migrate`, `info`, and
   `grant-runtime`.
-
-## Pending
-
-- Pull delivery through the `delivery-api` role. That role is not on `main` yet. When it lands, add
-  its launch step to `control.sh` and a feature file here.

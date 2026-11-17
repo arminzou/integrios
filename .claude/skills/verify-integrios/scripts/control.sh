@@ -19,7 +19,10 @@ ADMIN_OP_PORT=$((5151 + OFFSET))
 INGESTION_PORT=$((5231 + OFFSET))
 INGESTION_OP_PORT=$((5232 + OFFSET))
 WORKER_OP_PORT=$((5299 + OFFSET))
-PORTS="$PG_PORT $MOCKSINK_PORT $ADMIN_PORT $ADMIN_OP_PORT $INGESTION_PORT $INGESTION_OP_PORT $WORKER_OP_PORT"
+DELIVERY_PORT=$((5241 + OFFSET))
+DELIVERY_OP_PORT=$((5242 + OFFSET))
+PORTS="$PG_PORT $MOCKSINK_PORT $ADMIN_PORT $ADMIN_OP_PORT $INGESTION_PORT $INGESTION_OP_PORT $WORKER_OP_PORT $DELIVERY_PORT $DELIVERY_OP_PORT"
+ROLES="admin ingestion worker delivery-api"
 
 OPERATOR_KEY=global_operator_key:operator_bootstrap_secret
 OPERATOR_EMAIL=operator@example.test
@@ -47,6 +50,7 @@ print_env() {
 export VERIFY_RUN=$RUN VERIFY_PORT_OFFSET=$OFFSET
 export ADMIN=http://127.0.0.1:$ADMIN_PORT INGESTION=http://127.0.0.1:$INGESTION_PORT MOCKSINK=http://127.0.0.1:$MOCKSINK_PORT
 export ADMIN_OPS=http://127.0.0.1:$ADMIN_OP_PORT INGESTION_OPS=http://127.0.0.1:$INGESTION_OP_PORT WORKER_OPS=http://127.0.0.1:$WORKER_OP_PORT
+export DELIVERY_API=http://127.0.0.1:$DELIVERY_PORT DELIVERY_API_OPS=http://127.0.0.1:$DELIVERY_OP_PORT
 export AUTH='Authorization: OperatorKey $OPERATOR_KEY'
 export OPERATOR_EMAIL=$OPERATOR_EMAIL
 EOF
@@ -107,10 +111,12 @@ up() {
   start_role ingestion "$ROOT" ConnectionStrings__Postgres="$DATA_DB" \
     ASPNETCORE_URLS=http://127.0.0.1:$INGESTION_PORT OperationalPort=$INGESTION_OP_PORT
   start_role worker "$ROOT" ConnectionStrings__Postgres="$DATA_DB" OperationalPort=$WORKER_OP_PORT
+  start_role delivery-api "$ROOT" ConnectionStrings__Postgres="$DATA_DB"     ASPNETCORE_URLS=http://127.0.0.1:$DELIVERY_PORT OperationalPort=$DELIVERY_OP_PORT
 
   wait_ready admin "http://127.0.0.1:$ADMIN_OP_PORT/ready"
   wait_ready ingestion "http://127.0.0.1:$INGESTION_OP_PORT/ready"
   wait_ready worker "http://127.0.0.1:$WORKER_OP_PORT/ready"
+  wait_ready delivery-api "http://127.0.0.1:$DELIVERY_OP_PORT/ready"
   print_env >"$STATE/env"
   echo "up: run '$RUN'; load it with: source $STATE/env"
 }
@@ -119,12 +125,13 @@ doctor() {
   local failed=0
   check() { if eval "$2" >/dev/null 2>&1; then echo "ok   $1"; else echo "FAIL $1"; failed=1; fi; }
   check "state dir $STATE" "[ -f '$STATE/env' ]"
-  for role in admin ingestion worker; do
+  for role in $ROLES; do
     check "$role process from this run is alive" "kill -0 \$(cat '$STATE/$role.pid')"
   done
   check "admin /ready" "curl -fsS -m 10 http://127.0.0.1:$ADMIN_OP_PORT/ready"
   check "ingestion /ready" "curl -fsS -m 10 http://127.0.0.1:$INGESTION_OP_PORT/ready"
   check "worker /ready" "curl -fsS -m 10 http://127.0.0.1:$WORKER_OP_PORT/ready"
+  check "delivery-api /ready" "curl -fsS -m 10 http://127.0.0.1:$DELIVERY_OP_PORT/ready"
   check "OperatorKey accepted by Admin API" "curl -fsS -m 10 -H 'Authorization: OperatorKey $OPERATOR_KEY' http://127.0.0.1:$ADMIN_PORT/admin/tenants"
   check "password sign-in enabled" "curl -fsS -m 10 http://127.0.0.1:$ADMIN_PORT/auth/options | grep -q '\"password_enabled\":true'"
   check "mocksink answers" "curl -fsS -m 10 http://127.0.0.1:$MOCKSINK_PORT/__admin/health"
@@ -136,10 +143,10 @@ doctor() {
 
 down() {
   local role pid attempt
-  for role in admin ingestion worker; do
+  for role in $ROLES; do
     [ -f "$STATE/$role.pid" ] && kill "$(cat "$STATE/$role.pid")" 2>/dev/null || true
   done
-  for role in admin ingestion worker; do
+  for role in $ROLES; do
     [ -f "$STATE/$role.pid" ] || continue
     pid=$(cat "$STATE/$role.pid")
     for ((attempt=0; attempt<75; attempt++)); do
