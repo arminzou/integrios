@@ -48,8 +48,10 @@ jobs:
       - name: Check CI selection and final gate
         run: python3 -m unittest discover -s .github/ci -v
       - name: Check verification helpers
-        if: hashFiles('.claude/skills/verify-integrios/scripts/control.test.sh') != ''
-        run: bash .claude/skills/verify-integrios/scripts/control.test.sh
+        run: |
+          for test_script in .claude/skills/verify-integrios/scripts/{control,prove}.test.sh; do
+            if [ -f "$test_script" ]; then bash "$test_script"; fi
+          done
 
   docs:
     needs: changes
