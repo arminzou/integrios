@@ -41,3 +41,6 @@ artifacts/openapi/
 artifacts/data-protection/
 .playwright-cli/*
 .playwright-mcp/*
+
+# Verification runs: per-run state and kept evidence
+artifacts/verify/
