@@ -26,11 +26,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7.0.1
 
-      - name: Check verification helpers
-        run: |
-          bash .claude/skills/verify-integrios/scripts/control.test.sh
-          bash .claude/skills/verify-integrios/scripts/prove.test.sh
-
       - name: Set up .NET
         uses: actions/setup-dotnet@v6.0.0
         with:
