@@ -11,6 +11,7 @@ namespace Integrios.Infrastructure.Data;
 internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> options) : DbContext(options)
 {
     public DbSet<OperatorKey> OperatorKeys => Set<OperatorKey>();
+    public DbSet<SubscriberKey> SubscriberKeys => Set<SubscriberKey>();
     public DbSet<TenantApiKey> TenantApiKeys => Set<TenantApiKey>();
     public DbSet<Destination> Destinations => Set<Destination>();
     public DbSet<DeliveryAttempt> DeliveryAttempts => Set<DeliveryAttempt>();
@@ -96,6 +97,11 @@ internal sealed class IntegriosDbContext(DbContextOptions<IntegriosDbContext> op
         modelBuilder.Entity<OperatorKey>(entity =>
         {
             entity.Property(e => e.Id).HasDefaultValueSql(generatedGuid);
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql(currentTimestamp);
+        });
+
+        modelBuilder.Entity<SubscriberKey>(entity =>
+        {
             entity.Property(e => e.CreatedAt).HasDefaultValueSql(currentTimestamp);
         });
 

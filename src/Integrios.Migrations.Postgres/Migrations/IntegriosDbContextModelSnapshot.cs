@@ -722,6 +722,71 @@ namespace Integrios.Migrations.Postgres.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Integrios.Domain.Entities.SubscriberKey", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<DateTimeOffset?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<Guid>("DestinationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("destination_id");
+
+                    b.Property<string>("KeyHash")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("key_hash");
+
+                    b.Property<string>("KeyPrefix")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("key_prefix");
+
+                    b.Property<DateTimeOffset?>("LastUsedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_used_at");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("revoked_at");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.HasKey("Id")
+                        .HasName("subscriber_keys_pkey");
+
+                    b.HasAlternateKey("KeyPrefix")
+                        .HasName("subscriber_keys_key_prefix_key");
+
+                    b.HasIndex(new[] { "TenantId", "DestinationId" }, "idx_subscriber_keys_destination");
+
+                    b.HasIndex(new[] { "KeyHash" }, "idx_subscriber_keys_key_hash")
+                        .IsUnique();
+
+                    b.ToTable("subscriber_keys", (string)null);
+                });
+
             modelBuilder.Entity("Integrios.Domain.Entities.Subscription", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1178,6 +1243,16 @@ namespace Integrios.Migrations.Postgres.Migrations
                         .HasPrincipalKey("TenantId", "Id")
                         .IsRequired()
                         .HasConstraintName("fk_sources_topic_tenant");
+                });
+
+            modelBuilder.Entity("Integrios.Domain.Entities.SubscriberKey", b =>
+                {
+                    b.HasOne("Integrios.Domain.Entities.Destination", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "DestinationId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .IsRequired()
+                        .HasConstraintName("subscriber_keys_destination_fkey");
                 });
 
             modelBuilder.Entity("Integrios.Domain.Entities.Subscription", b =>

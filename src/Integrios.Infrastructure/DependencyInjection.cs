@@ -10,6 +10,8 @@ using Integrios.Application.Authoring.OperatorKeys;
 using Integrios.Application.Authoring.Sources;
 using Integrios.Application.Authoring.Subscriptions;
 using Integrios.Application.Authoring.TenantApiKeys;
+using Integrios.Application.Authoring.SubscriberKeys;
+using Integrios.Infrastructure.SubscriberKeys;
 using Integrios.Application.Authoring.Tenants;
 using Integrios.Application.Authoring.Topics;
 using Integrios.Application.Delivery;
@@ -88,6 +90,7 @@ public static class DependencyInjection
         services.AddScoped<IOperatorKeyLookup>(provider => provider.GetRequiredService<OperatorKeyRepository>());
         services.AddScoped<IOperatorKeyLifecycle>(provider => provider.GetRequiredService<OperatorKeyRepository>());
         services.AddScoped<ITenantApiKeyRepository, TenantApiKeyRepository>();
+        services.AddScoped<ISubscriberKeyRepository, SubscriberKeyRepository>();
         services.AddScoped<ITenantRepository, TenantRepository>();
         services.AddScoped<IConnectorReader, ConnectorReader>();
         if (databaseProvider == DatabaseProvider.SqlServer)
@@ -216,6 +219,8 @@ public static class DependencyInjection
         services.AddDeliveryPolicies(deliveryOptions);
 
         services.AddSingleton<IPullDeliveryQueue, EventDeliveryQueue>();
+        services.AddSingleton<IActiveSubscriberKeyLookup, ActiveSubscriberKeyLookup>();
+        services.AddSingleton<ISubscriberKeyUseRecorder, SubscriberKeyUseRecorder>();
         services.AddTransformEvaluationServices();
 
         return services;
