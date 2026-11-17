@@ -5,8 +5,9 @@ description: Launches an isolated Integrios stack (PostgreSQL and a WireMock sin
 
 # Verify Integrios
 
-Drive the real app built from this checkout. Do not rerun suites CI already runs; spend the time on
-the running app. Read [features/README.md](features/README.md) for the map, then the feature file
+Drive the real app built from this checkout. Run narrow local tests while iterating, following
+`CONTRIBUTING.md`, and use this skill for behavioral proof in the running app. Local results do not
+replace the CI merge gate. Read [features/README.md](features/README.md) for the map, then the feature file
 for what you are proving.
 
 Every command below runs from the repository root in Bash (Git Bash on Windows). The helpers live in
