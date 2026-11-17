@@ -79,63 +79,74 @@ const formFields = ["name", "destination_id", "event_types", "mapping", "descrip
 /// Subscription keeps whatever version it already carries rather than being silently upgraded.
 const currentHttpDeliveryVersion = 1;
 
-const subscriptionSchema = z
-  .object({
-    name: z.string().trim().min(1, "Enter a name."),
-    destination_id: z.string().min(1, "Choose a Destination."),
-    event_types: z.array(z.string()).min(1, "Choose at least one Event type."),
-    mapping: z.string().max(65_536, "Keep the mapping expression at or below 64 KiB."),
-    raw_mapping: z.string().superRefine((text, ctx) => {
-      if (!text.trim()) return;
-      const parsed = parseJson(text);
-      if (parsed.error !== undefined) ctx.addIssue({ code: z.ZodIssueCode.custom, message: parsed.error });
-    }),
-    method: z.enum(["POST", "PUT", "PATCH", "DELETE"]),
-    path: z.string(),
-    body: z.enum(["json", "none"]),
-    headers: z
-      .array(z.object({ name: z.string().trim().min(1, "Enter a header name."), value: z.string() }))
-      .max(32, "Add at most 32 headers."),
-    success_mode: z.enum(["", "json_boolean"]),
-    success_field: z.string(),
-    success_expected: z.enum(["", "true", "false"]),
-    success_diagnostic_field: z.string(),
-    success_max_body_bytes: z.string(),
-    description: z.string(),
-  })
-  .superRefine((values, ctx) => {
-    const names = new Set<string>();
-    values.headers.forEach((header, index) => {
-      const normalized = header.name.trim().toLowerCase();
-      if (normalized && names.has(normalized))
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["headers", index, "name"],
-          message: "Use each header name once, ignoring case.",
-        });
-      names.add(normalized);
-    });
-    if (values.success_mode !== "json_boolean") return;
-    if (!values.success_field.trim())
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["success_field"], message: "Enter the response field." });
-    if (!values.success_expected)
+const subscriptionFields = z.object({
+  name: z.string().trim().min(1, "Enter a name."),
+  destination_id: z.string().min(1, "Choose a Destination."),
+  event_types: z.array(z.string()).min(1, "Choose at least one Event type."),
+  mapping: z.string().max(65_536, "Keep the mapping expression at or below 64 KiB."),
+  raw_mapping: z.string().superRefine((text, ctx) => {
+    if (!text.trim()) return;
+    const parsed = parseJson(text);
+    if (parsed.error !== undefined) ctx.addIssue({ code: z.ZodIssueCode.custom, message: parsed.error });
+  }),
+  method: z.enum(["POST", "PUT", "PATCH", "DELETE"]),
+  path: z.string(),
+  body: z.enum(["json", "none"]),
+  headers: z
+    .array(z.object({ name: z.string().trim().min(1, "Enter a header name."), value: z.string() }))
+    .max(32, "Add at most 32 headers."),
+  success_mode: z.enum(["", "json_boolean"]),
+  success_field: z.string(),
+  success_expected: z.enum(["", "true", "false"]),
+  success_diagnostic_field: z.string(),
+  success_max_body_bytes: z.string(),
+  description: z.string(),
+});
+
+const subscriptionSchema = subscriptionFields.superRefine((values, ctx) => {
+  const names = new Set<string>();
+  values.headers.forEach((header, index) => {
+    const normalized = header.name.trim().toLowerCase();
+    if (normalized && names.has(normalized))
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ["success_expected"],
-        message: "Choose the expected value.",
+        path: ["headers", index, "name"],
+        message: "Use each header name once, ignoring case.",
       });
-    if (values.success_max_body_bytes) {
-      const maximum = Number(values.success_max_body_bytes);
-      if (!Number.isInteger(maximum) || maximum < 1 || maximum > 1_048_576)
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["success_max_body_bytes"],
-          message: "Enter an integer from 1 through 1048576.",
-        });
-    }
+    names.add(normalized);
   });
+  if (values.success_mode !== "json_boolean") return;
+  if (!values.success_field.trim())
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["success_field"], message: "Enter the response field." });
+  if (!values.success_expected)
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["success_expected"],
+      message: "Choose the expected value.",
+    });
+  if (values.success_max_body_bytes) {
+    const maximum = Number(values.success_max_body_bytes);
+    if (!Number.isInteger(maximum) || maximum < 1 || maximum > 1_048_576)
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["success_max_body_bytes"],
+        message: "Enter an integer from 1 through 1048576.",
+      });
+  }
+});
+
+// A pull Subscription saves no HTTP request, so a draft left in its hidden HTTP fields never blocks the save.
+const pullSubscriptionSchema = subscriptionFields.extend({
+  headers: z.array(z.object({ name: z.string(), value: z.string() })),
+});
 
 export type SubscriptionValues = z.infer<typeof subscriptionSchema>;
+
+type DestinationTransports = { id: string; transport?: string }[] | undefined;
+
+function isPullDestination(destinations: DestinationTransports, destinationId: string) {
+  return destinations?.find((destination) => destination.id === destinationId)?.transport === "pull";
+}
 
 function guidedMappingExpression(mapping: unknown): string | null {
   if (mapping === null || mapping === undefined) return "";
@@ -911,8 +922,14 @@ function SubscriptionForm({
   const rawMapping = subscription !== undefined && originalExpression === null;
   const storedSuccess = subscription?.http_success;
 
-  const form = useForm<SubscriptionValues, unknown, SubscriptionValues>({
-    resolver: zodResolver(subscriptionSchema),
+  const form = useForm<SubscriptionValues, DestinationTransports, SubscriptionValues>({
+    context: destinations.data?.items,
+    resolver: (values, items, options) =>
+      zodResolver(isPullDestination(items, values.destination_id) ? pullSubscriptionSchema : subscriptionSchema)(
+        values,
+        items,
+        options,
+      ),
     defaultValues: {
       name: subscription?.name ?? "",
       destination_id: subscription?.destination_id ?? "",
@@ -940,7 +957,7 @@ function SubscriptionForm({
   const expression = form.watch("mapping");
   const successMode = form.watch("success_mode");
   const destinationId = form.watch("destination_id");
-  const pull = destinations.data?.items.find((destination) => destination.id === destinationId)?.transport === "pull";
+  const pull = isPullDestination(destinations.data?.items, destinationId);
   // Delivery runs the mapping even when the request carries no body, so a mapping there could only
   // fail a delivery. A request without a body is saved without one.
   const mapsBody = pull || form.watch("body") === "json";

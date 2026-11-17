@@ -711,7 +711,7 @@ describe("Create forms, filled through a real browser", () => {
     await view.close();
   }, 60_000);
 
-  it("sends a Subscription to a pull Destination with no HTTP operation", async () => {
+  it("sends a Subscription to a pull Destination with no HTTP operation, even over an unfinished HTTP draft", async () => {
     const { page: view, writes } = await open(`/tenants/${tenantId}/subscriptions?topic_id=${topicId}`);
     const pullDestination = {
       ...destination,
@@ -728,6 +728,8 @@ describe("Create forms, filled through a real browser", () => {
     await view.click("text=New Subscription");
     const form = formNamed(view, "Create a Subscription");
     await form.getByLabel("Name").fill("to-orders-service");
+    await choose(form.getByLabel("Destination"), /sink/);
+    await form.getByRole("button", { name: "Add header" }).click();
     await choose(form.getByLabel("Destination"), /orders-service/);
     await form.getByRole("checkbox", { name: "order.created" }).check();
     await form.getByRole("heading", { name: "Mapping" }).waitFor();
