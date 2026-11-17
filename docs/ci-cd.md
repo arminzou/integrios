@@ -4,25 +4,64 @@ Integrios ships an application workflow (`.github/workflows/ci.yml`) and a separ
 workflow (`.github/workflows/docs.yml`). The application flows keep routine feedback prompt while
 still making complete verification mandatory before publishing a release:
 
-1. **Pull request**: locked restore, dependency audit, Release build, architecture and unit tests,
-   plus the same Functional suite against PostgreSQL and SQL Server 2022. No configuration or
-   secrets are required, so this runs for fork pull requests too.
-2. **Main**: repeats the pull-request gate, then runs the complete Acceptance project before
+1. **Pull request**: selects whole jobs by changed paths, then reports the combined `ci` gate.
+   Selected application jobs retain locked restore, dependency audits, and complete test projects.
+   No secrets are required, so this runs for fork pull requests too.
+2. **Main**: runs all checks and both database providers, then the complete Acceptance project before
    publishing commit, `main`, and `latest` images.
-3. **Nightly**: repeats the pull-request gate and complete Acceptance project on schedule.
-4. **Release**: repeats the pull-request gate and runs the complete Acceptance project before
+3. **Nightly**: runs all checks, both database providers, and complete Acceptance on schedule.
+4. **Release**: runs all checks, both database providers, and the complete Acceptance project before
    publishing images. A `v*` tag, or an explicit manual run from `main`, triggers it. See
    [Cutting a release](#cutting-a-release) for how that tag comes about.
 5. **Deploy**: owned by you. Integrios publishes images; how you run them (Compose,
    Kubernetes, etc.) lives in your own infrastructure, not in this repo.
 
-Documentation-only changes run the documentation workflow on pull requests and `main`. It installs
+Documentation-only pull requests select the documentation job in `ci.yml`. The separate `docs.yml`
+workflow publishes documentation changes from `main`. Each documentation build installs
 the root lockfile with `npm ci`, builds the VitePress site, checks representative output pages,
 and scans the generated files for private content markers. The build fails on broken internal links.
 Pull requests only check the build; successful `main` runs publish it to
-[GitHub Pages](https://arminzou.github.io/integrios/). These changes do not start the application
-Acceptance suite. For local documentation work, run `npm ci`, `npm run docs:dev` to preview, and
+[GitHub Pages](https://arminzou.github.io/integrios/). Documentation-only PRs do not start application
+checks; pushes to main still receive comprehensive verification. For local documentation work, run `npm ci`, `npm run docs:dev` to preview, and
 `npm run docs:build` to check the production build and internal links.
+
+## Pull-request selection
+
+`.github/ci/checks.py` owns job selection. Changes combine their required jobs; new or unclassified
+paths select all PR checks. The selector compares the PR merge commit with the event's base commit,
+including both sides of a rename and deleted paths. A failed diff blocks the final gate.
+
+| Changed area | Selected PR jobs |
+| --- | --- |
+| Verification skill under `.claude/skills/verify-integrios/` | Helper checks |
+| Markdown, `docs/`, or `LICENSE` | Helper checks and docs build |
+| `src/Integrios.Admin/frontend/` | Helper checks and full frontend checks, including API generation |
+| Admin or Application C# | Helper checks, architecture/unit checks, frontend, PostgreSQL functional |
+| Ingestion or Worker C# | Helper checks, architecture/unit checks, PostgreSQL functional |
+| Infrastructure, Domain, migrations, or C# tests | Helper checks, architecture/unit checks, frontend, both functional providers |
+| Host entry point, project/dependency files, runtime settings, deployment, CI, build tooling, or unknown paths | All PR jobs |
+
+Frontend dependency files stay in the frontend job. Other project/dependency files and runtime
+settings select all jobs. Helper checks always test the selector and final gate; when the
+verification skill is present, they also run its control-helper regression checks.
+
+The application jobs start independently after selection. The functional matrix contains PostgreSQL
+and adds SQL Server for provider-sensitive changes. Tests within each project are not filtered.
+Release-please's same-repository metadata PR selects docs and helpers only; main and tag runs still
+perform comprehensive verification.
+
+A new push cancels older runs for the same PR. Main, nightly, manual, and tag runs have separate
+concurrency groups and do not cancel one another. Acceptance waits for `ci`; publishing waits for
+both `ci` and acceptance.
+
+Configure the main branch ruleset to require the GitHub Actions check named `ci`. It fails when
+selection fails, a selected job fails or is cancelled, or a selected job is unexpectedly skipped.
+The gate runs even for documentation-only PRs, so path selection cannot leave a required check
+permanently pending. Do not require individual conditional jobs.
+
+Use narrow local tests during iteration and exercise affected user flows when runtime evidence is
+needed. Push a coherent change, then use CI as the merge gate. A passing local run does not waive
+CI, and slow or flaky tests must be fixed rather than silently omitted.
 
 ## Cutting a release
 

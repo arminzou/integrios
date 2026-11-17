@@ -102,6 +102,11 @@ While iterating, filter to the narrowest relevant test rather than running a who
 `dotnet test <project> --filter "FullyQualifiedName~SourcesAdminTests"`. Do not partition a project
 with traits or category filters. If you skip verification, say so explicitly.
 
+Run narrow checks while editing, then the relevant checks above before pushing a coherent change.
+Use the running app to prove behavior when the claim depends on runtime or browser interaction.
+CI remains the shared merge gate; local results do not replace it. Avoid pushing each intermediate
+edit just to obtain feedback from CI.
+
 ## Making changes
 
 1. Fork the repo and branch off `main`.
@@ -129,10 +134,17 @@ chore(db): add initial migration for tenant and connector tables
 
 ## CI
 
-A pull request that changes code runs the build, architecture and unit tests, the dashboard
-checks, and the functional tests through GitHub Actions; a documentation-only pull request runs the
-documentation build instead. Images are published only from pushes to `main` and release tags, never
-from a pull request. [docs/ci-cd.md](docs/ci-cd.md) describes each run.
+Pull requests select whole CI jobs by changed paths. The `ci` check requires every selected job to
+pass and accepts skips only for unselected jobs. Unknown paths select every PR check. Main, nightly,
+and release runs keep the complete application checks, both database providers, and packaged
+acceptance. Images are never published from a pull request.
+[docs/ci-cd.md](docs/ci-cd.md) describes the selection rules and release gates.
+
+After changing CI selection or its final gate, run:
+
+```bash
+python -m unittest discover -s .github/ci -v
+```
 
 ## License
 
