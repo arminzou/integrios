@@ -86,6 +86,43 @@ class SelectionTests(unittest.TestCase):
             self.assertEqual(json.loads(values["providers"]), ["postgres", "sqlserver"])
             self.assertEqual(values["docs"], "true")
 
+    def test_shallow_checkout_fetches_exact_event_base_after_base_advances(self):
+        script = Path(__file__).with_name("checks.py").resolve()
+        with tempfile.TemporaryDirectory() as directory:
+            origin = Path(directory, "origin")
+            checkout = Path(directory, "checkout")
+            origin.mkdir()
+
+            def git(*args):
+                return subprocess.check_output(["git", "-C", str(origin), *args])
+
+            git("init", "-q")
+            readme = origin / "README.md"
+            readme.write_text("base", encoding="utf-8")
+            git("add", ".")
+            git("-c", "user.name=Test", "-c", "user.email=test@example.test", "commit", "-qm", "event base")
+            base = git("rev-parse", "HEAD").decode().strip()
+            backend = origin / "src/Integrios.Infrastructure/Queries.cs"
+            backend.parent.mkdir(parents=True)
+            backend.write_text("changed after event base", encoding="utf-8")
+            git("add", ".")
+            git("-c", "user.name=Test", "-c", "user.email=test@example.test", "commit", "-qm", "advanced base")
+            readme.write_text("updated", encoding="utf-8")
+            git("add", ".")
+            git("-c", "user.name=Test", "-c", "user.email=test@example.test", "commit", "-qm", "checked out head")
+            subprocess.run(["git", "clone", "--depth=2", origin.as_uri(), str(checkout)], check=True, capture_output=True)
+            missing = subprocess.run(["git", "cat-file", "-e", base], cwd=checkout, capture_output=True)
+            self.assertNotEqual(missing.returncode, 0)
+            output = Path(directory, "outputs")
+            env = dict(os.environ, GITHUB_EVENT_NAME="pull_request", BASE_SHA=base, GITHUB_OUTPUT=str(output), RELEASE_PR="false")
+
+            result = subprocess.run([sys.executable, str(script), "select"], cwd=checkout, env=env, capture_output=True)
+
+            self.assertEqual(result.returncode, 0, result.stderr.decode())
+            values = dict(line.split("=", 1) for line in output.read_text().splitlines())
+            self.assertEqual(json.loads(values["providers"]), ["postgres", "sqlserver"])
+            self.assertEqual(values["docs"], "true")
+
 
 class GateTests(unittest.TestCase):
     def setUp(self):
