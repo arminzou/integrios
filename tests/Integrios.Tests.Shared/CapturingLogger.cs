@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using Microsoft.Extensions.Logging;
 
 namespace Integrios.Tests.Shared;
@@ -38,7 +39,9 @@ public sealed class CapturingLoggerProvider : ILoggerProvider
 
 public sealed class CapturingLogger : ILogger
 {
-    private readonly List<object?> scopes = [];
+    // Scopes follow the async flow, as real providers do, so concurrent callers never see each other's scopes.
+    private readonly AsyncLocal<ImmutableList<object?>> scopes = new();
+    private readonly Lock gate = new();
 
     public List<IReadOnlyList<object?>> Entries { get; } = [];
     public List<string> Messages { get; } = [];
@@ -46,8 +49,9 @@ public sealed class CapturingLogger : ILogger
 
     public IDisposable BeginScope<TState>(TState state) where TState : notnull
     {
-        scopes.Add(state);
-        return new Scope(scopes);
+        ImmutableList<object?> outer = scopes.Value ?? [];
+        scopes.Value = outer.Add(state);
+        return new Scope(() => scopes.Value = outer);
     }
 
     public bool IsEnabled(LogLevel logLevel) => true;
@@ -55,15 +59,18 @@ public sealed class CapturingLogger : ILogger
     public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
         Func<TState, Exception?, string> formatter)
     {
-        Entries.Add(scopes.ToList());
         string message = formatter(state, exception);
-        Messages.Add(message);
-        Records.Add(new CapturedLogRecord(logLevel, eventId, state!, exception, message));
+        lock (gate)
+        {
+            Entries.Add(scopes.Value ?? []);
+            Messages.Add(message);
+            Records.Add(new CapturedLogRecord(logLevel, eventId, state!, exception, message));
+        }
     }
 
-    private sealed class Scope(List<object?> scopes) : IDisposable
+    private sealed class Scope(Action restore) : IDisposable
     {
-        public void Dispose() => scopes.RemoveAt(scopes.Count - 1);
+        public void Dispose() => restore();
     }
 }
 
