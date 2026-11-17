@@ -30,8 +30,8 @@ with `--dashboard` on a cold `npm ci`. It:
 1. Refuses to start if the run's state directory exists or any of its ports is taken.
 2. Starts `postgres` and `mocksink` from `compose.yml` under the Compose project
    `integrios-verify-<run>`, with its own volume, and waits for them to be healthy.
-3. Builds `src/Integrios` once with `dotnet build`. Set `VERIFY_NO_BUILD=1` to skip a rebuild you
-   just did.
+3. Builds `src/Integrios` with `dotnet build` and records the commit only after it succeeds.
+   There is no build-skip option: an older binary must not pass the revision check.
 4. With `--dashboard`, runs `npm ci` (only when `node_modules` is missing) and `npm run build:assets`
    in `src/Integrios.Admin/frontend`.
 5. Runs the same bootstrap the Compose stack runs (see `docs/setup.md`): `database migrate` as the
@@ -69,8 +69,7 @@ source artifacts/verify/pr42/state/env
 ```
 
 Only one build may run in a worktree at a time; parallel `dotnet build` or `generate:api` runs
-collide in `obj/`. Start a second run in the same worktree with `VERIFY_NO_BUILD=1` after the first
-build is done.
+collide in `obj/`. Use a separate worktree for concurrent runs so each has its own binaries.
 
 ### One role by hand
 
@@ -151,7 +150,9 @@ ignores). Cleanup keeps it.
 $V/control.sh down
 ```
 
-It stops the three role processes by the PIDs this run recorded, removes the run's Compose
+It signals the three role processes by the PIDs this run recorded and waits up to 75 seconds per
+role for exit before removing the database. If a role stays alive, cleanup fails and keeps the
+database and state for a later `down` attempt. On success, it removes the run's Compose
 containers and volume, and deletes `artifacts/verify/<run>/state`. It never kills by process name
 and never touches `artifacts/verify/<run>/evidence`. Run it after every failed attempt too, so a
 stale run does not hold ports. If `up` failed after starting roles, `down` still stops them. Built
@@ -165,5 +166,8 @@ cleanup. A Linux run has not been made yet. Its unverified points are stopping r
 on their PIDs and the `/dev/tcp` port probe in `control.sh`.
 
 ## Maintenance
+
+Run `bash $V/control.test.sh` after changing the control helper. It checks environment quoting,
+build-before-revision ordering, and cleanup ordering and timeout without launching the stack.
 
 Keep the feature map honest as the app changes with `/maintain-verification-skill`.

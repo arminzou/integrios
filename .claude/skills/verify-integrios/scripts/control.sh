@@ -48,9 +48,10 @@ export VERIFY_RUN=$RUN VERIFY_PORT_OFFSET=$OFFSET
 export ADMIN=http://127.0.0.1:$ADMIN_PORT INGESTION=http://127.0.0.1:$INGESTION_PORT MOCKSINK=http://127.0.0.1:$MOCKSINK_PORT
 export ADMIN_OPS=http://127.0.0.1:$ADMIN_OP_PORT INGESTION_OPS=http://127.0.0.1:$INGESTION_OP_PORT WORKER_OPS=http://127.0.0.1:$WORKER_OP_PORT
 export AUTH='Authorization: OperatorKey $OPERATOR_KEY'
-export OPERATOR_EMAIL=$OPERATOR_EMAIL OPERATOR_PASSWORD_FILE=$STATE/operator-password
-export EVIDENCE=$EVIDENCE
+export OPERATOR_EMAIL=$OPERATOR_EMAIL
 EOF
+  printf 'export OPERATOR_PASSWORD_FILE=%q\n' "$STATE/operator-password"
+  printf 'export EVIDENCE=%q\n' "$EVIDENCE"
 }
 
 start_role() {
@@ -75,11 +76,11 @@ up() {
     if port_open "$p"; then echo "port $p is taken; choose another VERIFY_PORT_OFFSET" >&2; exit 1; fi
   done
   mkdir -p "$STATE" "$EVIDENCE"
-  git -C "$ROOT" rev-parse HEAD >"$STATE/revision"
 
   compose up -d --wait postgres mocksink
   # One build at a time per worktree: parallel builds collide in obj/.
-  [ -n "${VERIFY_NO_BUILD:-}" ] || dotnet build "$ROOT/src/Integrios/Integrios.csproj" -nologo -v q
+  dotnet build "$ROOT/src/Integrios/Integrios.csproj" -nologo -v q
+  git -C "$ROOT" rev-parse HEAD >"$STATE/revision"
   if [ "${1:-}" = --dashboard ]; then
     local frontend=$ROOT/src/Integrios.Admin/frontend
     [ -d "$frontend/node_modules" ] || npm --prefix "$frontend" ci
@@ -134,14 +135,28 @@ doctor() {
 }
 
 down() {
+  local role pid attempt
   for role in admin ingestion worker; do
     [ -f "$STATE/$role.pid" ] && kill "$(cat "$STATE/$role.pid")" 2>/dev/null || true
+  done
+  for role in admin ingestion worker; do
+    [ -f "$STATE/$role.pid" ] || continue
+    pid=$(cat "$STATE/$role.pid")
+    for ((attempt=0; attempt<75; attempt++)); do
+      kill -0 "$pid" 2>/dev/null || break
+      sleep 1
+    done
+    if kill -0 "$pid" 2>/dev/null; then
+      echo "$role (PID $pid) did not stop; database and state retained at $STATE; retry down after it exits" >&2
+      return 1
+    fi
   done
   compose down -v --remove-orphans
   rm -rf "$STATE"
   echo "down: run '$RUN' removed; evidence kept at $EVIDENCE"
 }
 
+if [[ ${BASH_SOURCE[0]} == "$0" ]]; then
 case ${1:-} in
   up) shift; up "$@" ;;
   doctor) doctor ;;
@@ -150,3 +165,4 @@ case ${1:-} in
   down) down ;;
   *) echo "usage: $0 <up [--dashboard] | doctor | env | integrios <args...> | down>" >&2; exit 2 ;;
 esac
+fi
