@@ -18,4 +18,5 @@ public sealed record Destination
     public required DateTimeOffset CreatedAt { get; init; }
     public required DateTimeOffset UpdatedAt { get; init; }
     public string? Description { get; init; }
+    public DateTimeOffset? LastPolledAt { get; init; }
 }

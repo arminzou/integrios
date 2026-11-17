@@ -232,6 +232,10 @@ namespace Integrios.Migrations.SqlServer.Migrations
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("environment");
 
+                    b.Property<DateTimeOffset?>("LastPolledAt")
+                        .HasColumnType("datetimeoffset")
+                        .HasColumnName("last_polled_at");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)")

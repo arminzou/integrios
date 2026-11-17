@@ -16,6 +16,8 @@ public sealed record DestinationDto
     public string? Description { get; init; }
     public required DateTimeOffset CreatedAt { get; init; }
     public required DateTimeOffset UpdatedAt { get; init; }
+    // When a Subscriber last asked a pull Destination for work, to the minute; null until one has.
+    public DateTimeOffset? LastPolledAt { get; init; }
 
     public static DestinationDto From(Destination destination) => new()
     {
@@ -30,5 +32,6 @@ public sealed record DestinationDto
         Description = destination.Description,
         CreatedAt = destination.CreatedAt,
         UpdatedAt = destination.UpdatedAt,
+        LastPolledAt = destination.LastPolledAt,
     };
 }

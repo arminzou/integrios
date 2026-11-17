@@ -221,6 +221,7 @@ public static class DependencyInjection
         services.AddSingleton<IPullDeliveryQueue, EventDeliveryQueue>();
         services.AddSingleton<IActiveSubscriberKeyLookup, ActiveSubscriberKeyLookup>();
         services.AddSingleton<ISubscriberKeyUseRecorder, SubscriberKeyUseRecorder>();
+        services.AddSingleton<IDestinationPollRecorder, DestinationPollRecorder>();
         services.AddTransformEvaluationServices();
 
         return services;
