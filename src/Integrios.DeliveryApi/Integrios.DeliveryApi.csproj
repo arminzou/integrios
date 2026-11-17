@@ -9,6 +9,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.15" />
+    <PackageReference Include="Microsoft.OpenApi" Version="2.13.0" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Integrios.Application\Integrios.Application.csproj" />
     <ProjectReference Include="..\Integrios.Domain\Integrios.Domain.csproj" />
     <ProjectReference Include="..\Integrios.Infrastructure\Integrios.Infrastructure.csproj" />

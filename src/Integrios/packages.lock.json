@@ -797,7 +797,9 @@
         "dependencies": {
           "Integrios.Application": "[0.12.0, )",
           "Integrios.Domain": "[0.12.0, )",
-          "Integrios.Infrastructure": "[0.12.0, )"
+          "Integrios.Infrastructure": "[0.12.0, )",
+          "Microsoft.AspNetCore.OpenApi": "[10.0.15, )",
+          "Microsoft.OpenApi": "[2.13.0, )"
         }
       },
       "integrios.domain": {
