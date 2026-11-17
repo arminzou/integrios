@@ -10,9 +10,9 @@ J='Content-Type: application/json'
 SLUG=${SEED_SLUG:-v$(date +%s)}
 ROOT=$(git rev-parse --show-toplevel)
 
-post() { curl -fsS -X POST "$ADMIN$1" -H "$AUTH" -H "$J" -d "$2"; }
+post() { curl -fsS --max-time 10 -X POST "$ADMIN$1" -H "$AUTH" -H "$J" -d "$2"; }
 
-CONNECTOR=$(curl -fsS -X PUT "$ADMIN/admin/connectors/http/versions/1" -H "$AUTH" -H "$J" \
+CONNECTOR=$(curl -fsS --max-time 10 -X PUT "$ADMIN/admin/connectors/http/versions/1" -H "$AUTH" -H "$J" \
   --data-binary "@$ROOT/examples/connectors/http.json" | jq -er .connector.id)
 TENANT=$(post /admin/tenants "{\"slug\":\"$SLUG\",\"name\":\"Verify $SLUG\",\"environment\":\"production\"}" | jq -er .id)
 TOKEN=$(post "/admin/tenants/$TENANT/tenant-api-keys" '{"name":"verify-ingestion"}' | jq -er .token)

@@ -61,10 +61,10 @@ start_role() {
 }
 
 wait_ready() {
-  local name=$1 url=$2
-  for _ in $(seq 1 60); do
-    [ "$(curl -s -o /dev/null -w '%{http_code}' -m 10 "$url" || true)" = 200 ] && { echo "ready: $name"; return; }
-    sleep 1
+  local name=$1 url=$2 deadline=$((SECONDS + 60)) remaining
+  while (( (remaining = deadline - SECONDS) > 0 )); do
+    [ "$(curl -s -o /dev/null -w '%{http_code}' -m "$((remaining < 10 ? remaining : 10))" "$url" || true)" = 200 ] && { echo "ready: $name"; return; }
+    if ((SECONDS < deadline)); then sleep 1; fi
   done
   echo "not ready after 60s: $name ($url); see $STATE/$name.log" >&2
   return 1

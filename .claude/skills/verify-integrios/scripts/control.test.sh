@@ -64,4 +64,41 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
   [[ -f $STATE/worker.pid && ! -f $scratch/database-removed ]] || fail 'timeout destroyed state or database'
 )
 
-echo 'PASS: environment quoting, mandatory build, delayed shutdown, shutdown timeout'
+(
+  curl() {
+    while (($#)); do
+      if [[ $1 == -m ]]; then printf '%s\n' "$2" >>"$scratch/readiness-budgets"; fi
+      shift
+    done
+    printf 503
+  }
+  sleep() { SECONDS=$((SECONDS + 27)); }
+  SECONDS=0
+  if wait_ready test http://unused.invalid >"$scratch/readiness.log" 2>&1; then
+    fail 'unready role passed readiness'
+  fi
+  mapfile -t budgets <"$scratch/readiness-budgets"
+  ((${#budgets[@]} <= 3)) || fail 'readiness exceeded elapsed deadline'
+  if ((${#budgets[@]} == 3)); then
+    ((budgets[2] > 0 && budgets[2] <= 6)) || fail 'readiness request exceeded remaining budget'
+  fi
+)
+
+(
+  curl() { printf 200; }
+  sleep() { fail 'ready role kept polling'; }
+  wait_ready test http://unused.invalid >/dev/null
+)
+
+(
+  ADMIN=http://unused.invalid AUTH=test-only MOCKSINK=http://sink.invalid
+  curl() {
+    [[ " $* " == *' --max-time 10 '* ]] || fail 'seed HTTP request has no timeout'
+    touch "$scratch/seed-request"
+    printf '%s\n' '{"connector":{"id":"test-id"},"id":"test-id","token":"test-only-token"}'
+  }
+  source "$(dirname "$0")/seed-delivery.sh" >/dev/null
+  [[ -f $scratch/seed-request ]] || fail 'seed sent no requests'
+)
+
+echo 'PASS: environment quoting, mandatory build, shutdown, readiness deadline, seed request timeouts'
