@@ -18,6 +18,14 @@ public sealed class DeliveryResult
 
     public static DeliveryResult Ack { get; } = new(Settlement.Ack);
 
+    /// True for <see cref="Retry"/>, false for <see cref="Ack"/>.
+    public bool IsRetry => Settlement.Action == "nack";
+
+    /// The retry delay a handler asked for, rounded up to whole seconds; null when it left the delay to the platform.
+    public TimeSpan? RetryAfter => Settlement.RetryAfterSeconds is { } seconds ? TimeSpan.FromSeconds(seconds) : null;
+
+    public string? Reason => Settlement.Error;
+
     /// <param name="after">Delay before the retry, up to 15 minutes; null uses the platform's backoff.</param>
     public static DeliveryResult Retry(TimeSpan? after = null, string? reason = null)
     {
