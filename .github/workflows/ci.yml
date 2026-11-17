@@ -2,11 +2,9 @@ name: ci
 
 on:
   pull_request:
-    paths-ignore: ['**.md', 'docs/**', 'LICENSE', 'package.json', 'package-lock.json']
   push:
     branches: [main]
     tags: ['v*']
-    paths-ignore: ['**.md', 'docs/**', 'LICENSE', 'package.json', 'package-lock.json']
   schedule:
     - cron: '17 3 * * *'
   workflow_dispatch:
@@ -14,14 +12,76 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      verify: ${{ steps.select.outputs.verify }}
+      frontend: ${{ steps.select.outputs.frontend }}
+      postgres: ${{ steps.select.outputs.postgres }}
+      docs: ${{ steps.select.outputs.docs }}
+      helpers: ${{ steps.select.outputs.helpers }}
+      providers: ${{ steps.select.outputs.providers }}
+      plan: ${{ steps.select.outputs.plan }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          # PR checkout is the merge commit; its first parent is the event's base SHA.
+          fetch-depth: 2
+      - name: Select whole jobs
+        id: select
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          RELEASE_PR: ${{ github.event_name == 'pull_request' && github.head_ref == 'release-please--branches--main' && github.event.pull_request.head.repo.full_name == github.repository }}
+        run: python3 .github/ci/checks.py select
+
+  helpers:
+    needs: changes
+    if: needs.changes.outputs.helpers == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: Check CI selection and final gate
+        run: python3 -m unittest discover -s .github/ci -v
+      - name: Check verification helpers
+        run: |
+          for test_script in .claude/skills/verify-integrios/scripts/{control,prove}.test.sh; do
+            if [ -f "$test_script" ]; then bash "$test_script"; fi
+          done
+
+  docs:
+    needs: changes
+    if: needs.changes.outputs.docs == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v5.0.0
+        with:
+          node-version: 22.22.0
+          cache: npm
+      - run: npm ci
+      - name: Add excluded-content probe
+        run: printf '%s\n' '__PRIVATE_DOC_PROBE__' > docs/__private_doc_probe.local.md
+      - run: npm run docs:build
+      - name: Check public output
+        shell: bash
+        run: |
+          test -f docs/.vitepress/dist/index.html
+          test -f docs/.vitepress/dist/setup.html
+          if test -e docs/.vitepress/dist/__private_doc_probe.local.html ||
+             grep -R -n '__PRIVATE_DOC_PROBE__' docs/.vitepress/dist; then
+            echo 'Excluded documentation appeared in public output' >&2
+            exit 1
+          fi
+
   verify:
     name: verify
-    # release-please's pull request is a rendering of commits already verified on main, and
-    # publishing is gated behind the tag run, not this one. Skipping keeps the token upgrade in
-    # release-please.yml from adding a full duplicate run on every push to main. `functional`
-    # needs verify, so it skips with it; skipped jobs satisfy required status checks.
-    if: github.head_ref != 'release-please--branches--main'
+    needs: changes
+    if: needs.changes.outputs.verify == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7.0.1
@@ -55,11 +115,8 @@ jobs:
 
   frontend:
     name: frontend
-    # release-please's pull request is a rendering of commits already verified on main, and
-    # publishing is gated behind the tag run, not this one. Skipping keeps the token upgrade in
-    # release-please.yml from adding a full duplicate run on every push to main. `functional`
-    # needs verify, so it skips with it; skipped jobs satisfy required status checks.
-    if: github.head_ref != 'release-please--branches--main'
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7.0.1
@@ -118,7 +175,8 @@ jobs:
 
   functional:
     name: functional (${{ matrix.database-provider }})
-    needs: verify
+    needs: changes
+    if: needs.changes.outputs.postgres == 'true'
     runs-on: ubuntu-latest
     # The functional project now starts a real Service Bus emulator alongside the database container; a broker
     # that never becomes ready would otherwise burn the six-hour default before failing.
@@ -126,7 +184,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        database-provider: [postgres, sqlserver]
+        database-provider: ${{ fromJSON(needs.changes.outputs.providers) }}
     steps:
       - uses: actions/checkout@v7.0.1
 
@@ -150,8 +208,21 @@ jobs:
           dotnet test tests/Integrios.FunctionalTests/Integrios.FunctionalTests.csproj
           --configuration Release --no-build
 
+  ci:
+    name: ci
+    needs: [changes, helpers, docs, verify, frontend, functional]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: Require every selected check
+        env:
+          PLAN: ${{ needs.changes.outputs.plan }}
+          NEEDS: ${{ toJSON(needs) }}
+        run: python3 .github/ci/checks.py gate
+
   acceptance:
-    needs: [verify, frontend, functional]
+    needs: ci
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
@@ -376,7 +447,7 @@ jobs:
           retention-days: 90
 
   package:
-    needs: [verify, acceptance]
+    needs: [ci, acceptance]
     if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     permissions:
@@ -447,7 +518,7 @@ jobs:
           retention-days: 90
 
   windows-archive:
-    needs: [verify, acceptance]
+    needs: [ci, acceptance]
     if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     permissions:

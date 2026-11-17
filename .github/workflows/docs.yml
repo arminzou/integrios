@@ -1,8 +1,6 @@
 name: docs
 
 on:
-  pull_request:
-    paths: ['**.md', 'docs/**', 'package.json', 'package-lock.json', '.github/workflows/docs.yml']
   push:
     branches: [main]
     paths: ['**.md', 'docs/**', 'package.json', 'package-lock.json', '.github/workflows/docs.yml']
