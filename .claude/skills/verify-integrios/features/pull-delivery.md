@@ -45,7 +45,8 @@ Preconditions: `up` and `doctor` pass, and the run's env is loaded.
 ## Gotchas
 
 - The seed's Topic also has an HTTP Subscription, so every Event delivers twice: once to mocksink
-  and once to the pull Destination. Filter the deliveries list by `destination_id`.
+  and once to the pull Destination. `GET .../events/<event>/deliveries` lists both, so select the
+  pull entry by `destination_id` with `jq`; the endpoint has no Destination filter.
 - A consumer project needs `Microsoft.Extensions.Hosting` itself; the SDK depends only on the
   hosting abstractions.
 - The SDK package is unpublished. Reference `src/Integrios.Subscriber/Integrios.Subscriber.csproj`
