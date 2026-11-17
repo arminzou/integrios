@@ -38,14 +38,7 @@ internal sealed class DispatchEventDeliveriesCommandHandler(
 
             if (claim is RecoveredEventDeliveryDeadLetter recovered)
             {
-                metrics.RecordDeliveryDeadLettered(recovered.ConnectorKey);
-                logger.LogWarning(
-                    "Recovered expired attempt_id={AttemptId}, attempt_number={AttemptNumber} and dead-lettered delivery_id={DeliveryId}, subscription_id={SubscriptionId}, event_id={EventId}",
-                    recovered.AttemptId,
-                    recovered.AttemptNumber,
-                    recovered.DeliveryId,
-                    recovered.SubscriptionId,
-                    recovered.EventId);
+                RecoveredDeadLetterSignal.Emit(logger, metrics, recovered);
                 continue;
             }
 

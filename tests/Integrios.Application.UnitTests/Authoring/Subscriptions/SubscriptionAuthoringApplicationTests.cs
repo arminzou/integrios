@@ -303,7 +303,7 @@ public sealed class SubscriptionAuthoringApplicationTests
             IReadOnlyList<string> eventTypes,
             Guid destinationId,
             JsonElement? transformConfig,
-            HttpDeliveryConfiguration httpDelivery,
+            HttpDeliveryConfiguration? httpDelivery,
             HttpSuccessRule? httpSuccess,
             int orderIndex,
             string? description,
@@ -317,7 +317,7 @@ public sealed class SubscriptionAuthoringApplicationTests
         public Task<Subscription?> GetByIdAsync(Guid tenantId, Guid topicId, Guid id, CancellationToken cancellationToken = default) =>
             Task.FromResult<Subscription?>(null);
 
-        public Task<Subscription?> UpdateAsync(Guid tenantId, Guid topicId, Guid id, string name, IReadOnlyList<string> eventTypes, Guid destinationId, JsonElement? transformConfig, HttpDeliveryConfiguration httpDelivery, HttpSuccessRule? httpSuccess, int orderIndex, string? description, CancellationToken cancellationToken = default) =>
+        public Task<Subscription?> UpdateAsync(Guid tenantId, Guid topicId, Guid id, string name, IReadOnlyList<string> eventTypes, Guid destinationId, JsonElement? transformConfig, HttpDeliveryConfiguration? httpDelivery, HttpSuccessRule? httpSuccess, int orderIndex, string? description, CancellationToken cancellationToken = default) =>
             Task.FromResult<Subscription?>(null);
 
         public Task<bool> SetStatusAsync(Guid tenantId, Guid topicId, Guid id, OperationalStatus status, CancellationToken cancellationToken = default) =>

@@ -1,10 +1,13 @@
+using Integrios.Application.Delivery;
 using Integrios.Domain.Enums;
 
 namespace Integrios.Application.DeliveryApi;
 
 public interface IPullDeliveryQueue
 {
-    Task<PullDeliveryWorkItem?> ClaimNextAsync(Guid destinationId, CancellationToken cancellationToken);
+    // Answers a ClaimedPullDelivery, or a RecoveredEventDeliveryDeadLetter when reclaiming an expired
+    // lease exhausted the delivery's retries.
+    Task<EventDeliveryClaimResult?> ClaimNextAsync(Guid destinationId, CancellationToken cancellationToken);
 
     Task<PullLeaseRenewalResult> RenewAsync(PullAttemptOwner owner, CancellationToken cancellationToken);
 
@@ -13,6 +16,8 @@ public interface IPullDeliveryQueue
         PullSettlement settlement,
         CancellationToken cancellationToken);
 }
+
+public sealed record ClaimedPullDelivery(PullDeliveryWorkItem WorkItem) : EventDeliveryClaimResult;
 
 public sealed record PullDeliveryWorkItem(
     Guid Id,

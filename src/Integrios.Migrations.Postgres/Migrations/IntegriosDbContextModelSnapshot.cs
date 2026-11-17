@@ -90,6 +90,21 @@ namespace Integrios.Migrations.Postgres.Migrations
 
                             t.HasCheckConstraint("ck_connectors_manifest_schema_version_positive", "manifest_schema_version > 0");
                         });
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("5ab5c71b-e000-4000-8000-000000000001"),
+                            ContractVersion = 1,
+                            CreatedAt = new DateTimeOffset(new DateTime(2026, 11, 16, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Description = "A Subscriber service claims deliveries for this Destination and reports each outcome, instead of receiving HTTP requests.",
+                            Direction = "destination",
+                            Key = "subscriber",
+                            Manifest = "{\"manifest_schema_version\":1,\"key\":\"subscriber\",\"contract_version\":1,\"direction\":\"destination\",\"destination_configuration_schema\":{\"type\":\"object\",\"properties\":{},\"additionalProperties\":false},\"source_verification\":{\"allow_unverified\":true,\"schemes\":[]},\"destination_authentication\":{\"allow_unauthenticated\":true,\"schemes\":[]},\"presentation\":{\"name\":\"Subscriber\",\"description\":\"A Subscriber service claims deliveries for this Destination and reports each outcome, instead of receiving HTTP requests.\",\"event_types\":[],\"authoring_presets\":[]}}",
+                            ManifestSchemaVersion = 1,
+                            Name = "Subscriber",
+                            UpdatedAt = new DateTimeOffset(new DateTime(2026, 11, 16, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0))
+                        });
                 });
 
             modelBuilder.Entity("Integrios.Domain.Entities.DeliveryAttempt", b =>
@@ -148,6 +163,10 @@ namespace Integrios.Migrations.Postgres.Migrations
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("status");
+
+                    b.Property<bool?>("TerminalFailure")
+                        .HasColumnType("boolean")
+                        .HasColumnName("terminal_failure");
 
                     b.HasKey("Id")
                         .HasName("delivery_attempts_pkey");
@@ -733,7 +752,6 @@ namespace Integrios.Migrations.Postgres.Migrations
                         .HasColumnName("event_types");
 
                     b.Property<string>("HttpDelivery")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("jsonb")
                         .HasColumnName("http_delivery")
                         .HasDefaultValueSql("'{\"body\": \"json\", \"method\": \"POST\", \"headers\": {}, \"version\": 1}'::jsonb");

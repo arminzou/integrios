@@ -10,10 +10,12 @@ using Integrios.Application.Delivery;
 using Integrios.Application.DeliveryApi;
 using Integrios.Application.Ingestion;
 using Integrios.Application.Secrets;
+using Integrios.Application.Telemetry;
 using Integrios.Application.Transforms;
 using Integrios.Domain.Entities;
 using Integrios.Domain.ValueObjects;
 using Integrios.Infrastructure;
+using Integrios.Infrastructure.Connectors;
 using Integrios.Infrastructure.Data;
 using Integrios.Infrastructure.Delivery;
 using Integrios.Infrastructure.Events;
@@ -26,6 +28,7 @@ using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using Npgsql;
 using Respawn;
 
@@ -129,7 +132,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         dbContext.ChangeTracker.Clear();
         await using DbConnection connection = database.CreateConnection();
         await connection.OpenAsync();
-        await respawner.ResetAsync(connection);
+        await database.ResetAsync(respawner, connection);
         await SeedRoutingDataAsync(connection);
     }
 
@@ -163,14 +166,16 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     internal static readonly Guid PullDestinationAId = Guid.Parse("cccccccc-0000-0000-0000-0000000000a1");
     internal static readonly Guid PullDestinationBId = Guid.Parse("cccccccc-0000-0000-0000-0000000000b1");
     internal IPullDeliveryQueue PullQueue => DeliveryQueue;
-    internal PullDeliveryClaimer PullClaimer => new(DeliveryQueue, new JsonataTransformEvaluator());
+    internal CapturingLoggerProvider PullClaimLogs { get; } = new();
+    internal PullDeliveryClaimer PullClaimer => new(
+        DeliveryQueue,
+        new JsonataTransformEvaluator(),
+        applicationProvider.GetRequiredService<IntegriosMetrics>(),
+        LoggerFactory.Create(logging => logging.AddProvider(PullClaimLogs)).CreateLogger<PullDeliveryClaimer>());
 
     public Task SeedPullDestinationsAsync()
     {
-        Guid connectorId = Guid.NewGuid();
         return ExecuteAsync($$$"""
-            INSERT INTO connectors (id,{{{database.KeyColumn}}},contract_version,manifest_schema_version,name,direction,manifest,created_at,updated_at)
-            VALUES (@ConnectorId,'subscriber',1,1,'Subscriber','destination',{{{database.Json("@Manifest")}}},{{{database.Now}}},{{{database.Now}}});
             INSERT INTO destinations (id,tenant_id,connector_id,name,configuration,status) VALUES
                 (@AId,@TenantId,@ConnectorId,'pull-a',{{{database.Json("@Empty")}}},'active'),
                 (@BId,@TenantId,@ConnectorId,'pull-b',{{{database.Json("@Empty")}}},'active');
@@ -180,8 +185,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
                 (@B1,@TenantId,@TopicId,'to-pull-b',{{{database.Json("@ShippedRules")}}},@BId,4,'active',NULL);
             """, new
         {
-            ConnectorId = connectorId,
-            Manifest = TestConnectorManifest.Create("subscriber", "Subscriber", "destination"),
+            ConnectorId = BuiltInConnectors.Subscriber.Id,
             AId = PullDestinationAId,
             BId = PullDestinationBId,
             TenantId,
@@ -225,6 +229,15 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
             new { DeliveryId = deliveryId, Seconds = (int)by.TotalSeconds });
         if (updated != 1)
             throw new InvalidOperationException($"Delivery {deliveryId} has no active attempt to backdate.");
+    }
+
+    public async Task MoveDeliveryToDestinationAsync(Guid deliveryId, Guid destinationId)
+    {
+        int updated = await ExecuteAsync(
+            "UPDATE event_deliveries SET destination_id=@DestinationId WHERE id=@DeliveryId",
+            new { DeliveryId = deliveryId, DestinationId = destinationId });
+        if (updated != 1)
+            throw new InvalidOperationException($"Delivery {deliveryId} was not found.");
     }
 
     public async Task MarkPullTransportAsync(Guid deliveryId)

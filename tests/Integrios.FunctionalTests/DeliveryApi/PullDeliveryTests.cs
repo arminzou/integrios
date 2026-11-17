@@ -1,5 +1,8 @@
+using Integrios.Application.Delivery;
 using Integrios.Application.DeliveryApi;
+using Integrios.Application.Telemetry;
 using Integrios.FunctionalTests.Worker;
+using Integrios.Tests.Shared;
 
 namespace Integrios.FunctionalTests.DeliveryApi;
 
@@ -81,6 +84,16 @@ public sealed class PullDeliveryTests : IClassFixture<WorkerRoutingFixture>, IAs
 
         (await ClaimAsync(A)).ShouldBeEmpty();
         (await ClaimAsync(B)).ShouldBeEmpty();
+        (await fixture.GetEventDeliveryAsync(pushDeliveryId)).LifetimeAttemptCount.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task PullClaim_NeverTakesAPushDeliveryEvenOnItsOwnDestination()
+    {
+        Guid pushDeliveryId = await fixture.FanoutSingleDeliveryAsync("payment.created");
+        await fixture.MoveDeliveryToDestinationAsync(pushDeliveryId, A);
+
+        (await ClaimAsync(A)).ShouldBeEmpty();
         (await fixture.GetEventDeliveryAsync(pushDeliveryId)).LifetimeAttemptCount.ShouldBe(0);
     }
 
@@ -196,6 +209,51 @@ public sealed class PullDeliveryTests : IClassFixture<WorkerRoutingFixture>, IAs
         attempt.ErrorMessage.ShouldBe("order rejected");
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public async Task RepeatedFailure_OnlyAcceptsTheOriginalSettlement(bool terminal, bool exhaustRetries)
+    {
+        await fixture.FanoutPullDeliveryAsync("order.placed");
+        if (exhaustRetries)
+        {
+            for (int attempt = 1; attempt < RetryPolicy.DefaultMaxAttempts; attempt++)
+            {
+                PullDelivery previous = (await ClaimAsync(A)).ShouldHaveSingleItem();
+                await fixture.ForceLeaseExpiredAsync(previous.DeliveryId);
+            }
+        }
+
+        PullDelivery claimed = (await ClaimAsync(A)).ShouldHaveSingleItem();
+        PullAttemptOwner owner = Owner(A, claimed);
+        PullSettlement original = terminal ? PullSettlement.Fail("rejected") : PullSettlement.Nack("retry", null);
+        PullSettlement different = terminal ? PullSettlement.Nack(null, null) : PullSettlement.Fail("rejected");
+
+        (await fixture.PullQueue.SettleAsync(owner, original, CancellationToken.None))
+            .ShouldBe(PullSettlementStatus.Applied);
+        (await fixture.PullQueue.SettleAsync(owner, original, CancellationToken.None))
+            .ShouldBe(PullSettlementStatus.AlreadyApplied);
+        (await fixture.PullQueue.SettleAsync(owner, different, CancellationToken.None))
+            .ShouldBe(PullSettlementStatus.OwnershipLost);
+        (await fixture.PullQueue.SettleAsync(owner, PullSettlement.Ack(), CancellationToken.None))
+            .ShouldBe(PullSettlementStatus.OwnershipLost);
+
+        (await fixture.GetEventDeliveryAsync(claimed.DeliveryId)).Status
+            .ShouldBe(terminal || exhaustRetries ? "dead_lettered" : "pending");
+
+        if (terminal || exhaustRetries)
+        {
+            await fixture.ReplayAsync(claimed.EventId, claimed.DeliveryId);
+            (await ClaimAsync(A)).ShouldHaveSingleItem();
+            (await fixture.PullQueue.SettleAsync(owner, original, CancellationToken.None))
+                .ShouldBe(PullSettlementStatus.AlreadyApplied);
+            (await fixture.PullQueue.SettleAsync(owner, different, CancellationToken.None))
+                .ShouldBe(PullSettlementStatus.OwnershipLost);
+            (await fixture.GetEventDeliveryAsync(claimed.DeliveryId)).Status.ShouldBe("in_flight");
+        }
+    }
+
     [Fact]
     public async Task ExpiredLease_StillSettlesUntilReclaimed()
     {
@@ -229,6 +287,25 @@ public sealed class PullDeliveryTests : IClassFixture<WorkerRoutingFixture>, IAs
             .ShouldBe(PullSettlementStatus.OwnershipLost);
         (await fixture.PullQueue.SettleAsync(Owner(A, second), PullSettlement.Ack(), CancellationToken.None))
             .ShouldBe(PullSettlementStatus.Applied);
+    }
+
+    [Fact]
+    public async Task RecoveredDeadLetter_IsLoggedAndCountedLikePush()
+    {
+        using var metrics = new MetricCollector(IntegriosMetrics.MeterName);
+        Guid deliveryId = await fixture.FanoutPullDeliveryAsync("order.placed");
+        for (int attempt = 1; attempt <= RetryPolicy.DefaultMaxAttempts; attempt++)
+        {
+            (await ClaimAsync(A)).ShouldHaveSingleItem();
+            await fixture.ForceLeaseExpiredAsync(deliveryId);
+        }
+
+        (await ClaimAsync(A)).ShouldBeEmpty();
+
+        (await fixture.GetEventDeliveryAsync(deliveryId)).Status.ShouldBe("dead_lettered");
+        metrics.ForInstrument("integrios_deliveries_dead_lettered")
+            .ShouldContain(measurement => Equals(measurement.Tag("connector_key"), "subscriber"));
+        fixture.PullClaimLogs.AnyMessageContains(deliveryId.ToString()).ShouldBeTrue();
     }
 
     [Fact]

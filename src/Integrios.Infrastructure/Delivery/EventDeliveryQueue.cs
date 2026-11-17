@@ -63,33 +63,24 @@ internal sealed class EventDeliveryQueue(
             var other => other
         };
 
-    public async Task<PullDeliveryWorkItem?> ClaimNextAsync(Guid destinationId, CancellationToken cancellationToken)
-    {
-        while (true)
+    public async Task<EventDeliveryClaimResult?> ClaimNextAsync(Guid destinationId, CancellationToken cancellationToken) =>
+        await ClaimRowAsync(destinationId, cancellationToken) switch
         {
-            switch (await ClaimRowAsync(destinationId, cancellationToken))
-            {
-                case null:
-                    return null;
-                case ClaimedRow claimed:
-                    return new PullDeliveryWorkItem(
-                        claimed.Row.Id,
-                        claimed.AttemptId,
-                        claimed.AttemptNumber,
-                        claimed.Row.EventId,
-                        claimed.Row.SubscriptionId,
-                        claimed.Row.PayloadJson ?? string.Empty,
-                        claimed.Row.EventType ?? string.Empty,
-                        claimed.Row.TopicName,
-                        claimed.Row.AcceptedAt,
-                        claimed.Row.MappingConfigSnapshot,
-                        claimed.LeaseExpiresAt,
-                        claimed.Row.Traceparent);
-                default:
-                    continue;
-            }
-        }
-    }
+            ClaimedRow claimed => new ClaimedPullDelivery(new PullDeliveryWorkItem(
+                claimed.Row.Id,
+                claimed.AttemptId,
+                claimed.AttemptNumber,
+                claimed.Row.EventId,
+                claimed.Row.SubscriptionId,
+                claimed.Row.PayloadJson ?? string.Empty,
+                claimed.Row.EventType ?? string.Empty,
+                claimed.Row.TopicName,
+                claimed.Row.AcceptedAt,
+                claimed.Row.MappingConfigSnapshot,
+                claimed.LeaseExpiresAt,
+                claimed.Row.Traceparent)),
+            var other => other
+        };
 
     private async Task<EventDeliveryClaimResult?> ClaimRowAsync(
         Guid? pullDestinationId,
@@ -367,7 +358,7 @@ internal sealed class EventDeliveryQueue(
             sqlServer
                 ? """
                 UPDATE delivery_attempts
-                SET status = @AttemptStatus, failure_phase = @FailurePhase,
+                SET status = @AttemptStatus, failure_phase = @FailurePhase, terminal_failure = @TerminalFailure,
                     request_payload = @RequestPayloadJson, response_status_code = @ResponseStatusCode,
                     response_body = @ResponseBody, response_body_truncated = @ResponseBodyTruncated,
                     error_message = @ErrorMessage, completed_at = @DatabaseNow
@@ -378,6 +369,7 @@ internal sealed class EventDeliveryQueue(
                 UPDATE delivery_attempts
                 SET status = @AttemptStatus,
                     failure_phase = @FailurePhase,
+                    terminal_failure = @TerminalFailure,
                     request_payload = CAST(@RequestPayloadJson AS jsonb),
                     response_status_code = @ResponseStatusCode,
                     response_body = @ResponseBody,
@@ -394,6 +386,7 @@ internal sealed class EventDeliveryQueue(
                     completion.DeliveryId,
                     AttemptStatus = completion.Succeeded ? "succeeded" : "failed",
                     FailurePhase = MapFailurePhase(completion.FailurePhase),
+                    TerminalFailure = completion.Succeeded ? (bool?)null : completion.IsTerminalFailure,
                     completion.RequestPayloadJson,
                     completion.ResponseStatusCode,
                     completion.ResponseBody,
@@ -520,8 +513,8 @@ internal sealed class EventDeliveryQueue(
         PullSettlement settlement,
         CancellationToken cancellationToken)
     {
-        string? attemptStatus = await ReadPullAttemptStatusAsync(owner, cancellationToken);
-        if (attemptStatus == "in_progress")
+        PullAttemptState? attempt = await ReadPullAttemptAsync(owner, cancellationToken);
+        if (attempt?.Status == "in_progress")
         {
             DeliveryFinalizationResult result = await FinalizeAsync(
                 new DeliveryAttemptCompletion(
@@ -539,21 +532,22 @@ internal sealed class EventDeliveryQueue(
             if (result.Status == DeliveryFinalizationStatus.Applied)
                 return PullSettlementStatus.Applied;
 
-            attemptStatus = await ReadPullAttemptStatusAsync(owner, cancellationToken);
+            attempt = await ReadPullAttemptAsync(owner, cancellationToken);
         }
 
-        return attemptStatus == (settlement.Succeeded ? "succeeded" : "failed")
+        return attempt?.Status == (settlement.Succeeded ? "succeeded" : "failed")
+            && (settlement.Succeeded || attempt.TerminalFailure == settlement.IsTerminal)
             ? PullSettlementStatus.AlreadyApplied
             : PullSettlementStatus.OwnershipLost;
     }
 
-    private async Task<string?> ReadPullAttemptStatusAsync(PullAttemptOwner owner, CancellationToken cancellationToken)
+    private async Task<PullAttemptState?> ReadPullAttemptAsync(PullAttemptOwner owner, CancellationToken cancellationToken)
     {
         await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
-        return await connection.QuerySingleOrDefaultAsync<string?>(
+        return await connection.QuerySingleOrDefaultAsync<PullAttemptState>(
             new CommandDefinition(
                 """
-                SELECT a.status
+                SELECT a.status AS Status, a.terminal_failure AS TerminalFailure
                 FROM event_deliveries d
                 JOIN delivery_attempts a ON a.event_delivery_id = d.id
                 WHERE d.id = @DeliveryId AND d.destination_id = @DestinationId AND d.transport = 'pull'
@@ -600,6 +594,8 @@ internal sealed class EventDeliveryQueue(
         public int RetryCycleAttemptCount { get; init; }
         public DateTimeOffset DatabaseNow { get; init; }
     }
+
+    private sealed record PullAttemptState(string Status, bool? TerminalFailure);
 
     private sealed record ClaimedRow(
         DeliveryWorkRow Row,

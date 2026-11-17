@@ -79,63 +79,74 @@ const formFields = ["name", "destination_id", "event_types", "mapping", "descrip
 /// Subscription keeps whatever version it already carries rather than being silently upgraded.
 const currentHttpDeliveryVersion = 1;
 
-const subscriptionSchema = z
-  .object({
-    name: z.string().trim().min(1, "Enter a name."),
-    destination_id: z.string().min(1, "Choose a Destination."),
-    event_types: z.array(z.string()).min(1, "Choose at least one Event type."),
-    mapping: z.string().max(65_536, "Keep the mapping expression at or below 64 KiB."),
-    raw_mapping: z.string().superRefine((text, ctx) => {
-      if (!text.trim()) return;
-      const parsed = parseJson(text);
-      if (parsed.error !== undefined) ctx.addIssue({ code: z.ZodIssueCode.custom, message: parsed.error });
-    }),
-    method: z.enum(["POST", "PUT", "PATCH", "DELETE"]),
-    path: z.string(),
-    body: z.enum(["json", "none"]),
-    headers: z
-      .array(z.object({ name: z.string().trim().min(1, "Enter a header name."), value: z.string() }))
-      .max(32, "Add at most 32 headers."),
-    success_mode: z.enum(["", "json_boolean"]),
-    success_field: z.string(),
-    success_expected: z.enum(["", "true", "false"]),
-    success_diagnostic_field: z.string(),
-    success_max_body_bytes: z.string(),
-    description: z.string(),
-  })
-  .superRefine((values, ctx) => {
-    const names = new Set<string>();
-    values.headers.forEach((header, index) => {
-      const normalized = header.name.trim().toLowerCase();
-      if (normalized && names.has(normalized))
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["headers", index, "name"],
-          message: "Use each header name once, ignoring case.",
-        });
-      names.add(normalized);
-    });
-    if (values.success_mode !== "json_boolean") return;
-    if (!values.success_field.trim())
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["success_field"], message: "Enter the response field." });
-    if (!values.success_expected)
+const subscriptionFields = z.object({
+  name: z.string().trim().min(1, "Enter a name."),
+  destination_id: z.string().min(1, "Choose a Destination."),
+  event_types: z.array(z.string()).min(1, "Choose at least one Event type."),
+  mapping: z.string().max(65_536, "Keep the mapping expression at or below 64 KiB."),
+  raw_mapping: z.string().superRefine((text, ctx) => {
+    if (!text.trim()) return;
+    const parsed = parseJson(text);
+    if (parsed.error !== undefined) ctx.addIssue({ code: z.ZodIssueCode.custom, message: parsed.error });
+  }),
+  method: z.enum(["POST", "PUT", "PATCH", "DELETE"]),
+  path: z.string(),
+  body: z.enum(["json", "none"]),
+  headers: z
+    .array(z.object({ name: z.string().trim().min(1, "Enter a header name."), value: z.string() }))
+    .max(32, "Add at most 32 headers."),
+  success_mode: z.enum(["", "json_boolean"]),
+  success_field: z.string(),
+  success_expected: z.enum(["", "true", "false"]),
+  success_diagnostic_field: z.string(),
+  success_max_body_bytes: z.string(),
+  description: z.string(),
+});
+
+const subscriptionSchema = subscriptionFields.superRefine((values, ctx) => {
+  const names = new Set<string>();
+  values.headers.forEach((header, index) => {
+    const normalized = header.name.trim().toLowerCase();
+    if (normalized && names.has(normalized))
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ["success_expected"],
-        message: "Choose the expected value.",
+        path: ["headers", index, "name"],
+        message: "Use each header name once, ignoring case.",
       });
-    if (values.success_max_body_bytes) {
-      const maximum = Number(values.success_max_body_bytes);
-      if (!Number.isInteger(maximum) || maximum < 1 || maximum > 1_048_576)
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["success_max_body_bytes"],
-          message: "Enter an integer from 1 through 1048576.",
-        });
-    }
+    names.add(normalized);
   });
+  if (values.success_mode !== "json_boolean") return;
+  if (!values.success_field.trim())
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["success_field"], message: "Enter the response field." });
+  if (!values.success_expected)
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["success_expected"],
+      message: "Choose the expected value.",
+    });
+  if (values.success_max_body_bytes) {
+    const maximum = Number(values.success_max_body_bytes);
+    if (!Number.isInteger(maximum) || maximum < 1 || maximum > 1_048_576)
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["success_max_body_bytes"],
+        message: "Enter an integer from 1 through 1048576.",
+      });
+  }
+});
+
+// A pull Subscription saves no HTTP request, so a draft left in its hidden HTTP fields never blocks the save.
+const pullSubscriptionSchema = subscriptionFields.extend({
+  headers: z.array(z.object({ name: z.string(), value: z.string() })),
+});
 
 export type SubscriptionValues = z.infer<typeof subscriptionSchema>;
+
+type DestinationTransports = { id: string; transport?: string }[] | undefined;
+
+function isPullDestination(destinations: DestinationTransports, destinationId: string) {
+  return destinations?.find((destination) => destination.id === destinationId)?.transport === "pull";
+}
 
 function guidedMappingExpression(mapping: unknown): string | null {
   if (mapping === null || mapping === undefined) return "";
@@ -911,18 +922,24 @@ function SubscriptionForm({
   const rawMapping = subscription !== undefined && originalExpression === null;
   const storedSuccess = subscription?.http_success;
 
-  const form = useForm<SubscriptionValues, unknown, SubscriptionValues>({
-    resolver: zodResolver(subscriptionSchema),
+  const form = useForm<SubscriptionValues, DestinationTransports, SubscriptionValues>({
+    context: destinations.data?.items,
+    resolver: (values, items, options) =>
+      zodResolver(isPullDestination(items, values.destination_id) ? pullSubscriptionSchema : subscriptionSchema)(
+        values,
+        items,
+        options,
+      ),
     defaultValues: {
       name: subscription?.name ?? "",
       destination_id: subscription?.destination_id ?? "",
       event_types: subscription ? subscription.event_types : defaultEventType ? [defaultEventType] : [],
       mapping: originalExpression ?? "",
       raw_mapping: rawMapping ? formatJson(subscription.mapping_config) : "",
-      method: (subscription?.http_delivery.method ?? "POST") as SubscriptionValues["method"],
-      path: subscription?.http_delivery.path ?? "",
-      body: (subscription?.http_delivery.body ?? "json") as SubscriptionValues["body"],
-      headers: Object.entries(subscription?.http_delivery.headers ?? {}).map(([name, value]) => ({ name, value })),
+      method: (subscription?.http_delivery?.method ?? "POST") as SubscriptionValues["method"],
+      path: subscription?.http_delivery?.path ?? "",
+      body: (subscription?.http_delivery?.body ?? "json") as SubscriptionValues["body"],
+      headers: Object.entries(subscription?.http_delivery?.headers ?? {}).map(([name, value]) => ({ name, value })),
       success_mode: storedSuccess ? "json_boolean" : "",
       success_field: storedSuccess?.field ?? "",
       success_expected: (storedSuccess?.expected === undefined || storedSuccess.expected === null
@@ -939,16 +956,18 @@ function SubscriptionForm({
   const headerRows = useFieldArray({ control: form.control, name: "headers" });
   const expression = form.watch("mapping");
   const successMode = form.watch("success_mode");
+  const destinationId = form.watch("destination_id");
+  const pull = isPullDestination(destinations.data?.items, destinationId);
   // Delivery runs the mapping even when the request carries no body, so a mapping there could only
   // fail a delivery. A request without a body is saved without one.
-  const mapsBody = form.watch("body") === "json";
+  const mapsBody = pull || form.watch("body") === "json";
   const mappingChanged = mapsBody && !rawMapping && expression !== originalExpression;
   const mappingReviewed = !mappingChanged || reviewedExpression === expression;
 
   const save = useMutation({
     mutationFn: (values: SubscriptionValues) => {
       const httpDelivery: HttpDelivery = {
-        version: subscription?.http_delivery.version ?? currentHttpDeliveryVersion,
+        version: subscription?.http_delivery?.version ?? currentHttpDeliveryVersion,
         method: values.method,
         path: values.path || null,
         headers: Object.fromEntries(values.headers.map((header) => [header.name.trim(), header.value])),
@@ -959,8 +978,8 @@ function SubscriptionForm({
         event_types: values.event_types,
         destination_id: values.destination_id,
         mapping: !mapsBody ? null : rawMapping ? parseJson(values.raw_mapping).value : mappingEnvelope(values.mapping),
-        http_delivery: httpDelivery,
-        http_success: httpSuccess(values),
+        http_delivery: pull ? null : httpDelivery,
+        http_success: pull ? null : httpSuccess(values),
         order_index: subscription?.order_index ?? 0,
         description: values.description.trim() || null,
       };
@@ -1037,65 +1056,80 @@ function SubscriptionForm({
           </SelectField>
           <EventTypeSelection control={form.control} tenantId={tenantId} topicId={topicId} />
         </Section>
-        <Section title="HTTP request" hint="The operation this Subscription sends to its Destination.">
-          <SelectField control={form.control} name="method" label="Method" required>
-            {["POST", "PUT", "PATCH", "DELETE"].map((verb) => (
-              <SelectItem key={verb} value={verb}>
-                {verb}
-              </SelectItem>
-            ))}
-          </SelectField>
-          <TextField
-            control={form.control}
-            name="path"
-            label="Relative path (optional)"
-            hint="Appended to the Destination base URI. A query string is allowed."
-          />
-          <fieldset className="m-0 flex min-w-0 flex-col gap-3 border-0 p-0">
-            <legend className="text-sm font-medium">Request headers</legend>
-            <p className="m-0 text-xs text-ink-secondary">
-              Add operation-specific headers. Destination authentication supplies its own headers.
-            </p>
-            {headerRows.fields.map((row, index) => (
-              <div
-                key={row.id}
-                className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
-              >
-                <TextField
-                  control={form.control}
-                  name={`headers.${index}.name`}
-                  label={`Header ${index + 1} name`}
-                  className={monoInput}
-                  required
-                />
-                <TextField control={form.control} name={`headers.${index}.value`} label={`Header ${index + 1} value`} />
+        <Section
+          title={pull ? "Payload" : "HTTP request"}
+          hint={
+            pull
+              ? "What the Subscriber claims for each routed Event."
+              : "The operation this Subscription sends to its Destination."
+          }
+        >
+          {pull ? null : (
+            <>
+              <SelectField control={form.control} name="method" label="Method" required>
+                {["POST", "PUT", "PATCH", "DELETE"].map((verb) => (
+                  <SelectItem key={verb} value={verb}>
+                    {verb}
+                  </SelectItem>
+                ))}
+              </SelectField>
+              <TextField
+                control={form.control}
+                name="path"
+                label="Relative path (optional)"
+                hint="Appended to the Destination base URI. A query string is allowed."
+              />
+              <fieldset className="m-0 flex min-w-0 flex-col gap-3 border-0 p-0">
+                <legend className="text-sm font-medium">Request headers</legend>
+                <p className="m-0 text-xs text-ink-secondary">
+                  Add operation-specific headers. Destination authentication supplies its own headers.
+                </p>
+                {headerRows.fields.map((row, index) => (
+                  <div
+                    key={row.id}
+                    className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
+                  >
+                    <TextField
+                      control={form.control}
+                      name={`headers.${index}.name`}
+                      label={`Header ${index + 1} name`}
+                      className={monoInput}
+                      required
+                    />
+                    <TextField
+                      control={form.control}
+                      name={`headers.${index}.value`}
+                      label={`Header ${index + 1} value`}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="sm:mt-6"
+                      aria-label={`Remove header ${index + 1}`}
+                      onClick={() => headerRows.remove(index)}
+                    >
+                      <X aria-hidden="true" className="size-4" />
+                    </Button>
+                  </div>
+                ))}
                 <Button
                   type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="sm:mt-6"
-                  aria-label={`Remove header ${index + 1}`}
-                  onClick={() => headerRows.remove(index)}
+                  variant="outline"
+                  size="sm"
+                  className="self-start"
+                  disabled={headerRows.fields.length >= 32}
+                  onClick={() => headerRows.append({ name: "", value: "" })}
                 >
-                  <X aria-hidden="true" className="size-4" />
+                  Add header
                 </Button>
-              </div>
-            ))}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="self-start"
-              disabled={headerRows.fields.length >= 32}
-              onClick={() => headerRows.append({ name: "", value: "" })}
-            >
-              Add header
-            </Button>
-          </fieldset>
-          <SelectField control={form.control} name="body" label="Request body" required>
-            <SelectItem value="json">Mapped Event JSON</SelectItem>
-            <SelectItem value="none">No body</SelectItem>
-          </SelectField>
+              </fieldset>
+              <SelectField control={form.control} name="body" label="Request body" required>
+                <SelectItem value="json">Mapped Event JSON</SelectItem>
+                <SelectItem value="none">No body</SelectItem>
+              </SelectField>
+            </>
+          )}
           {!mapsBody ? null : rawMapping ? (
             <TextAreaField
               control={form.control}
@@ -1146,47 +1180,49 @@ function SubscriptionForm({
           )}
         </Section>
 
-        <Section title="Response success" hint="How a successful HTTP response is recognized for this operation.">
-          <SelectField
-            control={form.control}
-            name="success_mode"
-            label="Success check"
-            emptyLabel="Any HTTP 2xx response"
-          >
-            <SelectItem value="json_boolean">Response JSON boolean</SelectItem>
-          </SelectField>
-          {successMode === "json_boolean" ? (
-            <>
-              <TextField
-                control={form.control}
-                name="success_field"
-                label="Boolean field"
-                hint="Top-level response JSON field that signals success."
-                required
-              />
-              <SelectField control={form.control} name="success_expected" label="Expected value" required>
-                <SelectItem value="true">True</SelectItem>
-                <SelectItem value="false">False</SelectItem>
-              </SelectField>
-              <TextField
-                control={form.control}
-                name="success_diagnostic_field"
-                label="Diagnostic field (optional)"
-                hint="Top-level response field used when the operation reports failure."
-              />
-              <TextField
-                control={form.control}
-                name="success_max_body_bytes"
-                label="Maximum response bytes (optional)"
-                hint="Defaults to 65536. Allowed range: 1 through 1048576."
-                type="number"
-                min={1}
-                max={1_048_576}
-                step={1}
-              />
-            </>
-          ) : null}
-        </Section>
+        {pull ? null : (
+          <Section title="Response success" hint="How a successful HTTP response is recognized for this operation.">
+            <SelectField
+              control={form.control}
+              name="success_mode"
+              label="Success check"
+              emptyLabel="Any HTTP 2xx response"
+            >
+              <SelectItem value="json_boolean">Response JSON boolean</SelectItem>
+            </SelectField>
+            {successMode === "json_boolean" ? (
+              <>
+                <TextField
+                  control={form.control}
+                  name="success_field"
+                  label="Boolean field"
+                  hint="Top-level response JSON field that signals success."
+                  required
+                />
+                <SelectField control={form.control} name="success_expected" label="Expected value" required>
+                  <SelectItem value="true">True</SelectItem>
+                  <SelectItem value="false">False</SelectItem>
+                </SelectField>
+                <TextField
+                  control={form.control}
+                  name="success_diagnostic_field"
+                  label="Diagnostic field (optional)"
+                  hint="Top-level response field used when the operation reports failure."
+                />
+                <TextField
+                  control={form.control}
+                  name="success_max_body_bytes"
+                  label="Maximum response bytes (optional)"
+                  hint="Defaults to 65536. Allowed range: 1 through 1048576."
+                  type="number"
+                  min={1}
+                  max={1_048_576}
+                  step={1}
+                />
+              </>
+            ) : null}
+          </Section>
+        )}
 
         <Button
           type="submit"

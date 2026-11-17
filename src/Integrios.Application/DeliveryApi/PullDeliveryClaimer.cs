@@ -1,11 +1,17 @@
 using Integrios.Application.Delivery;
+using Integrios.Application.Telemetry;
 using Integrios.Application.Transforms;
+using Microsoft.Extensions.Logging;
 
 namespace Integrios.Application.DeliveryApi;
 
 // shortcut: a plain class while no host owns the DeliveryApi group; it becomes a handler that the
 // delivery-api host registers once that host exists.
-public sealed class PullDeliveryClaimer(IPullDeliveryQueue queue, ITransformEvaluator transformEvaluator)
+public sealed class PullDeliveryClaimer(
+    IPullDeliveryQueue queue,
+    ITransformEvaluator transformEvaluator,
+    IntegriosMetrics metrics,
+    ILogger<PullDeliveryClaimer> logger)
 {
     public async Task<IReadOnlyList<PullDelivery>> ClaimAsync(
         Guid destinationId,
@@ -15,9 +21,16 @@ public sealed class PullDeliveryClaimer(IPullDeliveryQueue queue, ITransformEval
         var claimed = new List<PullDelivery>();
         while (claimed.Count < max)
         {
-            PullDeliveryWorkItem? item = await queue.ClaimNextAsync(destinationId, cancellationToken);
-            if (item is null)
+            EventDeliveryClaimResult? claim = await queue.ClaimNextAsync(destinationId, cancellationToken);
+            if (claim is null)
                 break;
+            if (claim is RecoveredEventDeliveryDeadLetter recovered)
+            {
+                RecoveredDeadLetterSignal.Emit(logger, metrics, recovered);
+                continue;
+            }
+            if (claim is not ClaimedPullDelivery { WorkItem: var item })
+                throw new InvalidOperationException($"Unknown pull claim result '{claim.GetType().Name}'.");
 
             (string? payload, string? error) = DeliveryMapping.Apply(
                 transformEvaluator,

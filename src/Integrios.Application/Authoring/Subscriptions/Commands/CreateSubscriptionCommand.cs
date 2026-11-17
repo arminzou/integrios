@@ -18,7 +18,7 @@ public sealed record CreateSubscriptionCommand(
     IReadOnlyList<string>? EventTypes,
     Guid DestinationId,
     JsonElement? MappingConfig,
-    HttpDeliveryConfiguration HttpDelivery,
+    HttpDeliveryConfiguration? HttpDelivery,
     HttpSuccessRule? HttpSuccess,
     int OrderIndex,
     string? Description) : IRequest<SubscriptionDto?>;
@@ -62,8 +62,8 @@ internal sealed class CreateSubscriptionCommandHandler(
             AuthoringResource.Destination,
             [command.DestinationId],
             cancellationToken);
-        await EnsureDestinationIsAllowed(
-            command.TenantId, command.DestinationId, command.HttpDelivery, cancellationToken);
+        HttpDeliveryConfiguration? httpDelivery = await EnsureDestinationIsAllowed(
+            command.TenantId, command.DestinationId, command.HttpDelivery, command.HttpSuccess, cancellationToken);
 
         var subscription = await subscriptionRepository.CreateAsync(
             command.TenantId,
@@ -72,7 +72,7 @@ internal sealed class CreateSubscriptionCommandHandler(
             eventTypes,
             command.DestinationId,
             command.MappingConfig,
-            command.HttpDelivery,
+            httpDelivery,
             command.HttpSuccess,
             command.OrderIndex,
             command.Description,
@@ -81,10 +81,11 @@ internal sealed class CreateSubscriptionCommandHandler(
         return subscription is null ? null : SubscriptionDto.From(subscription);
     }
 
-    private async Task EnsureDestinationIsAllowed(
+    private async Task<HttpDeliveryConfiguration?> EnsureDestinationIsAllowed(
         Guid tenantId,
         Guid destinationId,
-        HttpDeliveryConfiguration httpDelivery,
+        HttpDeliveryConfiguration? httpDelivery,
+        HttpSuccessRule? httpSuccess,
         CancellationToken cancellationToken)
     {
         var destination = await destinationRepository.GetByIdAsync(tenantId, destinationId, cancellationToken);
@@ -101,17 +102,23 @@ internal sealed class CreateSubscriptionCommandHandler(
                 "The Destination references a Connector that does not exist.");
         }
 
+        HttpDeliveryConfiguration? effective = SubscriptionAuthoringRules.HttpDeliveryFor(connector, httpDelivery, httpSuccess);
         try
         {
             DestinationUseValidator.ValidateAuthoring(destination, connector, authSchemeRegistry);
-            HttpDeliveryConfigurationRules.ValidateAuthenticationHeaderCollisions(
-                httpDelivery,
-                destination.Authentication,
-                authSchemeRegistry);
+            if (effective is not null)
+            {
+                HttpDeliveryConfigurationRules.ValidateAuthenticationHeaderCollisions(
+                    effective,
+                    destination.Authentication,
+                    authSchemeRegistry);
+            }
         }
         catch (DestinationValidationException exception)
         {
             throw new SubscriptionValidationException(exception.Message);
         }
+
+        return effective;
     }
 }

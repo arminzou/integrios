@@ -85,7 +85,7 @@ public sealed class OperatorSessionFixture : IAsyncLifetime
     {
         await using DbConnection connection = database.CreateConnection();
         await connection.OpenAsync();
-        await respawner.ResetAsync(connection);
+        await database.ResetAsync(respawner, connection);
 
         // The machine credential must keep working alongside the browser session, so the same
         // OperatorKey the other Admin tests use is available here too.

@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Integrios.Admin.Endpoints;
 using Integrios.Application.Authoring.Destinations;
+using Integrios.Infrastructure.Connectors;
 using Integrios.Tests.Shared;
 
 namespace Integrios.FunctionalTests.Admin;
@@ -244,6 +245,29 @@ public sealed class DestinationsAdminTests(AdminApiFixture fixture) : Subscripti
             }));
 
         response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+    }
+
+    [Fact]
+    public async Task PullDestination_IsAuthoredOnTheSubscriberConnectorWithoutABaseUri()
+    {
+        HttpResponseMessage pull = await client.SendAsync(AdminRequest(
+            HttpMethod.Post,
+            $"/admin/tenants/{Fixture.TenantId}/destinations",
+            new { connector_id = BuiltInConnectors.Subscriber.Id, name = "orders-service", configuration = new { } }));
+        HttpResponseMessage push = await client.SendAsync(AdminRequest(
+            HttpMethod.Post,
+            $"/admin/tenants/{Fixture.TenantId}/destinations",
+            new { connector_id = Fixture.HttpConnectorId, name = "no-base-uri", configuration = new { } }));
+
+        pull.StatusCode.ShouldBe(HttpStatusCode.Created);
+        push.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        JsonElement body = await (await client.SendAsync(AdminRequest(
+            HttpMethod.Get, $"/admin/tenants/{Fixture.TenantId}/destinations?limit=100")))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        string? TransportOf(string name) => body.GetProperty("items").EnumerateArray()
+            .Single(item => item.GetProperty("name").GetString() == name).GetProperty("transport").GetString();
+        TransportOf("orders-service").ShouldBe("pull");
+        TransportOf("seeded-destination").ShouldBe("http");
     }
 
     private Task<HttpResponseMessage> CreateDestinationAsync(string name) => client.SendAsync(AdminRequest(

@@ -26,8 +26,10 @@ internal sealed class SubscriptionConfiguration : IEntityTypeConfiguration<Subsc
         entity.Property(e => e.Description).HasColumnName("description");
         entity.Property(e => e.DeletedAt).HasColumnName("deleted_at");
         entity.Property(e => e.DestinationId).HasColumnName("destination_id");
+        // A pull Subscription stores null, which EF would otherwise replace with the column default.
         entity.Property(e => e.HttpDelivery)
             .HasDefaultValueSql("'{\"body\": \"json\", \"method\": \"POST\", \"headers\": {}, \"version\": 1}'::jsonb")
+            .ValueGeneratedNever()
             .HasColumnType("jsonb")
             .IsRequired(false)
             .HasColumnName("http_delivery");

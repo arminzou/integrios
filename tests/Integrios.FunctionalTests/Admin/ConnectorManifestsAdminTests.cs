@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Dapper;
 using Integrios.Application.Authoring.Connectors;
 using Integrios.Domain.ValueObjects;
@@ -134,6 +135,33 @@ public sealed class ConnectorManifestsAdminTests : IClassFixture<AdminApiFixture
             StringComparison.Ordinal));
         HttpResponseMessage sourceContractResponse = await ApplyAsync(1, sourceContract);
         sourceContractResponse.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+    }
+
+    [Fact]
+    public async Task BuiltInSubscriberConnector_IsProvisionedAndRefusesEveryManifest()
+    {
+        ConnectorDto builtIn = await GetSubscriberAsync();
+        builtIn.Direction.ShouldBe("destination");
+        builtIn.Manifest.GetProperty("destination_configuration_schema").GetProperty("properties")
+            .EnumerateObject().ShouldBeEmpty();
+
+        foreach (int contractVersion in new[] { 1, 2 })
+        {
+            JsonNode manifest = JsonNode.Parse(builtIn.Manifest.GetRawText())!;
+            manifest["contract_version"] = contractVersion;
+            manifest["presentation"]!["name"] = "Renamed";
+            using HttpResponseMessage response = await SendAsync(
+                HttpMethod.Put,
+                $"/admin/connectors/subscriber/versions/{contractVersion}",
+                JsonSerializer.SerializeToElement(manifest));
+            response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        }
+
+        ConnectorDto retained = await GetSubscriberAsync();
+        retained.Name.ShouldBe("Subscriber");
+        retained.UpdatedAt.ShouldBe(builtIn.UpdatedAt);
+        using HttpResponseMessage version2 = await SendAsync(HttpMethod.Get, "/admin/connectors/subscriber/versions/2");
+        version2.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     [Fact]
@@ -303,6 +331,13 @@ public sealed class ConnectorManifestsAdminTests : IClassFixture<AdminApiFixture
             $"/admin/connectors/example_api/versions/{contractVersion}");
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         return await response.Content.ReadFromJsonAsync<ConnectorDto>(HostJson.Options);
+    }
+
+    private async Task<ConnectorDto> GetSubscriberAsync()
+    {
+        using HttpResponseMessage response = await SendAsync(HttpMethod.Get, "/admin/connectors/subscriber/versions/1");
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        return (await response.Content.ReadFromJsonAsync<ConnectorDto>(HostJson.Options))!;
     }
 
     private Task<HttpResponseMessage> ApplyAsync(int contractVersion, JsonElement manifest) =>

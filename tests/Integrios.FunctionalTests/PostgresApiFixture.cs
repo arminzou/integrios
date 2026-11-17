@@ -48,7 +48,7 @@ public sealed class PostgresApiFixture : IAsyncLifetime
     {
         await using DbConnection connection = database.CreateConnection();
         await connection.OpenAsync();
-        await respawner.ResetAsync(connection);
+        await database.ResetAsync(respawner, connection);
 
         SourceConnectorId = await database.ApplyConnectorManifestAsync(
             "test_source",
