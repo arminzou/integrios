@@ -10,6 +10,7 @@ before making or reviewing a change, then only the documents your task needs.
 | Project layout, commands, test selection, and commit format | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | System shape, planes, core model, and delivery semantics | [docs/architecture.md](docs/architecture.md) |
 | Running the stack locally and sending a first Event | [docs/setup.md](docs/setup.md) |
+| Proving a change in the running app and capturing evidence | [.claude/skills/verify-integrios/SKILL.md](.claude/skills/verify-integrios/SKILL.md) |
 | Runtime settings and their defaults | [docs/configuration.md](docs/configuration.md) |
 | Connector manifest properties | [docs/connector-manifest.md](docs/connector-manifest.md) |
 | PostgreSQL and SQL Server | [docs/database-backends.md](docs/database-backends.md) |

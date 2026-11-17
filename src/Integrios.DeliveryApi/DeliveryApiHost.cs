@@ -35,7 +35,10 @@ public static class DeliveryApiHost
         {
             StatusCodeSelector = exception => exception is BadHttpRequestException badRequest
                 ? badRequest.StatusCode
-                : StatusCodes.Status500InternalServerError
+                : StatusCodes.Status500InternalServerError,
+            // An unreadable body is the caller's error, answered with 400; logging it as an unhandled
+            // exception would let any key holder fill the error log.
+            SuppressDiagnosticsCallback = context => context.Exception is BadHttpRequestException
         });
         app.UseStatusCodePages();
 
