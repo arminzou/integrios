@@ -28,7 +28,9 @@ bash $V/prove.sh
 This command starts a fresh API-only run, runs doctor, seeds through the Admin API, checks the
 Connector response, accepts an Event, polls delivery, checks the Admin read-back and sink payload,
 resubmits the Event to check idempotency, and checks rejected credentials. Every assertion must
-pass. It then stops its own run. A failed check or failed cleanup exits nonzero.
+pass, including equality of the complete delivered JSON payload. It then stops its own run.
+A failed check or failed cleanup exits nonzero. Seed requests have a 10-second timeout; each role
+has a 60-second readiness deadline, with request timeouts capped by the remaining budget.
 
 It prints the evidence directory under `artifacts/verify/<run>/evidence/proof/`. That directory
 keeps JSON responses, HTTP status files, the submitted payload, `assertions.jsonl`, role logs,

@@ -21,6 +21,12 @@ assert_json() {
   record "$name" "$passed"
 }
 
+assert_sink_payload() {
+  assert_json 'sink received the expected payload' "$1" \
+    '(.requests | length) == 1 and (.requests[0].body | fromjson) == $request[0].payload' \
+    --slurpfile request "$2"
+}
+
 prove() {
   export VERIFY_RUN=${VERIFY_RUN:-proof-$(date +%s)-$RANDOM}
   source "$SCRIPTS/control.sh"
@@ -89,8 +95,7 @@ prove() {
 
   request sink 200 -X POST "$MOCKSINK/__admin/requests/find" -H 'Content-Type: application/json' \
     -d "{\"method\":\"POST\",\"urlPath\":\"/sink/$SLUG\"}"
-  assert_json 'sink received the expected payload' "$proof/sink.json" \
-    '.requests | length == 1 and (.[0].body | fromjson | .amount == 1200)'
+  assert_sink_payload "$proof/sink.json" "$proof/request.json"
 }
 
 if [[ ${BASH_SOURCE[0]} == "$0" ]]; then
