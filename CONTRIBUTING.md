@@ -44,6 +44,12 @@ No `.env` is needed; the Makefile and `compose.yml` default all development valu
 `.env` overrides them. See [docs/setup.md](docs/setup.md) for the end-to-end run and a first-event
 walkthrough, and the [docs site guide](docs/ci-cd.md) to preview the public documentation.
 
+For runtime proof, follow the [verification skill](.claude/skills/verify-integrios/SKILL.md).
+Its `prove.sh` command launches an isolated stack and checks Event intake through HTTP delivery,
+with retained evidence and nonzero exit on failure. Use the matching feature recipes for behavior
+outside that smoke path. Run narrow tests while editing and prove affected user flows before
+opening a PR; local proof supplements the shared CI gate.
+
 ## Project layout
 
 - `Integrios.slnx` is the solution entry point.
@@ -101,12 +107,6 @@ about to run anyway; run it once before pushing, or when the change is in the ta
 While iterating, filter to the narrowest relevant test rather than running a whole project:
 `dotnet test <project> --filter "FullyQualifiedName~SourcesAdminTests"`. Do not partition a project
 with traits or category filters. If you skip verification, say so explicitly.
-
-For runtime proof, follow the [verification skill](.claude/skills/verify-integrios/SKILL.md).
-Its `prove.sh` command launches an isolated stack and checks Event intake through HTTP delivery,
-with retained evidence and nonzero exit on failure. Use the matching feature recipes for behavior
-outside that smoke path. Run narrow tests while editing and prove affected user flows before
-opening a PR; local proof supplements the shared CI gate.
 
 ## Making changes
 
