@@ -68,7 +68,7 @@ AUTH="Authorization: OperatorKey global_operator_key:operator_bootstrap_secret"
 
 # 1. Apply the generic HTTP example and capture this deployment's generated Connector ID.
 HTTP_CONNECTOR=$(curl -s -X PUT "$ADMIN/admin/connectors/http/versions/1" -H "$AUTH" \
-  -H 'Content-Type: application/json' --data-binary @examples/connectors/http.json | jq -r .id)
+  -H 'Content-Type: application/json' --data-binary @examples/connectors/http.json | jq -er .connector.id)
 
 # 2. Create a tenant
 TENANT=$(curl -s -X POST $ADMIN/admin/tenants -H "$AUTH" -H 'Content-Type: application/json' \
