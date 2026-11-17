@@ -41,8 +41,7 @@ Preconditions:
   Compose-network name `http://mocksink:8080` that `docs/setup.md` uses.
 - The default retry policy backs off exponentially from 30 seconds, so dead-lettering takes about
   90 seconds. Poll; do not sleep a fixed time.
-- `docs/setup.md` reads the Connector id with `jq -r .id`, but the `PUT` response nests it under
-  `.connector.id`. `seed-delivery.sh` uses the working path.
+- The Connector `PUT` response nests its id under `.connector.id`; it is not a top-level `.id`.
 - A delivery needs both the Source and the Subscription active. Nothing flows while either is
   Inactive, and that is not a Worker failure.
 - mocksink's journal keeps every request of the run. Filter by the seed's own `/sink/$SLUG` path.

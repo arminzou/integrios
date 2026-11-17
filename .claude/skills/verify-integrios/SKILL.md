@@ -17,6 +17,35 @@ Every command below runs from the repository root in Bash (Git Bash on Windows).
 V=.claude/skills/verify-integrios/scripts
 ```
 
+## Prove the common API flow
+
+Requires Git, Bash, Docker Compose, the pinned .NET SDK, curl, and jq. Use Git Bash on Windows.
+
+```bash
+bash $V/prove.sh
+```
+
+This command starts a fresh API-only run, runs doctor, seeds through the Admin API, checks the
+Connector response, accepts an Event, polls delivery, checks the Admin read-back and sink payload,
+resubmits the Event to check idempotency, and checks rejected credentials. Every assertion must
+pass. It then stops its own run. A failed check or failed cleanup exits nonzero.
+
+It prints the evidence directory under `artifacts/verify/<run>/evidence/proof/`. That directory
+keeps JSON responses, HTTP status files, the submitted payload, `assertions.jsonl`, role logs,
+launch/doctor/cleanup logs, and `summary.json` with the commit, tracked-diff hash, exit code, and
+elapsed seconds. Credentials stay in transient run state and are not copied into proof files.
+The commit and tracked-diff hash describe the invocation; they do not fingerprint untracked source.
+
+Set `VERIFY_RUN` and `VERIFY_PORT_OFFSET` for a named run on different ports. The command refuses
+an existing run and never reuses a running stack. During focused iteration, use the individual
+launch and drive commands below so one healthy stack can serve several related checks. Restart
+after changing code that the running binaries use.
+
+This is an API smoke proof, not a complete regression pass. It does not verify dashboard behavior,
+retry/dead-letter/replay, SQL Server, broker Sources, or packaged deployment. Read the matching
+feature recipes and run relevant tests for those changes. For UI work, use `browser.mjs` to exercise
+the UI and capture the result; an API pass is not a UI pass.
+
 ## Launch
 
 ```bash
@@ -168,7 +197,9 @@ on their PIDs and the `/dev/tcp` port probe in `control.sh`.
 
 ## Maintenance
 
-Run `bash $V/control.test.sh` after changing the control helper. It checks environment quoting,
-build-before-revision ordering, and cleanup ordering and timeout without launching the stack.
+Run `bash $V/control.test.sh` and `bash $V/prove.test.sh` after changing the helpers. They check
+environment quoting, build-before-revision ordering, cleanup ordering and timeout, and rejection
+of incorrect HTTP/JSON results without launching the stack. Re-drive affected mapped features
+after changing the harness. Update a feature recipe in the same change as the behavior it describes.
 
 Keep the feature map honest as the app changes with `/maintain-verification-skill`.

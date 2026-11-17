@@ -15,6 +15,9 @@ doctor, cleanup, and the helpers are described in [../SKILL.md](../SKILL.md); `$
 
 ## Driving conventions
 
+- `bash $V/prove.sh` automates the Connector response, Event intake, successful HTTP delivery,
+  idempotent resubmission, and rejected-credential checks on a fresh run. It does not cover the
+  rest of this map. Use the feature files for change-specific proof.
 - Start every recipe from the baseline. A recipe that needs a Tenant seeds its own.
 - Prefer ARIA roles and accessible names in the browser. Form names come from the dashboard's own
   tests (`src/Integrios.Admin/frontend/tests/e2e/journey.browser.test.ts`).

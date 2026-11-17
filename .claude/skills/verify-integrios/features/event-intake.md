@@ -25,7 +25,7 @@ Preconditions:
 - `mkdir -p $EVIDENCE/event-intake`.
 
 - **Accept.** Run `curl -sS -X POST "$INGESTION/events?source_id=$SOURCE" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{"event_type":"payment.created","source_event_id":"intake-001","payload":{"amount":1200}}' -w '\nHTTP %{http_code}\n' | tee $EVIDENCE/event-intake/accept.txt`. Status is `202`. The body has `"status":"accepted"`, `"already_accepted":false`, and an `event_id`.
-- **Read back.** Run `curl -fsS $INGESTION/events/<event-id> -H "Authorization: Bearer $TOKEN" | tee $EVIDENCE/event-intake/event.json`. The Event has the same id and payload.
+- **Read back.** Run `curl -fsS $INGESTION/events/<event-id> -H "Authorization: Bearer $TOKEN" | tee $EVIDENCE/event-intake/event.json`. The Event has the same id and its delivery history. This endpoint does not return the original payload; inspect the sink journal for delivered payload proof.
 - **Resubmit.** Repeat the accept request unchanged. The response names the same `event_id` with `"already_accepted":true`, and no second Event is created.
 - **Wrong credential.** Repeat the accept request with `Authorization: Bearer intg_wrong`. The request is refused with a 4xx (401 expected) and no `event_id`.
 

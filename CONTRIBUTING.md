@@ -102,6 +102,12 @@ While iterating, filter to the narrowest relevant test rather than running a who
 `dotnet test <project> --filter "FullyQualifiedName~SourcesAdminTests"`. Do not partition a project
 with traits or category filters. If you skip verification, say so explicitly.
 
+For runtime proof, follow the [verification skill](.claude/skills/verify-integrios/SKILL.md).
+Its `prove.sh` command launches an isolated stack and checks Event intake through HTTP delivery,
+with retained evidence and nonzero exit on failure. Use the matching feature recipes for behavior
+outside that smoke path. Run narrow tests while editing and prove affected user flows before
+opening a PR; local proof supplements the shared CI gate.
+
 ## Making changes
 
 1. Fork the repo and branch off `main`.
