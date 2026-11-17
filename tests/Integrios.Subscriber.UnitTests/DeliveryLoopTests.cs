@@ -328,6 +328,7 @@ public sealed class DeliveryLoopTests : IAsyncDisposable
         time.Advance(Lease);
 
         await cancelled.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await Eventually(() => transport.Claims == 2);
         await loop!.StopAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
     }
 

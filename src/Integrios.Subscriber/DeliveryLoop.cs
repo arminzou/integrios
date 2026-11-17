@@ -142,9 +142,9 @@ internal sealed class DeliveryLoop<THandler>(
                         delivery.DeliveryId, delivery.AttemptId);
                 return;
             }
-            catch (Exception exception) when (!stoppingToken.IsCancellationRequested && time.GetUtcNow() < leaseExpiresAt)
+            catch (Exception exception) when (!stoppingToken.IsCancellationRequested)
             {
-                logger.LogWarning(exception, "Reporting delivery {DeliveryId} failed; retrying.", delivery.DeliveryId);
+                logger.LogWarning(exception, "Reporting delivery {DeliveryId} failed.", delivery.DeliveryId);
             }
             remaining = leaseExpiresAt - time.GetUtcNow();
             await PauseAsync(Backoff(failures) < remaining ? Backoff(failures) : remaining, stoppingToken);
