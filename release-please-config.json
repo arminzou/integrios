@@ -14,7 +14,7 @@
       "component": "client",
       "include-component-in-tag": true,
       "extra-files": [
-        { "type": "xml", "path": "Integrios.Client.csproj", "xpath": "//Project/PropertyGroup/Version" }
+        { "type": "generic", "path": "Integrios.Client.csproj" }
       ]
     }
   }
