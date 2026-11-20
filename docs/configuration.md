@@ -2,7 +2,7 @@
 
 Admin, Ingestion, Worker, and Delivery API use standard .NET configuration. Each role reads `appsettings.json`,
 then `appsettings.<role>.json`, then `appsettings.<Environment>.json`, then
-`appsettings.<role>.<Environment>.json`, where the role is `ingestion`, `admin`, `worker`, or `delivery-api`. The
+`appsettings.<role>.<Environment>.json`, where the role is `ingestion`, `admin`, `worker`, or `subscriber`. The
 repository ships `appsettings.<role>.json` with non-secret defaults where present and
 `appsettings.<role>.Development.json` with local-only values. Environment variables override those
 files, and command-line arguments override both. For a hierarchical key, replace each `:` with `__`:
@@ -92,7 +92,7 @@ the Worker does not read this setting.
 
 | Configuration key | Environment variable | Default | Constraint |
 |---|---|---|---|
-| `Integrios:DeliveryApi:MaxAttemptDuration` | `Integrios__DeliveryApi__MaxAttemptDuration` | `00:30:00` | `TimeSpan` greater than `Integrios:Delivery:LeaseDuration`. Caps how long a Subscriber can renew one attempt's lease. |
+| `Integrios:Subscriber:MaxAttemptDuration` | `Integrios__Subscriber__MaxAttemptDuration` | `00:30:00` | `TimeSpan` greater than `Integrios:Delivery:LeaseDuration`. Caps how long a Subscriber can renew one attempt's lease. |
 
 ## Credentials and Tenant secret sources
 

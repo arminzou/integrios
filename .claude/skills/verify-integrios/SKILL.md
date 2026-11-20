@@ -71,7 +71,7 @@ with `--dashboard` on a cold `npm ci`. It:
    OperatorKey `global_operator_key:operator_bootstrap_secret`, and `operator-user create
    --password-file` for `operator@example.test` with a random password stored in the state
    directory.
-6. Starts `admin`, `ingestion`, `worker`, and `delivery-api` as background `dotnet integrios.dll <role>`
+6. Starts `admin`, `ingestion`, `worker`, and `subscriber` as background `dotnet integrios.dll <role>`
    processes, each under its runtime database principal, and waits until every `/ready` endpoint answers
    `200`. Ready means the role reached the database, not only that the port listens.
 
@@ -155,8 +155,8 @@ means you changed commits since `up`: run `down` and `up` again.
   uses a new slug, so it never collides with earlier seeds in the same run. `eval "$($V/seed-pull.sh)"`
   does the same and adds a pull Destination, its SubscriberKey, and an active Subscription to it,
   exporting `PULL_DESTINATION`, `SUBSCRIBER_KEY`, and `PULL_SUBSCRIPTION`.
-- **Subscriber SDK:** `bash $V/prove-pull.sh` proves every `Integrios.Subscriber` outcome against
-  this run's `delivery-api`. See [features/pull-delivery.md](features/pull-delivery.md).
+- **Subscriber SDK:** `bash $V/prove-pull.sh` proves every `Integrios.Client` outcome against
+  this run's `subscriber` role. See [features/pull-delivery.md](features/pull-delivery.md).
 - **Browser:** `node $V/browser.mjs <route> <evidence-prefix>` signs in through the real password
   form, opens the route, and writes `<prefix>.aria.txt` and `<prefix>.png`. For multi-step journeys,
   import `signIn` and `capture` from it in a scratch `.mjs` file; the selectors in each feature file
