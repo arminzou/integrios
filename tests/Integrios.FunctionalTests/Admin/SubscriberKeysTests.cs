@@ -87,7 +87,7 @@ public sealed class SubscriberKeysTests(AdminApiFixture fixture) : AdminApiTestB
         using var host = DeliveryHost();
         using var client = host.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", created.Token);
-        var identity = await client.GetFromJsonAsync<IdentityResponse>("/test/subscriber");
+        var identity = await client.GetFromJsonAsync<IdentityResponse>("/test/subscriber", HostJson.Options);
         identity!.TenantId.ShouldBe(fixture.TenantId.ToString());
         identity.DestinationId.ShouldBe(destinationId.ToString());
         identity.KeyId.ShouldBe(created.SubscriberKey.Id.ToString());
@@ -113,7 +113,7 @@ public sealed class SubscriberKeysTests(AdminApiFixture fixture) : AdminApiTestB
         foreach ((CreateSubscriberKeyResult key, Guid expected) in new[] { (keyA, destinationId), (keyB, destinationB) })
         {
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", key.Token);
-            var identity = await client.GetFromJsonAsync<IdentityResponse>("/test/subscriber");
+            var identity = await client.GetFromJsonAsync<IdentityResponse>("/test/subscriber", HostJson.Options);
             identity!.DestinationId.ShouldBe(expected.ToString());
             identity.KeyId.ShouldBe(key.SubscriberKey.Id.ToString());
         }

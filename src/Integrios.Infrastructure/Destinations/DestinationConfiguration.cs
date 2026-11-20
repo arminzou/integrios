@@ -42,6 +42,7 @@ internal sealed class DestinationConfiguration : IEntityTypeConfiguration<Destin
             .HasColumnType("jsonb")
             .HasColumnName("authentication");
         entity.Property(e => e.Environment).HasColumnName("environment");
+        entity.Property(e => e.LastPolledAt).HasColumnName("last_polled_at");
         entity.Property(e => e.ConnectorId).HasColumnName("connector_id");
         entity.Property(e => e.Name).HasColumnName("name");
         entity.Property(e => e.Status)

@@ -18,6 +18,7 @@ using Integrios.Infrastructure;
 using Integrios.Infrastructure.Connectors;
 using Integrios.Infrastructure.Data;
 using Integrios.Infrastructure.Delivery;
+using Integrios.Infrastructure.Destinations;
 using Integrios.Infrastructure.Events;
 using Integrios.Infrastructure.Subscriptions;
 using Integrios.Infrastructure.Telemetry;
@@ -26,6 +27,7 @@ using Integrios.Tests.Shared;
 using MediatR;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
@@ -103,6 +105,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         services.AddSingleton(infrastructureProvider.GetRequiredService<DeliveryExecutionOptions>());
         services.AddSingleton<IEventDeliveryQueue>(DeliveryQueue);
         services.AddSingleton<IPullDeliveryQueue>(DeliveryQueue);
+        services.AddSingleton<IDestinationPollRecorder>(new DestinationPollRecorder(connectionFactory));
         services.AddSingleton<IDeliveryClient>(_ => DeliveryClient);
         services.AddSingleton<IDestinationAuthenticator, ApiKeyHeaderAuthenticator>();
         services.AddSingleton<IDestinationAuthenticator, BearerTokenAuthenticator>();
@@ -169,7 +172,37 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     internal IPullDeliveryQueue PullQueue => DeliveryQueue;
     internal CapturingLoggerProvider PullClaimLogs { get; } = new();
     internal Task<IReadOnlyList<PullDelivery>> ClaimPullAsync(Guid destinationId, int max) =>
-        mediator.Send(new ClaimPullDeliveriesCommand(destinationId, max));
+        mediator.Send(new ClaimPullDeliveriesCommand(destinationId, max, TimeSpan.Zero));
+
+    internal IConfiguration Configuration => database.Configuration;
+
+    internal async Task<string> SeedSubscriberKeyAsync(Guid destinationId)
+    {
+        string token = "intg_sub_" + Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
+        await ExecuteAsync(
+            """
+            INSERT INTO subscriber_keys (id,tenant_id,destination_id,name,key_prefix,key_hash)
+            VALUES (@Id,@TenantId,@DestinationId,'subscriber',@Prefix,@Hash)
+            """,
+            new
+            {
+                Id = Guid.NewGuid(),
+                TenantId,
+                DestinationId = destinationId,
+                Prefix = token[..16],
+                Hash = "sha256:" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token))).ToLowerInvariant(),
+            });
+        return token;
+    }
+
+    internal async Task<DateTimeOffset?> GetLastPolledAtAsync(Guid destinationId) =>
+        (await QueryAsync<PollRow>(
+            "SELECT last_polled_at AS LastPolledAt FROM destinations WHERE id=@Id", new { Id = destinationId })).Single().LastPolledAt;
+
+    internal Task BackdateLastPolledAtAsync(Guid destinationId, TimeSpan by) =>
+        ExecuteAsync(
+            "UPDATE destinations SET last_polled_at=@At WHERE id=@Id",
+            new { Id = destinationId, At = DateTimeOffset.UtcNow - by });
 
     public Task SeedPullDestinationsAsync()
     {
@@ -956,6 +989,11 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         DateTime dateTime => new DateTimeOffset(DateTime.SpecifyKind(dateTime, DateTimeKind.Utc)),
         _ => throw new InvalidOperationException($"Unsupported database timestamp type {value.GetType().Name}.")
     };
+
+    private sealed record PollRow
+    {
+        public DateTimeOffset? LastPolledAt { get; init; }
+    }
 
     private sealed record DeliveryRow
     {

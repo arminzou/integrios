@@ -34,6 +34,7 @@ public sealed class HostCompositionArchitectureTests
         [typeof(ISubscriberKeyRepository)] = [Host.Admin],
         [typeof(IActiveSubscriberKeyLookup)] = [Host.DeliveryApi],
         [typeof(ISubscriberKeyUseRecorder)] = [Host.DeliveryApi],
+        [typeof(IDestinationPollRecorder)] = [Host.DeliveryApi],
         [typeof(IActiveTenantApiKeyLookup)] = [Host.Ingestion],
         [typeof(ITenantApiKeyUseRecorder)] = [Host.Ingestion],
         [typeof(IDestinationAuthenticator)] = [Host.Admin, Host.Worker],
@@ -455,6 +456,7 @@ public sealed class HostCompositionArchitectureTests
         using IServiceScope scope = provider.CreateScope();
 
         AssertResolves<IPullDeliveryQueue>(scope.ServiceProvider);
+        AssertResolves<IDestinationPollRecorder>(scope.ServiceProvider);
         AssertResolves<ITransformEvaluator>(scope.ServiceProvider);
         AssertResolves<DeliveryExecutionOptions>(scope.ServiceProvider);
         AssertResolves<RetryPolicy>(scope.ServiceProvider);

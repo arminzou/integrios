@@ -70,9 +70,10 @@ public sealed class ClaimPullDeliveriesCommandTests
         services.AddLogging();
         services.AddApplicationServices();
         services.AddSingleton(queue);
+        services.AddSingleton(Substitute.For<IDestinationPollRecorder>());
         services.AddSingleton(transforms ?? Substitute.For<ITransformEvaluator>());
         await using ServiceProvider provider = services.BuildServiceProvider();
-        return await provider.GetRequiredService<IMediator>().Send(new ClaimPullDeliveriesCommand(DestinationId, max));
+        return await provider.GetRequiredService<IMediator>().Send(new ClaimPullDeliveriesCommand(DestinationId, max, TimeSpan.Zero));
     }
 
     private static ITransformEvaluator FailingTransforms()

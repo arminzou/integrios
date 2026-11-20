@@ -1,5 +1,7 @@
+using System.Text.Json;
 using Integrios.Application;
 using Integrios.DeliveryApi.Auth;
+using Integrios.DeliveryApi.Endpoints;
 using Microsoft.AspNetCore.Authentication;
 using Integrios.Infrastructure;
 using Integrios.Infrastructure.Hosting;
@@ -29,8 +31,23 @@ public static class DeliveryApiHost
         app.UseRouting();
         app.UseOperationalEndpointIsolation(operationalPort);
         app.UseRequestCompletionLogging();
+        app.UseExceptionHandler(new ExceptionHandlerOptions
+        {
+            StatusCodeSelector = exception => exception is BadHttpRequestException badRequest
+                ? badRequest.StatusCode
+                : StatusCodes.Status500InternalServerError,
+            // An unreadable body is the caller's error, answered with 400; logging it as an unhandled
+            // exception would let any key holder fill the error log.
+            SuppressDiagnosticsCallback = context => context.Exception is BadHttpRequestException
+        });
+        app.UseStatusCodePages();
+
+        if (app.Environment.IsDevelopment())
+            app.MapOpenApi();
+
         app.UseAuthentication();
         app.UseAuthorization();
+        app.MapDeliveryEndpoints();
         app.MapOperationalEndpoints();
     }
 
@@ -40,6 +57,10 @@ public static class DeliveryApiHost
         builder.Logging.AddOperationalConsoleLogging(builder.Environment.IsDevelopment());
         int operationalPort = builder.AddOperationalEndpoints(DefaultOperationalPort, defaultProductUrl: DefaultUrl);
 
+        builder.Services.ConfigureHttpJsonOptions(options =>
+            options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower);
+        builder.Services.AddOpenApi();
+        builder.Services.AddProblemDetails();
         builder.Services.AddDeliveryApiApplicationServices();
         builder.Services.AddAuthentication(SubscriberKeyAuthHandler.SchemeName)
             .AddScheme<AuthenticationSchemeOptions, SubscriberKeyAuthHandler>(SubscriberKeyAuthHandler.SchemeName, _ => { });

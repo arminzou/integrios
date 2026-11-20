@@ -229,6 +229,10 @@ namespace Integrios.Migrations.Postgres.Migrations
                         .HasColumnType("text")
                         .HasColumnName("environment");
 
+                    b.Property<DateTimeOffset?>("LastPolledAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_polled_at");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("text")

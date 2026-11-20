@@ -46,10 +46,9 @@ resolution, Source and Topic validation, durable Event acceptance, fanout, trans
 HTTP delivery, retries, dead-lettering, replay, and delivery tracking.
 
 Worker owns fanout and HTTP delivery. Delivery API owns pull-delivery claims and settlement,
-with its own Application handler group and queue port. It reads no Tenant secrets. The
-`delivery-api` role currently exposes operational endpoints only; its authenticated Subscriber
-HTTP endpoints are not yet implemented. Its product listener defaults to loopback port 5241,
-and its operational listener defaults to port 5242 outside containers.
+with its own Application handler group and queue port. It reads no Tenant secrets. It serves the
+[pull delivery protocol](#pull-delivery-preview) to Subscribers. Its product listener defaults to
+loopback port 5241, and its operational listener defaults to port 5242 outside containers.
 
 The services share the configured PostgreSQL or SQL Server 2022+ database. Admin owns configuration
 writes; Worker reads the configuration it needs directly from that database and does not call Admin
@@ -202,6 +201,38 @@ before Integrios records success, so recovery may repeat the logical delivery. S
 EventDelivery identifiers let downstream systems deduplicate; per-attempt identifiers support
 diagnostics. Fenced leases prevent an older Worker from overwriting a newer authoritative result,
 and indeterminate attempts preserve ambiguity rather than reporting a false confirmed failure.
+
+### Pull delivery (preview)
+
+A Destination built from the platform's `subscriber` Connector is a pull Destination. The Worker
+never sends its deliveries; a Subscriber service claims them from the `delivery-api` role over
+HTTP and reports each outcome. A SubscriberKey in `Authorization: Bearer` selects exactly one pull
+Destination, so no Destination id appears in a path, and a key can never see another Destination's
+work. The protocol is a preview and may still change.
+
+| Call | Body | Answer |
+| --- | --- | --- |
+| `POST /delivery/v1/claims` | `max` (1 to 32), `wait_seconds` (0 to 20) | `200` with `deliveries`, or `204` when none arrived within the wait |
+| `POST /delivery/v1/deliveries/{id}/attempts/{attempt}/renew` | none | `200` with the new `lease_expires_at` |
+| `.../ack` | none | `204` |
+| `.../nack` | optional `retry_after_seconds` (0 to 900) and `error` | `204`; the delivery retries under the platform policy |
+| `.../fail` | `error` | `204`; the delivery dead-letters |
+
+A claim spends an attempt exactly as a push claim does, and returns the mapped payload with the
+Event, delivery and attempt identifiers, the Event type, Topic, accepted time, lease expiry and
+`traceparent`. An idle claim holds the request open and re-checks about once a second until work
+arrives or the wait ends; an empty wait spends nothing. Each claim also records the Destination's
+last poll time, at most once a minute, which the dashboard shows on the Destination so a stopped
+Subscriber does not look like a quiet queue.
+
+Renew extends the lease by `Integrios:Delivery:LeaseDuration`, capped at
+`Integrios:DeliveryApi:MaxAttemptDuration` from the attempt's start; past that it answers `409`
+with code `max_attempt_duration`. Every attempt call is fenced by the attempt id: once another
+claim has reclaimed the delivery, or a different outcome was recorded, the call answers `409` with
+code `ownership_lost`. Repeating the settlement that was already recorded answers its original
+success, so a Subscriber whose response was lost can retry it safely. Pull attempts appear in the
+same delivery history as push attempts, with failure phase `subscriber` and the Subscriber's error
+text in place of an HTTP status.
 
 ## Scaling and observability
 
