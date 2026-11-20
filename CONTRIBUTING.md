@@ -71,6 +71,8 @@ opening a PR; local proof supplements the shared CI gate.
 - `src/Integrios.Infrastructure` implements those ports: persistence, messaging, secret resolution,
   and other external-system adapters.
 - `src/Integrios.Domain` holds entities, enums, and value objects.
+- `src/Integrios.Subscriber` is the unpublished .NET SDK preview for team-owned Subscriber hosts.
+  It depends only on the Delivery API's HTTP protocol, with no server-project references.
 - `src/Integrios.Migrations.Postgres/` and `src/Integrios.Migrations.SqlServer/` hold the
   provider-specific EF Core migrations.
 - `tests/` holds the xUnit test projects, including `tests/Integrios.UnitTests` for the `integrios`

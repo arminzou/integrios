@@ -1,6 +1,6 @@
 ---
 name: verify-integrios
-description: Launches an isolated Integrios stack (PostgreSQL and a WireMock sink in Compose; Admin, Ingestion, and Worker built from this checkout) and drives it the way an Operator or a Source does — Event intake, HTTP delivery, the Admin API and Operator dashboard, and the `integrios admin database` CLI — then captures evidence. Use to prove a change works in the running app rather than only in tests.
+description: Launches an isolated Integrios stack (PostgreSQL and a WireMock sink in Compose; Admin, Ingestion, Worker, and Delivery API built from this checkout) and drives it the way an Operator, a Source, or a Subscriber does — Event intake, HTTP and pull delivery, the Subscriber SDK, the Admin API and Operator dashboard, and the `integrios admin database` CLI — then captures evidence. Use to prove a change works in the running app rather than only in tests.
 ---
 
 # Verify Integrios
@@ -71,12 +71,12 @@ with `--dashboard` on a cold `npm ci`. It:
    OperatorKey `global_operator_key:operator_bootstrap_secret`, and `operator-user create
    --password-file` for `operator@example.test` with a random password stored in the state
    directory.
-6. Starts `admin`, `ingestion`, and `worker` as background `dotnet integrios.dll <role>` processes,
-   each under its runtime database principal, and waits until all three `/ready` endpoints answer
+6. Starts `admin`, `ingestion`, `worker`, and `delivery-api` as background `dotnet integrios.dll <role>`
+   processes, each under its runtime database principal, and waits until every `/ready` endpoint answers
    `200`. Ready means the role reached the database, not only that the port listens.
 
 The loaded env exports `ADMIN`, `INGESTION`, `MOCKSINK`, `ADMIN_OPS`, `INGESTION_OPS`,
-`WORKER_OPS`, `AUTH` (an `Authorization: OperatorKey ...` header), `OPERATOR_EMAIL`,
+`WORKER_OPS`, `DELIVERY_API`, `DELIVERY_API_OPS`, `AUTH` (an `Authorization: OperatorKey ...` header), `OPERATOR_EMAIL`,
 `OPERATOR_PASSWORD_FILE`, and `EVIDENCE`.
 
 ### Ports and parallel runs
@@ -91,6 +91,7 @@ with a `make up` stack:
 | Admin API and dashboard | 25150 (operational 25151) |
 | Ingestion | 25231 (operational 25232) |
 | Worker operational | 25299 |
+| Delivery API | 25241 (operational 25242) |
 
 Other worktrees may run Testcontainers or their own verification at the same time. For a second
 concurrent run, set both variables for every `control.sh` call of that run:
@@ -137,7 +138,7 @@ failure.
 $V/control.sh doctor
 ```
 
-It checks that the three role processes from this run are alive, each `/ready` answers, the
+It checks that the four role processes from this run are alive, each `/ready` answers, the
 OperatorKey is accepted by `GET /admin/tenants`, password sign-in is enabled, mocksink answers,
 the PostgreSQL container belongs to this run's Compose project, and the run was built from the
 current `HEAD`. It also reports whether dashboard assets exist. A `built from current HEAD` failure
@@ -151,7 +152,11 @@ means you changed commits since `up`: run `down` and `up` again.
   example Connector, a TenantApiKey, a Destination at `$MOCKSINK/sink/<slug>`, a `payments` Topic,
   an active Event API Source and an active Subscription for `payment.created`) and exports `SLUG`,
   `TENANT`, `TOKEN`, `CONNECTOR`, `DESTINATION`, `TOPIC`, `SOURCE`, and `SUBSCRIPTION`. Each call
-  uses a new slug, so it never collides with earlier seeds in the same run.
+  uses a new slug, so it never collides with earlier seeds in the same run. `eval "$($V/seed-pull.sh)"`
+  does the same and adds a pull Destination, its SubscriberKey, and an active Subscription to it,
+  exporting `PULL_DESTINATION`, `SUBSCRIBER_KEY`, and `PULL_SUBSCRIPTION`.
+- **Subscriber SDK:** `bash $V/prove-pull.sh` proves every `Integrios.Subscriber` outcome against
+  this run's `delivery-api`. See [features/pull-delivery.md](features/pull-delivery.md).
 - **Browser:** `node $V/browser.mjs <route> <evidence-prefix>` signs in through the real password
   form, opens the route, and writes `<prefix>.aria.txt` and `<prefix>.png`. For multi-step journeys,
   import `signIn` and `capture` from it in a scratch `.mjs` file; the selectors in each feature file
@@ -182,7 +187,7 @@ ignores). Cleanup keeps it.
 $V/control.sh down
 ```
 
-It signals the three role processes by the PIDs this run recorded and waits up to 75 seconds per
+It signals the four role processes by the PIDs this run recorded and waits up to 75 seconds per
 role for exit before removing the database. If a role stays alive, cleanup fails and keeps the
 database and state for a later `down` attempt. On success, it removes the run's Compose
 containers and volume, and deletes `artifacts/verify/<run>/state`. It never kills by process name
