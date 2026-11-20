@@ -3,10 +3,19 @@
   "release-type": "simple",
   "include-component-in-tag": false,
   "bump-minor-pre-major": true,
+  "separate-pull-requests": true,
   "packages": {
     ".": {
       "version-file": "VERSION",
-      "extra-files": ["deploy/compose.yml", "deploy/azure/main.example.bicepparam"]
+      "extra-files": ["deploy/compose.yml", "deploy/azure/main.example.bicepparam"],
+      "exclude-paths": ["src/Integrios.Client"]
+    },
+    "src/Integrios.Client": {
+      "component": "client",
+      "include-component-in-tag": true,
+      "extra-files": [
+        { "type": "xml", "path": "Integrios.Client.csproj", "xpath": "//Project/PropertyGroup/Version" }
+      ]
     }
   }
 }
