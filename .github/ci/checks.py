@@ -69,9 +69,16 @@ def main():
         event = os.environ["GITHUB_EVENT_NAME"]
         paths = []
         if event == "pull_request":
+            base = os.environ["BASE_SHA"]
+            if subprocess.run(
+                ["git", "cat-file", "-e", f"{base}^{{commit}}"],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            ).returncode:
+                # The event base can predate both parents in a shallow merge checkout.
+                subprocess.run(["git", "fetch", "--no-tags", "--depth=1", "origin", base], check=True)
             changed = subprocess.check_output([
                 "git", "diff", "--name-only", "--no-renames", "-z",
-                os.environ["BASE_SHA"], "HEAD", "--",
+                base, "HEAD", "--",
             ])
             paths = [os.fsdecode(path) for path in changed.split(b"\0") if path]
         plan = select_checks(paths, event, os.environ.get("RELEASE_PR") == "true")
