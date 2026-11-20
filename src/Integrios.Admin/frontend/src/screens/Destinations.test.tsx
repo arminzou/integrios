@@ -290,6 +290,21 @@ describe("A selected Destination", () => {
     const link = await within(panel).findByRole("link", { name: "HTTP v1" });
     expect(link.getAttribute("href")).toBe(`/connectors/${connectorId}`);
     expect(within(panel).getByText("bearer_token")).toBeTruthy();
+    expect(within(panel).queryByRole("link", { name: "Manage Subscriber keys" })).toBeNull();
+  });
+
+  it("links a pull Destination to its Subscriber keys", async () => {
+    const subscriber = { ...connector, key: "subscriber", name: "Subscriber", direction: "destination" };
+    stubHttp(({ url }) => {
+      if (url.pathname.endsWith(`/destinations/${destinationId}`)) return { status: 200, body: destination };
+      if (url.pathname.endsWith("/connectors")) return { status: 200, body: page([subscriber]) };
+      return { status: 200, body: page([]) };
+    });
+    renderScreen(<DestinationsScreen tenantId={tenantId} selectedDestinationId={destinationId} />);
+
+    const panel = await screen.findByRole("complementary", { name: "Destination detail" });
+    const link = await within(panel).findByRole("link", { name: "Manage Subscriber keys" });
+    expect(link.getAttribute("href")).toBe(`/tenants/${tenantId}/destinations/${destinationId}/subscriber-keys`);
   });
 
   it("offers Activate, not Deactivate, once it is inactive", async () => {

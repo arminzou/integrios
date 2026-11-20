@@ -904,6 +904,10 @@ function DestinationInspector({ tenantId, destinationId }: { tenantId: string; d
         </p>
       </section>
 
+      {connectors.data?.items.find((connector) => connector.id === current.connector_id)?.key === "subscriber" ? (
+        <Link to={`/tenants/${tenantId}/destinations/${destinationId}/subscriber-keys`}>Manage Subscriber keys</Link>
+      ) : null}
+
       <WriteStatus done={notice !== ""}>{notice}</WriteStatus>
       <EditDestination key={current.updated_at} tenantId={tenantId} destination={current} onDone={setNotice} />
     </Inspector>

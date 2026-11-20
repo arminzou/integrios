@@ -1,4 +1,6 @@
 using Integrios.Application;
+using Integrios.DeliveryApi.Auth;
+using Microsoft.AspNetCore.Authentication;
 using Integrios.Infrastructure;
 using Integrios.Infrastructure.Hosting;
 using Integrios.Infrastructure.Telemetry;
@@ -27,6 +29,8 @@ public static class DeliveryApiHost
         app.UseRouting();
         app.UseOperationalEndpointIsolation(operationalPort);
         app.UseRequestCompletionLogging();
+        app.UseAuthentication();
+        app.UseAuthorization();
         app.MapOperationalEndpoints();
     }
 
@@ -37,6 +41,9 @@ public static class DeliveryApiHost
         int operationalPort = builder.AddOperationalEndpoints(DefaultOperationalPort, defaultProductUrl: DefaultUrl);
 
         builder.Services.AddDeliveryApiApplicationServices();
+        builder.Services.AddAuthentication(SubscriberKeyAuthHandler.SchemeName)
+            .AddScheme<AuthenticationSchemeOptions, SubscriberKeyAuthHandler>(SubscriberKeyAuthHandler.SchemeName, _ => { });
+        builder.Services.AddAuthorization();
         builder.Services.AddDeliveryApiInfrastructureServices(builder.Configuration);
         builder.Services.AddTelemetryServices(builder.Configuration, "integrios-delivery-api");
 

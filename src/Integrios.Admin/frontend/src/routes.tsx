@@ -6,6 +6,7 @@ import { ConnectorsScreen } from "./screens/Connectors";
 import { DestinationsScreen } from "./screens/Destinations";
 import { EventsScreen } from "./screens/Events";
 import { SourcesScreen } from "./screens/Sources";
+import { SubscriberKeysScreen } from "./screens/SubscriberKeys";
 import { SubscriptionsScreen } from "./screens/Subscriptions";
 import { TenantApiKeysScreen } from "./screens/TenantApiKeys";
 import { TenantScreen, TenantsScreen } from "./screens/Tenants";
@@ -92,6 +93,21 @@ export const routeConfig: RouteObject[] = [
           <Ids>
             {({ tenantId, destinationId }) => (
               <DestinationsScreen tenantId={tenantId} selectedDestinationId={destinationId} />
+            )}
+          </Ids>
+        ),
+      },
+      {
+        path: "tenants/:tenantId/destinations/:destinationId/subscriber-keys/:subscriberKeyId?",
+        handle: { section: "destinations" satisfies TenantSection },
+        element: (
+          <Ids>
+            {({ tenantId, destinationId, subscriberKeyId }) => (
+              <SubscriberKeysScreen
+                tenantId={tenantId}
+                destinationId={destinationId}
+                selectedSubscriberKeyId={subscriberKeyId}
+              />
             )}
           </Ids>
         ),

@@ -6,6 +6,7 @@ using Integrios.Application.Authoring.OperatorKeys;
 using Integrios.Application.Authoring.Sources;
 using Integrios.Application.Authoring.Subscriptions;
 using Integrios.Application.Authoring.TenantApiKeys;
+using Integrios.Application.Authoring.SubscriberKeys;
 using Integrios.Application.Authoring.Tenants;
 using Integrios.Application.Authoring.Topics;
 using Integrios.Application.Delivery;
@@ -30,6 +31,9 @@ public sealed class HostCompositionArchitectureTests
         [typeof(IPullDeliveryQueue)] = [Host.DeliveryApi],
         [typeof(IOperatorKeyLifecycle)] = [Host.Admin],
         [typeof(ITenantApiKeyRepository)] = [Host.Admin],
+        [typeof(ISubscriberKeyRepository)] = [Host.Admin],
+        [typeof(IActiveSubscriberKeyLookup)] = [Host.DeliveryApi],
+        [typeof(ISubscriberKeyUseRecorder)] = [Host.DeliveryApi],
         [typeof(IActiveTenantApiKeyLookup)] = [Host.Ingestion],
         [typeof(ITenantApiKeyUseRecorder)] = [Host.Ingestion],
         [typeof(IDestinationAuthenticator)] = [Host.Admin, Host.Worker],
