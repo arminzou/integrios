@@ -41,9 +41,15 @@ Integrios separates platform intent from runtime execution.
 Source and Destination configuration and secret references, Topic and Subscription authoring, and transform
 preview. Tenants never receive control-plane authority.
 
-**Data plane** (`Integrios.Ingestion` and `Integrios.Worker`): request authentication and Tenant
+**Data plane** (`Integrios.Ingestion`, `Integrios.Worker`, and `Integrios.DeliveryApi`): request authentication and Tenant
 resolution, Source and Topic validation, durable Event acceptance, fanout, transformation,
 HTTP delivery, retries, dead-lettering, replay, and delivery tracking.
+
+Worker owns fanout and HTTP delivery. Delivery API owns pull-delivery claims and settlement,
+with its own Application handler group and queue port. It reads no Tenant secrets. The
+`delivery-api` role currently exposes operational endpoints only; its authenticated Subscriber
+HTTP endpoints are not yet implemented. Its product listener defaults to loopback port 5241,
+and its operational listener defaults to port 5242 outside containers.
 
 The services share the configured PostgreSQL or SQL Server 2022+ database. Admin owns configuration
 writes; Worker reads the configuration it needs directly from that database and does not call Admin

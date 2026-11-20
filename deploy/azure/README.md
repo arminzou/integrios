@@ -4,7 +4,7 @@ This directory is a minimal copy-and-own reference for running one matched Integ
 Azure Container Apps. Copy it, review it, and adapt the Bicep to your networking, capacity,
 availability, security, and operational requirements.
 
-The reference deploys separate Admin, Ingestion, and Worker Container Apps; migration, Bootstrap,
+The reference deploys separate Admin, Ingestion, Worker, and Delivery API Container Apps; migration, Bootstrap,
 and secret-validation jobs; one selected managed database; a Key Vault for deployment settings and
 one Tenant-secret Key Vault per direction; Log Analytics;
 Application Insights; Azure Managed Prometheus; an Operator Workbook; and an Azure Files share for
@@ -20,9 +20,10 @@ before you rely on it.
 
 | Area | Supplied reference |
 |---|---|
-| Runtime | One Admin, Ingestion, and Worker replica; no autoscaling or zone redundancy |
+| Runtime | One Admin, Ingestion, Worker, and Delivery API replica; no autoscaling or zone redundancy |
 | Admin | External HTTPS restricted to explicit Operator CIDRs; password sign-in enabled by default and optional Microsoft Entra ID; durable Data Protection keys shared through storage-encrypted Azure Files |
 | Ingestion | External HTTPS by default; may be internal independently of Service Bus access |
+| Delivery API | Internal ingress by default, reachable only from apps in the environment; set `deliveryApiExternal` for remote Subscribers. It reads no Tenant secrets |
 | Network | Public Container Apps environment, Key Vault, telemetry endpoints, and database firewall rules; no VNet or private endpoints. The Data Protection share is reachable from public networks with its storage account key, because Container Apps mounts it with that key and only a VNet could restrict it; treat the key as a credential that can forge Operator sessions |
 | Azure SQL | General Purpose serverless, one vCore maximum, 0.5 minimum capacity, 60-minute auto-pause, local backup redundancy |
 | PostgreSQL | PostgreSQL 16 Burstable B1ms, 32 GiB storage, seven-day local backup, no HA or geo-redundant backup |
@@ -98,7 +99,7 @@ Copy-Item ./main.example.bicepparam ./main.bicepparam
    HTTP requests from waking them during setup.
 5. Runs migrations as the Migrate identity, the schema owner and database Entra administrator.
 6. Grants control-plane scope to Admin and Bootstrap, and data-plane scope to Ingestion, Worker,
-   and secret validation.
+   Delivery API, and secret validation.
 7. Runs idempotent OperatorKey Bootstrap, then validates destination secrets.
 8. Starts one replica of each app, activates the latest revisions and waits for healthy revisions.
 

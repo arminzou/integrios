@@ -10,6 +10,7 @@ public static class DependencyInjection
     private const string Admin = "Admin";
     private const string Ingestion = "Ingestion";
     private const string Worker = "Worker";
+    private const string DeliveryApi = "DeliveryApi";
 
     // Operator replay and delivery recovery are Delivery work invoked by Admin.
     private static readonly Dictionary<Type, string> CrossGroupOwners = new()
@@ -29,6 +30,9 @@ public static class DependencyInjection
 
     public static IServiceCollection AddWorkerApplicationServices(this IServiceCollection services)
         => AddApplicationServices(services, OwnedBy(Worker, "Delivery"));
+
+    public static IServiceCollection AddDeliveryApiApplicationServices(this IServiceCollection services)
+        => AddApplicationServices(services, OwnedBy(DeliveryApi, "DeliveryApi"));
 
     private static IServiceCollection AddApplicationServices(
         IServiceCollection services,

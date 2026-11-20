@@ -1,5 +1,5 @@
-using System.Diagnostics.Metrics;
 using System.Data.Common;
+using System.Diagnostics.Metrics;
 using Azure.Core;
 using Azure.Identity;
 using Integrios.Application;
@@ -13,6 +13,7 @@ using Integrios.Application.Authoring.TenantApiKeys;
 using Integrios.Application.Authoring.Tenants;
 using Integrios.Application.Authoring.Topics;
 using Integrios.Application.Delivery;
+using Integrios.Application.DeliveryApi;
 using Integrios.Application.EventMonitoring;
 using Integrios.Application.Identity;
 using Integrios.Application.Ingestion;
@@ -167,11 +168,7 @@ public static class DependencyInjection
 
         DeliveryExecutionOptions deliveryOptions = ReadDeliveryOptions(configuration);
         deliveryOptions.Validate();
-        services.AddSingleton(deliveryOptions);
-        services.AddSingleton(new RetryPolicy(
-            deliveryOptions.RetryBaseDelay,
-            deliveryOptions.RetryMaxAttempts));
-        services.AddSingleton<DeliveryOutcomePolicy>();
+        services.AddDeliveryPolicies(deliveryOptions);
 
         services.AddScoped<ISecretValidationReader, SecretValidationReader>();
         if (databaseProvider == DatabaseProvider.SqlServer)
@@ -195,6 +192,46 @@ public static class DependencyInjection
         {
             AllowAutoRedirect = false
         });
+
+        return services;
+    }
+
+    public static IServiceCollection AddDeliveryApiInfrastructureServices(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        services.AddDatabaseServices(configuration);
+
+        DeliveryExecutionOptions deliveryOptions = ReadDeliveryOptions(configuration) with
+        {
+            MaxAttemptDuration = ReadDuration(
+                configuration,
+                "Integrios:DeliveryApi:MaxAttemptDuration",
+                DeliveryExecutionOptions.Default.MaxAttemptDuration),
+        };
+        deliveryOptions.Validate();
+        if (deliveryOptions.MaxAttemptDuration <= deliveryOptions.LeaseDuration)
+            throw new InvalidOperationException(
+                "Integrios:DeliveryApi:MaxAttemptDuration must be greater than Integrios:Delivery:LeaseDuration.");
+        services.AddDeliveryPolicies(deliveryOptions);
+
+        services.AddSingleton<IPullDeliveryQueue, EventDeliveryQueue>();
+        services.AddTransformEvaluationServices();
+
+        return services;
+    }
+
+    // Push and pull settle through the same outcome policy, so retry and dead-letter behavior
+    // cannot differ between transports.
+    private static IServiceCollection AddDeliveryPolicies(
+        this IServiceCollection services,
+        DeliveryExecutionOptions deliveryOptions)
+    {
+        services.AddSingleton(deliveryOptions);
+        services.AddSingleton(new RetryPolicy(
+            deliveryOptions.RetryBaseDelay,
+            deliveryOptions.RetryMaxAttempts));
+        services.AddSingleton<DeliveryOutcomePolicy>();
 
         return services;
     }

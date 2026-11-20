@@ -35,6 +35,8 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
     private readonly int adminOperationalPort = GetAvailablePort();
     private readonly int mockSinkPort = GetAvailablePort();
     private readonly int workerMetricsPort = GetAvailablePort();
+    private readonly int deliveryApiPort = GetAvailablePort();
+    private readonly int deliveryApiOperationalPort = GetAvailablePort();
 
     public PackagedDeploymentFixture()
     {
@@ -60,6 +62,8 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
             ["INTEGRIOS_MOCKSINK_PORT"] = mockSinkPort.ToString(),
             ["INTEGRIOS_WIREMOCK_MAPPINGS_DIR"] = Path.Combine(repoRoot, "tests", "Integrios.AcceptanceTests", "wiremock", "mappings"),
             ["INTEGRIOS_WORKER_METRICS_PORT"] = workerMetricsPort.ToString(),
+            ["INTEGRIOS_DELIVERY_API_PORT"] = deliveryApiPort.ToString(),
+            ["INTEGRIOS_DELIVERY_API_OPERATIONAL_PORT"] = deliveryApiOperationalPort.ToString(),
             ["INTEGRIOS_OTEL_CONFIG"] = Path.Combine(repoRoot, "tests", "Integrios.AcceptanceTests", "otel-collector.acceptance.yaml"),
             ["INTEGRIOS_OTEL_ARTIFACTS_DIR"] = otelArtifactsDirectory,
             ["INTEGRIOS_SOURCE_SECRETS_DIR"] = sourceSecretsDirectory,
@@ -89,6 +93,8 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
     private HttpClient wireMockClient = null!;
     public WireMockSink WireMockSink { get; private set; } = null!;
     public HttpClient WorkerOperationalClient { get; private set; } = null!;
+    public HttpClient DeliveryApiClient { get; private set; } = null!;
+    public HttpClient DeliveryApiOperationalClient { get; private set; } = null!;
     public string AdminAuthorization { get; private set; } = "OperatorKey global_operator_key:acceptance-admin-secret";
     public Guid HttpConnectorId { get; private set; }
     public Guid ApiKeyConnectorId { get; private set; }
@@ -321,7 +327,8 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
             "restart",
             "admin",
             "ingestion",
-            "worker");
+            "worker",
+            "delivery-api");
         if (result.ExitCode != 0)
             throw new InvalidOperationException($"Service restart failed: {result.Output}");
         await WaitUntilReadyAsync(expectCollector: true);
@@ -478,6 +485,7 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
             "ingestion",
             "admin",
             "worker",
+            "delivery-api",
             "mocksink",
         ]);
         if (!buildImages)
@@ -499,6 +507,8 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
         wireMockClient = CreateClient(mockSinkPort);
         WireMockSink = new WireMockSink(wireMockClient);
         WorkerOperationalClient = CreateClient(workerMetricsPort);
+        DeliveryApiClient = CreateClient(deliveryApiPort);
+        DeliveryApiOperationalClient = CreateClient(deliveryApiOperationalPort);
         await WaitUntilReadyAsync(expectCollector: !buildImages);
     }
 
@@ -576,7 +586,7 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
 
     private async Task AssertServerEnvironmentsAsync(string expected)
     {
-        foreach (string serviceName in (string[])["admin", "ingestion", "worker"])
+        foreach (string serviceName in (string[])["admin", "ingestion", "worker", "delivery-api"])
         {
             ComposeResult result = await RunComposeAsync(
                 TimeSpan.FromSeconds(30),
@@ -608,6 +618,8 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
                 await AssertHealthyAsync(IngestionOperationalClient, "Ingestion", "/ready");
                 await AssertHealthyAsync(WorkerOperationalClient, "Worker");
                 await AssertHealthyAsync(WorkerOperationalClient, "Worker", "/ready");
+                await AssertHealthyAsync(DeliveryApiOperationalClient, "Delivery API");
+                await AssertHealthyAsync(DeliveryApiOperationalClient, "Delivery API", "/ready");
                 await AssertHealthyAsync(wireMockClient, "WireMock", "/__admin/health");
 
                 // The OTLP receiver must accept spans before a test emits any, or early spans are
@@ -763,6 +775,8 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
         wireMockClient?.Dispose();
         WireMockSink = null!;
         WorkerOperationalClient?.Dispose();
+        DeliveryApiClient?.Dispose();
+        DeliveryApiOperationalClient?.Dispose();
     }
 
     public async Task<string> ReadTraceArtifactsAsync()

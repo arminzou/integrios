@@ -14,7 +14,8 @@ public sealed class ProjectArchitectureTests
         "Integrios.Infrastructure",
         "Integrios.Admin",
         "Integrios.Ingestion",
-        "Integrios.Worker"
+        "Integrios.Worker",
+        "Integrios.DeliveryApi"
     ];
 
     [Fact]
@@ -28,7 +29,8 @@ public sealed class ProjectArchitectureTests
             "Integrios.Infrastructure",
             "Integrios.Admin",
             "Integrios.Ingestion",
-            "Integrios.Worker");
+            "Integrios.Worker",
+            "Integrios.DeliveryApi");
         AssertOmitsReferencePrefixes(
             assemblies["Integrios.Domain"],
             "Microsoft.EntityFrameworkCore",
@@ -39,7 +41,8 @@ public sealed class ProjectArchitectureTests
             "Integrios.Infrastructure",
             "Integrios.Admin",
             "Integrios.Ingestion",
-            "Integrios.Worker");
+            "Integrios.Worker",
+            "Integrios.DeliveryApi");
         AssertOmitsReferencePrefixes(
             assemblies["Integrios.Application"],
             "Microsoft.AspNetCore",
@@ -52,11 +55,13 @@ public sealed class ProjectArchitectureTests
             assemblies["Integrios.Infrastructure"],
             "Integrios.Admin",
             "Integrios.Ingestion",
-            "Integrios.Worker");
+            "Integrios.Worker",
+            "Integrios.DeliveryApi");
 
-        AssertOmitsReferences(assemblies["Integrios.Admin"], "Integrios.Ingestion", "Integrios.Worker");
-        AssertOmitsReferences(assemblies["Integrios.Ingestion"], "Integrios.Admin", "Integrios.Worker");
-        AssertOmitsReferences(assemblies["Integrios.Worker"], "Integrios.Admin", "Integrios.Ingestion");
+        AssertOmitsReferences(assemblies["Integrios.Admin"], "Integrios.Ingestion", "Integrios.Worker", "Integrios.DeliveryApi");
+        AssertOmitsReferences(assemblies["Integrios.Ingestion"], "Integrios.Admin", "Integrios.Worker", "Integrios.DeliveryApi");
+        AssertOmitsReferences(assemblies["Integrios.Worker"], "Integrios.Admin", "Integrios.Ingestion", "Integrios.DeliveryApi");
+        AssertOmitsReferences(assemblies["Integrios.DeliveryApi"], "Integrios.Admin", "Integrios.Ingestion", "Integrios.Worker");
     }
 
     [Fact]
@@ -72,7 +77,8 @@ public sealed class ProjectArchitectureTests
             ["Integrios.Migrations.SqlServer"] = ["Integrios.Infrastructure"],
             ["Integrios.Admin"] = ["Integrios.Application", "Integrios.Domain", "Integrios.Infrastructure", "Integrios.Migrations.Postgres", "Integrios.Migrations.SqlServer"],
             ["Integrios.Ingestion"] = ["Integrios.Application", "Integrios.Domain", "Integrios.Infrastructure"],
-            ["Integrios.Worker"] = ["Integrios.Application", "Integrios.Domain", "Integrios.Infrastructure"]
+            ["Integrios.Worker"] = ["Integrios.Application", "Integrios.Domain", "Integrios.Infrastructure"],
+            ["Integrios.DeliveryApi"] = ["Integrios.Application", "Integrios.Domain", "Integrios.Infrastructure"]
         };
 
         foreach ((string projectName, string[] expectedReferences) in allowedProjectReferences)

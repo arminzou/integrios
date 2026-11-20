@@ -61,4 +61,20 @@ public sealed class BacklogSnapshotReaderTests : IClassFixture<WorkerRoutingFixt
         snapshot.ReadyDeliveryDepth.ShouldBe(1);
         snapshot.OldestReadyDeliveryAgeSeconds.ShouldBeGreaterThan(0);
     }
+
+    [Fact]
+    public async Task ReadAsync_LeavesPullDeliveriesOutOfThePushBacklog()
+    {
+        await fixture.SeedPullDestinationsAsync();
+        Guid eventId = await fixture.InsertEventAndOutboxAsync("order.placed");
+        (await fixture.RunFanoutBatchAsync()).ShouldBe(1);
+        Guid deliveryId = (await fixture.GetEventDeliveriesAsync(eventId)).ShouldHaveSingleItem().Id;
+        (await fixture.GetDeliveryTransportAsync(deliveryId)).Transport.ShouldBe("pull");
+        await fixture.AgeDeliveryAsync(eventId);
+
+        BacklogSnapshot snapshot = await fixture.BacklogSnapshotReader.ReadAsync(CancellationToken.None);
+
+        snapshot.ReadyDeliveryDepth.ShouldBe(0);
+        snapshot.OldestReadyDeliveryAgeSeconds.ShouldBe(0);
+    }
 }
