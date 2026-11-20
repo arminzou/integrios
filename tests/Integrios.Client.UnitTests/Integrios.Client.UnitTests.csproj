@@ -17,7 +17,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Integrios.Subscriber\Integrios.Subscriber.csproj" />
+    <ProjectReference Include="..\..\src\Integrios.Client\Integrios.Client.csproj" />
   </ItemGroup>
 
 </Project>

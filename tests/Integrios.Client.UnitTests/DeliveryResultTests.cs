@@ -1,4 +1,4 @@
-namespace Integrios.Subscriber.UnitTests;
+namespace Integrios.Client.UnitTests;
 
 public sealed class DeliveryResultTests
 {

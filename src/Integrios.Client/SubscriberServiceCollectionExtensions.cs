@@ -1,5 +1,5 @@
 using System.Net.Http.Headers;
-using Integrios.Subscriber;
+using Integrios.Client;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;

@@ -1,4 +1,4 @@
-namespace Integrios.Subscriber;
+namespace Integrios.Client;
 
 /// The outcome reported for one attempt. Action is the attempt route's final path segment.
 internal sealed record Settlement(string Action, int? RetryAfterSeconds, string? Error)

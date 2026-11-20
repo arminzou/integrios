@@ -4,7 +4,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Integrios.DeliveryApi;
 using Integrios.FunctionalTests.Worker;
-using Integrios.Subscriber;
+using Integrios.Client;
 using Integrios.Tests.Shared;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.TestHost;
@@ -13,7 +13,7 @@ using Microsoft.Extensions.Hosting;
 
 namespace Integrios.FunctionalTests.DeliveryApi;
 
-/// Drives the Integrios.Subscriber SDK against the real Delivery API host and database.
+/// Drives the Integrios.Client SDK against the real Delivery API host and database.
 public sealed class SubscriberSdkTests : IClassFixture<WorkerRoutingFixture>, IAsyncLifetime
 {
     private readonly WorkerRoutingFixture fixture;

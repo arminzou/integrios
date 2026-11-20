@@ -1,4 +1,4 @@
-namespace Integrios.Subscriber;
+namespace Integrios.Client;
 
 /// Handles one delivery. Return <see cref="DeliveryResult.Ack"/> on success or
 /// <see cref="DeliveryResult.Retry"/> to have Integrios retry it; throw

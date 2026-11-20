@@ -2,7 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace Integrios.Subscriber;
+namespace Integrios.Client;
 
 /// Runs the configured number of claim loops. Each loop claims one delivery at a time, so
 /// concurrency is also the number of leases this process holds.

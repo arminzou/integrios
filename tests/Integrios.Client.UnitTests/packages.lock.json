@@ -277,7 +277,7 @@
           "xunit.extensibility.core": "[2.9.3]"
         }
       },
-      "integrios.subscriber": {
+      "integrios.client": {
         "type": "Project",
         "dependencies": {
           "Microsoft.Extensions.Hosting.Abstractions": "[10.0.15, )",

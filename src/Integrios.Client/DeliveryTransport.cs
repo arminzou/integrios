@@ -3,7 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace Integrios.Subscriber;
+namespace Integrios.Client;
 
 /// The Delivery API's calls. An attempt that lost ownership (409) answers null or false; any other
 /// failure throws.

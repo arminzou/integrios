@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace Integrios.Subscriber;
+namespace Integrios.Client;
 
 public sealed record Delivery(
     Guid DeliveryId,

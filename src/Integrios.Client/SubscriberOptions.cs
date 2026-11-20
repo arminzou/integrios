@@ -1,4 +1,4 @@
-namespace Integrios.Subscriber;
+namespace Integrios.Client;
 
 public sealed class SubscriberOptions
 {

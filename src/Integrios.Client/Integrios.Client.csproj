@@ -5,7 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>true</IsPackable>
-    <PackageId>Integrios.Subscriber</PackageId>
+    <PackageId>Integrios.Client</PackageId>
     <!-- The SDK versions apart from the server, so it does not take the repository VERSION. -->
     <Version>0.1.0-preview.1</Version>
     <Description>Consume an Integrios pull Destination from a .NET generic host.</Description>
@@ -18,7 +18,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="Integrios.Subscriber.UnitTests" />
+    <InternalsVisibleTo Include="Integrios.Client.UnitTests" />
   </ItemGroup>
 
 </Project>

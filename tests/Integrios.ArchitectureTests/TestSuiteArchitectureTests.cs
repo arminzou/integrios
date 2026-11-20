@@ -38,7 +38,7 @@ public sealed class TestSuiteArchitectureTests
             ["Integrios.Ingestion"] = ["Integrios.Ingestion.UnitTests"],
             ["Integrios.Worker"] = ["Integrios.Worker.UnitTests"],
             ["Integrios.DeliveryApi"] = [],
-            ["Integrios.Subscriber"] = ["Integrios.Subscriber.UnitTests"]
+            ["Integrios.Client"] = ["Integrios.Client.UnitTests"]
         };
 
         foreach ((string projectName, string[] expectedFriends) in approved)

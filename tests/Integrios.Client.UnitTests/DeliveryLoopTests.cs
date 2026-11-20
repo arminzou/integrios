@@ -5,7 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 
-namespace Integrios.Subscriber.UnitTests;
+namespace Integrios.Client.UnitTests;
 
 public sealed class DeliveryLoopTests : IAsyncDisposable
 {
