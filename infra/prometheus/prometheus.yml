@@ -17,6 +17,6 @@ scrape_configs:
     static_configs:
       - targets: ["worker:5299"]
 
-  - job_name: integrios-delivery-api
+  - job_name: integrios-subscriber
     static_configs:
-      - targets: ["delivery-api:5299"]
+      - targets: ["subscriber:5299"]

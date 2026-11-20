@@ -5,7 +5,7 @@ using Integrios.Application.Transforms;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
-namespace Integrios.Application.DeliveryApi;
+namespace Integrios.Application.Subscriber;
 
 // Waits up to Wait for work, so an idle Subscriber holds one request open instead of polling.
 public sealed record ClaimPullDeliveriesCommand(Guid DestinationId, int Max, TimeSpan Wait)

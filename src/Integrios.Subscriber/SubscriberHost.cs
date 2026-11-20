@@ -1,17 +1,17 @@
 using System.Text.Json;
 using Integrios.Application;
-using Integrios.DeliveryApi.Auth;
-using Integrios.DeliveryApi.Endpoints;
-using Microsoft.AspNetCore.Authentication;
 using Integrios.Infrastructure;
 using Integrios.Infrastructure.Hosting;
 using Integrios.Infrastructure.Telemetry;
+using Integrios.Subscriber.Auth;
+using Integrios.Subscriber.Endpoints;
+using Microsoft.AspNetCore.Authentication;
 
-namespace Integrios.DeliveryApi;
+namespace Integrios.Subscriber;
 
-public static class DeliveryApiHost
+public static class SubscriberHost
 {
-    public const string Name = "delivery-api";
+    public const string Name = "subscriber";
     // Loopback unless the operator configures a listener, because Subscribers on the same server
     // are the default; remote Subscribers need an explicit, reviewed exposure.
     public const string DefaultUrl = "http://localhost:5241";
@@ -53,7 +53,7 @@ public static class DeliveryApiHost
 
     public static (WebApplicationBuilder Builder, int OperationalPort) CreateBuilder(string[] args)
     {
-        var builder = ServiceHosting.CreateBuilder(args, Name, typeof(DeliveryApiHost).Assembly.GetName().Name!);
+        var builder = ServiceHosting.CreateBuilder(args, Name, typeof(SubscriberHost).Assembly.GetName().Name!);
         builder.Logging.AddOperationalConsoleLogging(builder.Environment.IsDevelopment());
         int operationalPort = builder.AddOperationalEndpoints(DefaultOperationalPort, defaultProductUrl: DefaultUrl);
 
@@ -61,12 +61,12 @@ public static class DeliveryApiHost
             options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower);
         builder.Services.AddOpenApi();
         builder.Services.AddProblemDetails();
-        builder.Services.AddDeliveryApiApplicationServices();
+        builder.Services.AddSubscriberApplicationServices();
         builder.Services.AddAuthentication(SubscriberKeyAuthHandler.SchemeName)
             .AddScheme<AuthenticationSchemeOptions, SubscriberKeyAuthHandler>(SubscriberKeyAuthHandler.SchemeName, _ => { });
         builder.Services.AddAuthorization();
-        builder.Services.AddDeliveryApiInfrastructureServices(builder.Configuration);
-        builder.Services.AddTelemetryServices(builder.Configuration, "integrios-delivery-api");
+        builder.Services.AddSubscriberInfrastructureServices(builder.Configuration);
+        builder.Services.AddTelemetryServices(builder.Configuration, "integrios-subscriber");
 
         return (builder, operationalPort);
     }

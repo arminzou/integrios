@@ -2,7 +2,7 @@ namespace Integrios.Client;
 
 public sealed class SubscriberOptions
 {
-    /// The Delivery API's address, such as http://integrios-delivery-api:5241/.
+    /// The Delivery API's address, such as http://integrios-subscriber:5241/.
     public Uri? BaseAddress { get; set; }
 
     /// The SubscriberKey that selects this handler's pull Destination.

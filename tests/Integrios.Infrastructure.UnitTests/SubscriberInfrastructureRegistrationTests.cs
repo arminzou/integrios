@@ -6,23 +6,23 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Integrios.Infrastructure.UnitTests;
 
-public sealed class DeliveryApiInfrastructureRegistrationTests
+public sealed class SubscriberInfrastructureRegistrationTests
 {
     [Fact]
-    public void DeliveryApiRegistration_DefaultsTheAttemptCeilingToThirtyMinutes()
+    public void SubscriberRegistration_DefaultsTheAttemptCeilingToThirtyMinutes()
     {
-        using ServiceProvider provider = BuildDeliveryApi([]);
+        using ServiceProvider provider = BuildSubscriber([]);
 
         provider.GetRequiredService<DeliveryExecutionOptions>().MaxAttemptDuration
             .ShouldBe(TimeSpan.FromMinutes(30));
     }
 
     [Fact]
-    public void DeliveryApiRegistration_AppliesConfiguredCeilingLeaseAndRetryPolicy()
+    public void SubscriberRegistration_AppliesConfiguredCeilingLeaseAndRetryPolicy()
     {
-        using ServiceProvider provider = BuildDeliveryApi(new()
+        using ServiceProvider provider = BuildSubscriber(new()
         {
-            ["Integrios:DeliveryApi:MaxAttemptDuration"] = "00:10:00",
+            ["Integrios:Subscriber:MaxAttemptDuration"] = "00:10:00",
             ["Integrios:Delivery:LeaseDuration"] = "00:03:00",
             ["Integrios:Delivery:Retry:MaxAttempts"] = "6"
         });
@@ -36,31 +36,31 @@ public sealed class DeliveryApiInfrastructureRegistrationTests
     [Theory]
     [InlineData("00:02:00")]
     [InlineData("00:01:00")]
-    public void DeliveryApiRegistration_CeilingNotAboveTheLease_FailsStartupRegistration(string ceiling)
+    public void SubscriberRegistration_CeilingNotAboveTheLease_FailsStartupRegistration(string ceiling)
     {
         IConfiguration configuration = BuildConfiguration(new()
         {
-            ["Integrios:DeliveryApi:MaxAttemptDuration"] = ceiling
+            ["Integrios:Subscriber:MaxAttemptDuration"] = ceiling
         });
 
         InvalidOperationException exception = Should.Throw<InvalidOperationException>(() =>
-            new ServiceCollection().AddDeliveryApiInfrastructureServices(configuration));
+            new ServiceCollection().AddSubscriberInfrastructureServices(configuration));
 
-        exception.Message.ShouldContain("Integrios:DeliveryApi:MaxAttemptDuration", Case.Sensitive);
+        exception.Message.ShouldContain("Integrios:Subscriber:MaxAttemptDuration", Case.Sensitive);
     }
 
     [Fact]
-    public void DeliveryApiRegistration_NonTimeSpanCeiling_FailsStartupRegistration()
+    public void SubscriberRegistration_NonTimeSpanCeiling_FailsStartupRegistration()
     {
         IConfiguration configuration = BuildConfiguration(new()
         {
-            ["Integrios:DeliveryApi:MaxAttemptDuration"] = "half an hour"
+            ["Integrios:Subscriber:MaxAttemptDuration"] = "half an hour"
         });
 
         InvalidOperationException exception = Should.Throw<InvalidOperationException>(() =>
-            new ServiceCollection().AddDeliveryApiInfrastructureServices(configuration));
+            new ServiceCollection().AddSubscriberInfrastructureServices(configuration));
 
-        exception.Message.ShouldContain("Integrios:DeliveryApi:MaxAttemptDuration", Case.Sensitive);
+        exception.Message.ShouldContain("Integrios:Subscriber:MaxAttemptDuration", Case.Sensitive);
     }
 
     [Fact]
@@ -68,7 +68,7 @@ public sealed class DeliveryApiInfrastructureRegistrationTests
     {
         IConfiguration configuration = BuildConfiguration(new()
         {
-            ["Integrios:DeliveryApi:MaxAttemptDuration"] = "not-a-timespan",
+            ["Integrios:Subscriber:MaxAttemptDuration"] = "not-a-timespan",
             ["Integrios:Delivery:LeaseDuration"] = "01:00:00",
             ["Integrios:Delivery:ShutdownGracePeriod"] = "00:01:00"
         });
@@ -81,12 +81,12 @@ public sealed class DeliveryApiInfrastructureRegistrationTests
         provider.GetRequiredService<DeliveryExecutionOptions>().LeaseDuration.ShouldBe(TimeSpan.FromHours(1));
     }
 
-    private static ServiceProvider BuildDeliveryApi(Dictionary<string, string?> values)
+    private static ServiceProvider BuildSubscriber(Dictionary<string, string?> values)
     {
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddDeliveryApiApplicationServices();
-        services.AddDeliveryApiInfrastructureServices(BuildConfiguration(values));
+        services.AddSubscriberApplicationServices();
+        services.AddSubscriberInfrastructureServices(BuildConfiguration(values));
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
     }
 

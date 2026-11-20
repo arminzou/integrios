@@ -1,6 +1,6 @@
 using MediatR;
 
-namespace Integrios.Application.DeliveryApi;
+namespace Integrios.Application.Subscriber;
 
 public sealed record RenewPullLeaseCommand(PullAttemptOwner Owner) : IRequest<PullLeaseRenewalResult>;
 

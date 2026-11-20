@@ -4,17 +4,17 @@ using Integrios.Application.Authoring.Connectors;
 using Integrios.Application.Authoring.Destinations;
 using Integrios.Application.Authoring.OperatorKeys;
 using Integrios.Application.Authoring.Sources;
+using Integrios.Application.Authoring.SubscriberKeys;
 using Integrios.Application.Authoring.Subscriptions;
 using Integrios.Application.Authoring.TenantApiKeys;
-using Integrios.Application.Authoring.SubscriberKeys;
 using Integrios.Application.Authoring.Tenants;
 using Integrios.Application.Authoring.Topics;
 using Integrios.Application.Delivery;
-using Integrios.Application.DeliveryApi;
 using Integrios.Application.EventMonitoring;
 using Integrios.Application.Identity;
 using Integrios.Application.Ingestion;
 using Integrios.Application.Secrets;
+using Integrios.Application.Subscriber;
 using Integrios.Application.Transforms;
 using Integrios.Infrastructure;
 using Microsoft.AspNetCore.Builder;
@@ -28,13 +28,13 @@ public sealed class HostCompositionArchitectureTests
     private static readonly IReadOnlyDictionary<Type, Host[]> PortOwners = new Dictionary<Type, Host[]>
     {
         [typeof(IOperatorKeyLookup)] = [Host.Admin],
-        [typeof(IPullDeliveryQueue)] = [Host.DeliveryApi],
+        [typeof(IPullDeliveryQueue)] = [Host.Subscriber],
         [typeof(IOperatorKeyLifecycle)] = [Host.Admin],
         [typeof(ITenantApiKeyRepository)] = [Host.Admin],
         [typeof(ISubscriberKeyRepository)] = [Host.Admin],
-        [typeof(IActiveSubscriberKeyLookup)] = [Host.DeliveryApi],
-        [typeof(ISubscriberKeyUseRecorder)] = [Host.DeliveryApi],
-        [typeof(IDestinationPollRecorder)] = [Host.DeliveryApi],
+        [typeof(IActiveSubscriberKeyLookup)] = [Host.Subscriber],
+        [typeof(ISubscriberKeyUseRecorder)] = [Host.Subscriber],
+        [typeof(IDestinationPollRecorder)] = [Host.Subscriber],
         [typeof(IActiveTenantApiKeyLookup)] = [Host.Ingestion],
         [typeof(ITenantApiKeyUseRecorder)] = [Host.Ingestion],
         [typeof(IDestinationAuthenticator)] = [Host.Admin, Host.Worker],
@@ -76,7 +76,7 @@ public sealed class HostCompositionArchitectureTests
         [typeof(ISubscriptionQueries)] = [Host.Admin],
         [typeof(ITenantRepository)] = [Host.Admin],
         [typeof(ITopicRepository)] = [Host.Admin],
-        [typeof(ITransformEvaluator)] = [Host.Admin, Host.Worker, Host.Ingestion, Host.DeliveryApi]
+        [typeof(ITransformEvaluator)] = [Host.Admin, Host.Worker, Host.Ingestion, Host.Subscriber]
     };
 
     [Fact]
@@ -105,7 +105,7 @@ public sealed class HostCompositionArchitectureTests
             (Host.Admin, Admin.AdminHost.CreateBuilder(args).Builder),
             (Host.Ingestion, Ingestion.IngestionHost.CreateBuilder(args).Builder),
             (Host.Worker, Worker.WorkerHost.CreateBuilder(args).Builder),
-            (Host.DeliveryApi, DeliveryApi.DeliveryApiHost.CreateBuilder(args).Builder)
+            (Host.Subscriber, Subscriber.SubscriberHost.CreateBuilder(args).Builder)
         ];
 
         foreach ((Host host, WebApplicationBuilder builder) in roles)
@@ -136,8 +136,8 @@ public sealed class HostCompositionArchitectureTests
             services => services.AddWorkerApplicationServices(),
             services => services.AddWorkerInfrastructureServices(BuildConfiguration()));
         using ServiceProvider deliveryApi = BuildProvider(
-            services => services.AddDeliveryApiApplicationServices(),
-            services => services.AddDeliveryApiInfrastructureServices(BuildConfiguration()));
+            services => services.AddSubscriberApplicationServices(),
+            services => services.AddSubscriberInfrastructureServices(BuildConfiguration()));
         using IServiceScope adminScope = admin.CreateScope();
         using IServiceScope ingestionScope = ingestion.CreateScope();
         using IServiceScope workerScope = worker.CreateScope();
@@ -148,7 +148,7 @@ public sealed class HostCompositionArchitectureTests
             ("Admin", adminScope.ServiceProvider),
             ("Ingestion", ingestionScope.ServiceProvider),
             ("Worker", workerScope.ServiceProvider),
-            ("DeliveryApi", deliveryApiScope.ServiceProvider)
+            ("Subscriber", deliveryApiScope.ServiceProvider)
         ];
 
         ApplicationArchitectureTests.HandlerRegistration[] handlers =
@@ -181,7 +181,7 @@ public sealed class HostCompositionArchitectureTests
         ["Integrios.Application.EventMonitoring"] = Host.Admin,
         ["Integrios.Application.Ingestion"] = Host.Ingestion,
         ["Integrios.Application.Delivery"] = Host.Worker,
-        ["Integrios.Application.DeliveryApi"] = Host.DeliveryApi
+        ["Integrios.Application.Subscriber"] = Host.Subscriber
     };
 
     // Mirrors CrossGroupOwners in Application's DependencyInjection. Both lists exist so that a
@@ -206,8 +206,8 @@ public sealed class HostCompositionArchitectureTests
             services => services.AddWorkerApplicationServices(),
             services => services.AddWorkerInfrastructureServices(BuildConfiguration()));
         using ServiceProvider deliveryApi = BuildProvider(
-            services => services.AddDeliveryApiApplicationServices(),
-            services => services.AddDeliveryApiInfrastructureServices(BuildConfiguration()));
+            services => services.AddSubscriberApplicationServices(),
+            services => services.AddSubscriberInfrastructureServices(BuildConfiguration()));
         using IServiceScope adminScope = admin.CreateScope();
         using IServiceScope ingestionScope = ingestion.CreateScope();
         using IServiceScope workerScope = worker.CreateScope();
@@ -218,7 +218,7 @@ public sealed class HostCompositionArchitectureTests
             (Host.Admin, adminScope.ServiceProvider),
             (Host.Ingestion, ingestionScope.ServiceProvider),
             (Host.Worker, workerScope.ServiceProvider),
-            (Host.DeliveryApi, deliveryApiScope.ServiceProvider)
+            (Host.Subscriber, deliveryApiScope.ServiceProvider)
         ];
 
         ApplicationArchitectureTests.HandlerRegistration[] handlers =
@@ -288,8 +288,8 @@ public sealed class HostCompositionArchitectureTests
             services => services.AddWorkerApplicationServices(),
             services => services.AddWorkerInfrastructureServices(BuildConfiguration()));
         using ServiceProvider deliveryApi = BuildProvider(
-            services => services.AddDeliveryApiApplicationServices(),
-            services => services.AddDeliveryApiInfrastructureServices(BuildConfiguration()));
+            services => services.AddSubscriberApplicationServices(),
+            services => services.AddSubscriberInfrastructureServices(BuildConfiguration()));
         using IServiceScope adminScope = admin.CreateScope();
         using IServiceScope ingestionScope = ingestion.CreateScope();
         using IServiceScope workerScope = worker.CreateScope();
@@ -300,7 +300,7 @@ public sealed class HostCompositionArchitectureTests
             (Host.Admin, adminScope.ServiceProvider),
             (Host.Ingestion, ingestionScope.ServiceProvider),
             (Host.Worker, workerScope.ServiceProvider),
-            (Host.DeliveryApi, deliveryApiScope.ServiceProvider)
+            (Host.Subscriber, deliveryApiScope.ServiceProvider)
         ];
 
         foreach ((Type port, Host[] expectedOwners) in PortOwners)
@@ -448,11 +448,11 @@ public sealed class HostCompositionArchitectureTests
     }
 
     [Fact]
-    public void DeliveryApi_ResolvesOnlyPullDeliveryPortsAndNoSecrets()
+    public void Subscriber_ResolvesOnlyPullDeliveryPortsAndNoSecrets()
     {
         using ServiceProvider provider = BuildProvider(
-            services => services.AddDeliveryApiApplicationServices(),
-            services => services.AddDeliveryApiInfrastructureServices(BuildConfiguration()));
+            services => services.AddSubscriberApplicationServices(),
+            services => services.AddSubscriberInfrastructureServices(BuildConfiguration()));
         using IServiceScope scope = provider.CreateScope();
 
         AssertResolves<IPullDeliveryQueue>(scope.ServiceProvider);
@@ -511,6 +511,6 @@ public sealed class HostCompositionArchitectureTests
         Admin,
         Ingestion,
         Worker,
-        DeliveryApi
+        Subscriber
     }
 }

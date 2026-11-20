@@ -18,7 +18,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Integrios.Admin\Integrios.Admin.csproj" />
     <ProjectReference Include="..\..\src\Integrios.Application\Integrios.Application.csproj" />
-    <ProjectReference Include="..\..\src\Integrios.DeliveryApi\Integrios.DeliveryApi.csproj" />
+    <ProjectReference Include="..\..\src\Integrios.Subscriber\Integrios.Subscriber.csproj" />
     <ProjectReference Include="..\..\src\Integrios.Domain\Integrios.Domain.csproj" />
     <ProjectReference Include="..\..\src\Integrios.Infrastructure\Integrios.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\Integrios.Ingestion\Integrios.Ingestion.csproj" />

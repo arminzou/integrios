@@ -56,7 +56,7 @@ services:
       Integrios__Worker__FanoutLoop__IdlePollInterval: "00:00:00.250"
       Integrios__Worker__DeliveryLoop__IdlePollInterval: "00:00:00.250"
       Integrios__Delivery__Retry__BaseDelay: "00:00:02"
-  delivery-api:
+  subscriber:
     image: ${INTEGRIOS_IMAGE}
     environment:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317

@@ -1,6 +1,6 @@
 using Integrios.Application;
 using Integrios.Application.Delivery;
-using Integrios.Application.DeliveryApi;
+using Integrios.Application.Subscriber;
 using Integrios.Application.Transforms;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;

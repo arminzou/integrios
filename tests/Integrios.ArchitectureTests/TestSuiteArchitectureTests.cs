@@ -37,7 +37,7 @@ public sealed class TestSuiteArchitectureTests
             ["Integrios.Admin"] = ["Integrios.FunctionalTests", "Integrios.Admin.UnitTests"],
             ["Integrios.Ingestion"] = ["Integrios.Ingestion.UnitTests"],
             ["Integrios.Worker"] = ["Integrios.Worker.UnitTests"],
-            ["Integrios.DeliveryApi"] = [],
+            ["Integrios.Subscriber"] = [],
             ["Integrios.Client"] = ["Integrios.Client.UnitTests"]
         };
 

@@ -1,7 +1,7 @@
 using Integrios.Application.Delivery;
 using Integrios.Domain.Enums;
 
-namespace Integrios.Application.DeliveryApi;
+namespace Integrios.Application.Subscriber;
 
 public interface IPullDeliveryQueue
 {

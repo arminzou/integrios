@@ -2,11 +2,11 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Encodings.Web;
-using Integrios.Application.DeliveryApi;
+using Integrios.Application.Subscriber;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Options;
 
-namespace Integrios.DeliveryApi.Auth;
+namespace Integrios.Subscriber.Auth;
 
 public sealed class SubscriberKeyAuthHandler(
     IOptionsMonitor<AuthenticationSchemeOptions> options,

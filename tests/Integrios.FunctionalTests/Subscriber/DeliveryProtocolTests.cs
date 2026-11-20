@@ -3,13 +3,13 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
-using Integrios.DeliveryApi;
 using Integrios.FunctionalTests.Worker;
+using Integrios.Subscriber;
 using Integrios.Tests.Shared;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
-namespace Integrios.FunctionalTests.DeliveryApi;
+namespace Integrios.FunctionalTests.Subscriber;
 
 public sealed class DeliveryProtocolTests : IClassFixture<WorkerRoutingFixture>, IAsyncLifetime
 {
@@ -29,7 +29,7 @@ public sealed class DeliveryProtocolTests : IClassFixture<WorkerRoutingFixture>,
     {
         await fixture.ResetAsync();
         await fixture.SeedPullDestinationsAsync();
-        host = new TestHostBuilder(DeliveryApiHost.CreateBuilder, DeliveryApiHost.ConfigurePipeline)
+        host = new TestHostBuilder(SubscriberHost.CreateBuilder, SubscriberHost.ConfigurePipeline)
             .WithSettings(fixture.Configuration);
         subscriberA = Client(await fixture.SeedSubscriberKeyAsync(A));
         subscriberB = Client(await fixture.SeedSubscriberKeyAsync(B));

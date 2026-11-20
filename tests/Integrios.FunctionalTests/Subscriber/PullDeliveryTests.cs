@@ -1,10 +1,10 @@
 using Integrios.Application.Delivery;
-using Integrios.Application.DeliveryApi;
+using Integrios.Application.Subscriber;
 using Integrios.Application.Telemetry;
 using Integrios.FunctionalTests.Worker;
 using Integrios.Tests.Shared;
 
-namespace Integrios.FunctionalTests.DeliveryApi;
+namespace Integrios.FunctionalTests.Subscriber;
 
 public sealed class PullDeliveryTests : IClassFixture<WorkerRoutingFixture>, IAsyncLifetime
 {

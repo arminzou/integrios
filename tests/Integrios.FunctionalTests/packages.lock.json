@@ -1089,7 +1089,7 @@
           "Microsoft.Extensions.Logging.Abstractions": "[10.0.15, )"
         }
       },
-      "integrios.deliveryapi": {
+      "integrios.subscriber": {
         "type": "Project",
         "dependencies": {
           "Integrios.Application": "[0.12.0, )",

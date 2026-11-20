@@ -8,18 +8,17 @@ using Integrios.Application.Authoring.Connectors;
 using Integrios.Application.Authoring.Destinations;
 using Integrios.Application.Authoring.OperatorKeys;
 using Integrios.Application.Authoring.Sources;
+using Integrios.Application.Authoring.SubscriberKeys;
 using Integrios.Application.Authoring.Subscriptions;
 using Integrios.Application.Authoring.TenantApiKeys;
-using Integrios.Application.Authoring.SubscriberKeys;
-using Integrios.Infrastructure.SubscriberKeys;
 using Integrios.Application.Authoring.Tenants;
 using Integrios.Application.Authoring.Topics;
 using Integrios.Application.Delivery;
-using Integrios.Application.DeliveryApi;
 using Integrios.Application.EventMonitoring;
 using Integrios.Application.Identity;
 using Integrios.Application.Ingestion;
 using Integrios.Application.Secrets;
+using Integrios.Application.Subscriber;
 using Integrios.Application.Transforms;
 using Integrios.Infrastructure.Connectors;
 using Integrios.Infrastructure.Data;
@@ -31,6 +30,7 @@ using Integrios.Infrastructure.OperatorKeys;
 using Integrios.Infrastructure.Outbox;
 using Integrios.Infrastructure.Secrets;
 using Integrios.Infrastructure.Sources;
+using Integrios.Infrastructure.SubscriberKeys;
 using Integrios.Infrastructure.Subscriptions;
 using Integrios.Infrastructure.TenantApiKeys;
 using Integrios.Infrastructure.Tenants;
@@ -199,7 +199,7 @@ public static class DependencyInjection
         return services;
     }
 
-    public static IServiceCollection AddDeliveryApiInfrastructureServices(
+    public static IServiceCollection AddSubscriberInfrastructureServices(
         this IServiceCollection services,
         IConfiguration configuration)
     {
@@ -209,13 +209,13 @@ public static class DependencyInjection
         {
             MaxAttemptDuration = ReadDuration(
                 configuration,
-                "Integrios:DeliveryApi:MaxAttemptDuration",
+                "Integrios:Subscriber:MaxAttemptDuration",
                 DeliveryExecutionOptions.Default.MaxAttemptDuration),
         };
         deliveryOptions.Validate();
         if (deliveryOptions.MaxAttemptDuration <= deliveryOptions.LeaseDuration)
             throw new InvalidOperationException(
-                "Integrios:DeliveryApi:MaxAttemptDuration must be greater than Integrios:Delivery:LeaseDuration.");
+                "Integrios:Subscriber:MaxAttemptDuration must be greater than Integrios:Delivery:LeaseDuration.");
         services.AddDeliveryPolicies(deliveryOptions);
 
         services.AddSingleton<IPullDeliveryQueue, EventDeliveryQueue>();

@@ -1024,7 +1024,7 @@
         "type": "Project",
         "dependencies": {
           "Integrios.Admin": "[0.12.0, )",
-          "Integrios.DeliveryApi": "[0.12.0, )",
+          "Integrios.Subscriber": "[0.12.0, )",
           "Integrios.Ingestion": "[0.12.0, )",
           "Integrios.Worker": "[0.12.0, )"
         }
@@ -1052,7 +1052,7 @@
           "Microsoft.Extensions.Logging.Abstractions": "[10.0.15, )"
         }
       },
-      "integrios.deliveryapi": {
+      "integrios.subscriber": {
         "type": "Project",
         "dependencies": {
           "Integrios.Application": "[0.12.0, )",

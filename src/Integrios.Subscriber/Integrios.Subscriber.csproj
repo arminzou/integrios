@@ -5,7 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <OutputType>Library</OutputType>
-    <UserSecretsId>integrios-delivery-api-development</UserSecretsId>
+    <UserSecretsId>integrios-subscriber-development</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>

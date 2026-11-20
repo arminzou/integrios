@@ -18,7 +18,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
         await AssertHealthyAsync(fixture.AdminOperationalClient);
         await AssertHealthyAsync(fixture.IngestionOperationalClient);
         await AssertHealthyAsync(fixture.WorkerOperationalClient);
-        await AssertHealthyAsync(fixture.DeliveryApiOperationalClient);
+        await AssertHealthyAsync(fixture.SubscriberOperationalClient);
         await fixture.WireMockSink.AssertHealthyAsync();
 
         (await fixture.ScalarAsync<long>(
@@ -78,7 +78,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             fixture.AdminOperationalClient,
             fixture.IngestionOperationalClient,
             fixture.WorkerOperationalClient,
-            fixture.DeliveryApiOperationalClient
+            fixture.SubscriberOperationalClient
         ];
 
         foreach (HttpClient client in operationalClients)
@@ -87,7 +87,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             (await client.GetAsync("/ready")).StatusCode.ShouldBe(HttpStatusCode.OK);
         }
 
-        foreach (HttpClient publicClient in (HttpClient[])[fixture.AdminClient, fixture.IngestionClient, fixture.DeliveryApiClient])
+        foreach (HttpClient publicClient in (HttpClient[])[fixture.AdminClient, fixture.IngestionClient, fixture.SubscriberClient])
         {
             (await publicClient.GetAsync("/health")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
             (await publicClient.GetAsync("/ready")).StatusCode.ShouldBe(HttpStatusCode.NotFound);

@@ -15,7 +15,7 @@ public sealed class ProjectArchitectureTests
         "Integrios.Admin",
         "Integrios.Ingestion",
         "Integrios.Worker",
-        "Integrios.DeliveryApi"
+        "Integrios.Subscriber"
     ];
 
     [Fact]
@@ -30,7 +30,7 @@ public sealed class ProjectArchitectureTests
             "Integrios.Admin",
             "Integrios.Ingestion",
             "Integrios.Worker",
-            "Integrios.DeliveryApi");
+            "Integrios.Subscriber");
         AssertOmitsReferencePrefixes(
             assemblies["Integrios.Domain"],
             "Microsoft.EntityFrameworkCore",
@@ -42,7 +42,7 @@ public sealed class ProjectArchitectureTests
             "Integrios.Admin",
             "Integrios.Ingestion",
             "Integrios.Worker",
-            "Integrios.DeliveryApi");
+            "Integrios.Subscriber");
         AssertOmitsReferencePrefixes(
             assemblies["Integrios.Application"],
             "Microsoft.AspNetCore",
@@ -56,12 +56,12 @@ public sealed class ProjectArchitectureTests
             "Integrios.Admin",
             "Integrios.Ingestion",
             "Integrios.Worker",
-            "Integrios.DeliveryApi");
+            "Integrios.Subscriber");
 
-        AssertOmitsReferences(assemblies["Integrios.Admin"], "Integrios.Ingestion", "Integrios.Worker", "Integrios.DeliveryApi");
-        AssertOmitsReferences(assemblies["Integrios.Ingestion"], "Integrios.Admin", "Integrios.Worker", "Integrios.DeliveryApi");
-        AssertOmitsReferences(assemblies["Integrios.Worker"], "Integrios.Admin", "Integrios.Ingestion", "Integrios.DeliveryApi");
-        AssertOmitsReferences(assemblies["Integrios.DeliveryApi"], "Integrios.Admin", "Integrios.Ingestion", "Integrios.Worker");
+        AssertOmitsReferences(assemblies["Integrios.Admin"], "Integrios.Ingestion", "Integrios.Worker", "Integrios.Subscriber");
+        AssertOmitsReferences(assemblies["Integrios.Ingestion"], "Integrios.Admin", "Integrios.Worker", "Integrios.Subscriber");
+        AssertOmitsReferences(assemblies["Integrios.Worker"], "Integrios.Admin", "Integrios.Ingestion", "Integrios.Subscriber");
+        AssertOmitsReferences(assemblies["Integrios.Subscriber"], "Integrios.Admin", "Integrios.Ingestion", "Integrios.Worker");
     }
 
     [Fact]
@@ -78,7 +78,7 @@ public sealed class ProjectArchitectureTests
             ["Integrios.Admin"] = ["Integrios.Application", "Integrios.Domain", "Integrios.Infrastructure", "Integrios.Migrations.Postgres", "Integrios.Migrations.SqlServer"],
             ["Integrios.Ingestion"] = ["Integrios.Application", "Integrios.Domain", "Integrios.Infrastructure"],
             ["Integrios.Worker"] = ["Integrios.Application", "Integrios.Domain", "Integrios.Infrastructure"],
-            ["Integrios.DeliveryApi"] = ["Integrios.Application", "Integrios.Domain", "Integrios.Infrastructure"],
+            ["Integrios.Subscriber"] = ["Integrios.Application", "Integrios.Domain", "Integrios.Infrastructure"],
             // The SDK ships to Subscriber teams and speaks only the wire protocol.
             ["Integrios.Client"] = []
         };

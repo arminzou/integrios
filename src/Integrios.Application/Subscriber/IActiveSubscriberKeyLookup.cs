@@ -1,4 +1,4 @@
-namespace Integrios.Application.DeliveryApi;
+namespace Integrios.Application.Subscriber;
 
 public interface IActiveSubscriberKeyLookup
 {

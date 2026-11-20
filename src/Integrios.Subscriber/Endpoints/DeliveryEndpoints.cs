@@ -1,10 +1,10 @@
 using System.Security.Claims;
 using System.Text.Json;
-using Integrios.Application.DeliveryApi;
-using Integrios.DeliveryApi.Auth;
+using Integrios.Application.Subscriber;
+using Integrios.Subscriber.Auth;
 using MediatR;
 
-namespace Integrios.DeliveryApi.Endpoints;
+namespace Integrios.Subscriber.Endpoints;
 
 public static class DeliveryEndpoints
 {

@@ -2,16 +2,16 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
-using Integrios.DeliveryApi;
-using Integrios.FunctionalTests.Worker;
 using Integrios.Client;
+using Integrios.FunctionalTests.Worker;
+using Integrios.Subscriber;
 using Integrios.Tests.Shared;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
-namespace Integrios.FunctionalTests.DeliveryApi;
+namespace Integrios.FunctionalTests.Subscriber;
 
 /// Drives the Integrios.Client SDK against the real Delivery API host and database.
 public sealed class SubscriberSdkTests : IClassFixture<WorkerRoutingFixture>, IAsyncLifetime
@@ -31,7 +31,7 @@ public sealed class SubscriberSdkTests : IClassFixture<WorkerRoutingFixture>, IA
         await fixture.ResetAsync();
         await fixture.SeedPullDestinationsAsync();
         // A three-second lease makes the SDK renew about every second.
-        deliveryApi = new TestHostBuilder(DeliveryApiHost.CreateBuilder, DeliveryApiHost.ConfigurePipeline)
+        deliveryApi = new TestHostBuilder(SubscriberHost.CreateBuilder, SubscriberHost.ConfigurePipeline)
             .WithSettings(fixture.Configuration)
             .WithSetting("Integrios:Delivery:HttpTimeout", "00:00:01")
             .WithSetting("Integrios:Delivery:AttemptDeadline", "00:00:02")
@@ -58,7 +58,7 @@ public sealed class SubscriberSdkTests : IClassFixture<WorkerRoutingFixture>, IA
         builder.Services
             .AddIntegriosSubscriber<DelegateHandler>(options =>
             {
-                options.BaseAddress = new Uri("http://delivery-api");
+                options.BaseAddress = new Uri("http://subscriber");
                 options.SubscriberKey = subscriberKey;
                 options.Concurrency = concurrency;
             })
