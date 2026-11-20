@@ -7,11 +7,11 @@ using System.Text;
 using System.Text.Json;
 using Dapper;
 using Integrios.Application.Authoring.SubscriberKeys;
-using Integrios.Application.DeliveryApi;
-using Integrios.DeliveryApi;
-using Integrios.DeliveryApi.Auth;
+using Integrios.Application.Subscriber;
 using Integrios.Infrastructure.Connectors;
 using Integrios.Ingestion;
+using Integrios.Subscriber;
+using Integrios.Subscriber.Auth;
 using Integrios.Tests.Shared;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -36,7 +36,7 @@ public sealed class SubscriberKeysTests(AdminApiFixture fixture) : AdminApiTestB
     private async Task<Guid> CreatePullDestinationAsync(string name)
     {
         HttpResponseMessage response = await admin.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/destinations",
-            new { connector_id = BuiltInConnectors.Subscriber.Id, name, configuration = new { } }));
+            new { connector_id = BuiltInConnectors.Pull.Id, name, configuration = new { } }));
         response.StatusCode.ShouldBe(HttpStatusCode.Created);
         return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
     }
@@ -166,9 +166,9 @@ public sealed class SubscriberKeysTests(AdminApiFixture fixture) : AdminApiTestB
         (await ingestion.PostAsJsonAsync("/events?source_id=" + Guid.NewGuid(), new { event_type = "test", payload = new { } })).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
-    private TestHostBuilder DeliveryHost() => new TestHostBuilder(DeliveryApiHost.CreateBuilder, (app, port) =>
+    private TestHostBuilder DeliveryHost() => new TestHostBuilder(SubscriberHost.CreateBuilder, (app, port) =>
     {
-        DeliveryApiHost.ConfigurePipeline(app, port);
+        SubscriberHost.ConfigurePipeline(app, port);
         app.MapGet("/test/subscriber", (HttpContext context) => Results.Ok(new IdentityResponse(
             context.User.FindFirstValue(ClaimTypes.NameIdentifier)!,
             context.User.FindFirstValue(SubscriberKeyAuthHandler.TenantIdClaim)!,

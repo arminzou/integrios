@@ -22,7 +22,7 @@ WORKER_OP_PORT=$((5299 + OFFSET))
 DELIVERY_PORT=$((5241 + OFFSET))
 DELIVERY_OP_PORT=$((5242 + OFFSET))
 PORTS="$PG_PORT $MOCKSINK_PORT $ADMIN_PORT $ADMIN_OP_PORT $INGESTION_PORT $INGESTION_OP_PORT $WORKER_OP_PORT $DELIVERY_PORT $DELIVERY_OP_PORT"
-ROLES="admin ingestion worker delivery-api"
+ROLES="admin ingestion worker subscriber"
 
 OPERATOR_KEY=global_operator_key:operator_bootstrap_secret
 OPERATOR_EMAIL=operator@example.test
@@ -111,12 +111,12 @@ up() {
   start_role ingestion "$ROOT" ConnectionStrings__Postgres="$DATA_DB" \
     ASPNETCORE_URLS=http://127.0.0.1:$INGESTION_PORT OperationalPort=$INGESTION_OP_PORT
   start_role worker "$ROOT" ConnectionStrings__Postgres="$DATA_DB" OperationalPort=$WORKER_OP_PORT
-  start_role delivery-api "$ROOT" ConnectionStrings__Postgres="$DATA_DB"     ASPNETCORE_URLS=http://127.0.0.1:$DELIVERY_PORT OperationalPort=$DELIVERY_OP_PORT
+  start_role subscriber "$ROOT" ConnectionStrings__Postgres="$DATA_DB"     ASPNETCORE_URLS=http://127.0.0.1:$DELIVERY_PORT OperationalPort=$DELIVERY_OP_PORT
 
   wait_ready admin "http://127.0.0.1:$ADMIN_OP_PORT/ready"
   wait_ready ingestion "http://127.0.0.1:$INGESTION_OP_PORT/ready"
   wait_ready worker "http://127.0.0.1:$WORKER_OP_PORT/ready"
-  wait_ready delivery-api "http://127.0.0.1:$DELIVERY_OP_PORT/ready"
+  wait_ready subscriber "http://127.0.0.1:$DELIVERY_OP_PORT/ready"
   print_env >"$STATE/env"
   echo "up: run '$RUN'; load it with: source $STATE/env"
 }
@@ -131,7 +131,7 @@ doctor() {
   check "admin /ready" "curl -fsS -m 10 http://127.0.0.1:$ADMIN_OP_PORT/ready"
   check "ingestion /ready" "curl -fsS -m 10 http://127.0.0.1:$INGESTION_OP_PORT/ready"
   check "worker /ready" "curl -fsS -m 10 http://127.0.0.1:$WORKER_OP_PORT/ready"
-  check "delivery-api /ready" "curl -fsS -m 10 http://127.0.0.1:$DELIVERY_OP_PORT/ready"
+  check "subscriber /ready" "curl -fsS -m 10 http://127.0.0.1:$DELIVERY_OP_PORT/ready"
   check "OperatorKey accepted by Admin API" "curl -fsS -m 10 -H 'Authorization: OperatorKey $OPERATOR_KEY' http://127.0.0.1:$ADMIN_PORT/admin/tenants"
   check "password sign-in enabled" "curl -fsS -m 10 http://127.0.0.1:$ADMIN_PORT/auth/options | grep -q '\"password_enabled\":true'"
   check "mocksink answers" "curl -fsS -m 10 http://127.0.0.1:$MOCKSINK_PORT/__admin/health"

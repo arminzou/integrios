@@ -7,9 +7,9 @@ using Dapper;
 using Integrios.Application;
 using Integrios.Application.Authoring.Subscriptions;
 using Integrios.Application.Delivery;
-using Integrios.Application.DeliveryApi;
 using Integrios.Application.Ingestion;
 using Integrios.Application.Secrets;
+using Integrios.Application.Subscriber;
 using Integrios.Application.Telemetry;
 using Integrios.Application.Transforms;
 using Integrios.Domain.Entities;
@@ -216,7 +216,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
                 (@B1,@TenantId,@TopicId,'to-pull-b',{{{database.Json("@ShippedRules")}}},@BId,4,'active',NULL);
             """, new
         {
-            ConnectorId = BuiltInConnectors.Subscriber.Id,
+            ConnectorId = BuiltInConnectors.Pull.Id,
             AId = PullDestinationAId,
             BId = PullDestinationBId,
             TenantId,

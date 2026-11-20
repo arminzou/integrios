@@ -248,12 +248,12 @@ public sealed class DestinationsAdminTests(AdminApiFixture fixture) : Subscripti
     }
 
     [Fact]
-    public async Task PullDestination_IsAuthoredOnTheSubscriberConnectorWithoutABaseUri()
+    public async Task PullDestination_IsAuthoredOnThePullConnectorWithoutABaseUri()
     {
         HttpResponseMessage pull = await client.SendAsync(AdminRequest(
             HttpMethod.Post,
             $"/admin/tenants/{Fixture.TenantId}/destinations",
-            new { connector_id = BuiltInConnectors.Subscriber.Id, name = "orders-service", configuration = new { } }));
+            new { connector_id = BuiltInConnectors.Pull.Id, name = "orders-service", configuration = new { } }));
         HttpResponseMessage push = await client.SendAsync(AdminRequest(
             HttpMethod.Post,
             $"/admin/tenants/{Fixture.TenantId}/destinations",

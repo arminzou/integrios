@@ -41,7 +41,7 @@ Integrios separates platform intent from runtime execution.
 Source and Destination configuration and secret references, Topic and Subscription authoring, and transform
 preview. Tenants never receive control-plane authority.
 
-**Data plane** (`Integrios.Ingestion`, `Integrios.Worker`, and `Integrios.DeliveryApi`): request authentication and Tenant
+**Data plane** (`Integrios.Ingestion`, `Integrios.Worker`, and `Integrios.Subscriber`): request authentication and Tenant
 resolution, Source and Topic validation, durable Event acceptance, fanout, transformation,
 HTTP delivery, retries, dead-lettering, replay, and delivery tracking.
 
@@ -204,8 +204,8 @@ and indeterminate attempts preserve ambiguity rather than reporting a false conf
 
 ### Pull delivery (preview)
 
-A Destination built from the platform's `subscriber` Connector is a pull Destination. The Worker
-never sends its deliveries; a Subscriber service claims them from the `delivery-api` role over
+A Destination built from the platform's `pull` Connector is a pull Destination. The Worker
+never sends its deliveries; a Subscriber service claims them from the `subscriber` role over
 HTTP and reports each outcome. A SubscriberKey in `Authorization: Bearer` selects exactly one pull
 Destination, so no Destination id appears in a path, and a key can never see another Destination's
 work. The protocol is a preview and may still change.
@@ -216,7 +216,7 @@ work. The protocol is a preview and may still change.
 | `POST /delivery/v1/deliveries/{id}/attempts/{attempt}/renew` | none | `200` with the new `lease_expires_at` |
 | `.../ack` | none | `204` |
 | `.../nack` | optional `retry_after_seconds` (0 to 900) and `error` | `204`; the delivery retries under the platform policy |
-| `.../fail` | `error` | `204`; the delivery dead-letters |
+| `.../reject` | `error` | `204`; the delivery dead-letters |
 
 A claim spends an attempt exactly as a push claim does, and returns the mapped payload with the
 Event, delivery and attempt identifiers, the Event type, Topic, accepted time, lease expiry and
@@ -226,7 +226,7 @@ last poll time, at most once a minute, which the dashboard shows on the Destinat
 Subscriber does not look like a quiet queue.
 
 Renew extends the lease by `Integrios:Delivery:LeaseDuration`, capped at
-`Integrios:DeliveryApi:MaxAttemptDuration` from the attempt's start; past that it answers `409`
+`Integrios:Subscriber:MaxAttemptDuration` from the attempt's start; past that it answers `409`
 with code `max_attempt_duration`. Every attempt call is fenced by the attempt id: once another
 claim has reclaimed the delivery, or a different outcome was recorded, the call answers `409` with
 code `ownership_lost`. Repeating the settlement that was already recorded answers its original
@@ -234,7 +234,7 @@ success, so a Subscriber whose response was lost can retry it safely. Pull attem
 same delivery history as push attempts, with failure phase `subscriber` and the Subscriber's error
 text in place of an HTTP status.
 
-`Integrios.Subscriber` is an unpublished .NET SDK preview for generic-host processes. It has no
+`Integrios.Client` is an unpublished .NET SDK preview for generic-host processes. It has no
 dependency on server projects. `AddIntegriosSubscriber<THandler>` registers a scoped handler,
 SubscriberKey, Delivery API address, and concurrency limit. Each claim loop holds one delivery
 at a time, renews at a third of the remaining lease, and cancels the handler on lease loss or

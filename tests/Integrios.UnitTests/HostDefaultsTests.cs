@@ -1,6 +1,6 @@
 using Integrios.Admin;
-using Integrios.DeliveryApi;
 using Integrios.Ingestion;
+using Integrios.Subscriber;
 using Integrios.Worker;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -21,7 +21,7 @@ public sealed class HostDefaultsTests : IDisposable
             (IngestionHost.Name, IngestionHost.CreateBuilder(Args()).OperationalPort, IngestionHost.DefaultOperationalPort),
             (AdminHost.Name, AdminHost.CreateBuilder(Args()).OperationalPort, AdminHost.DefaultOperationalPort),
             (WorkerHost.Name, WorkerHost.CreateBuilder(Args()).OperationalPort, WorkerHost.DefaultOperationalPort),
-            (DeliveryApiHost.Name, DeliveryApiHost.CreateBuilder(Args()).OperationalPort, DeliveryApiHost.DefaultOperationalPort),
+            (SubscriberHost.Name, SubscriberHost.CreateBuilder(Args()).OperationalPort, SubscriberHost.DefaultOperationalPort),
         ];
 
         foreach ((string role, int port, int defaultPort) in roles)
@@ -37,7 +37,7 @@ public sealed class HostDefaultsTests : IDisposable
             ("Integrios.Ingestion", IngestionHost.CreateBuilder(Args()).Builder),
             ("Integrios.Admin", AdminHost.CreateBuilder(Args()).Builder),
             ("Integrios.Worker", WorkerHost.CreateBuilder(Args()).Builder),
-            ("Integrios.DeliveryApi", DeliveryApiHost.CreateBuilder(Args()).Builder),
+            ("Integrios.Subscriber", SubscriberHost.CreateBuilder(Args()).Builder),
         ];
 
         foreach ((string expected, WebApplicationBuilder builder) in roles)
@@ -45,12 +45,12 @@ public sealed class HostDefaultsTests : IDisposable
     }
 
     [Fact]
-    public void DeliveryApi_ListensOnLoopbackUnlessAListenerIsConfigured()
+    public void Subscriber_ListensOnLoopbackUnlessAListenerIsConfigured()
     {
-        DeliveryApiHost.CreateBuilder(Args()).Builder.WebHost.GetSetting(WebHostDefaults.ServerUrlsKey)
+        SubscriberHost.CreateBuilder(Args()).Builder.WebHost.GetSetting(WebHostDefaults.ServerUrlsKey)
             .ShouldBe("http://localhost:5241;http://0.0.0.0:5242");
 
-        DeliveryApiHost.CreateBuilder([.. Args(), "--urls=http://0.0.0.0:5241"]).Builder.WebHost
+        SubscriberHost.CreateBuilder([.. Args(), "--urls=http://0.0.0.0:5241"]).Builder.WebHost
             .GetSetting(WebHostDefaults.ServerUrlsKey)
             .ShouldBe("http://0.0.0.0:5241;http://0.0.0.0:5242");
     }

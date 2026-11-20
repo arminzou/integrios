@@ -130,9 +130,9 @@ services:
     ports:
       - "127.0.0.1:${INTEGRIOS_WORKER_METRICS_PORT:-5299}:5299"
 
-  delivery-api:
+  subscriber:
     image: ghcr.io/arminzou/integrios:${INTEGRIOS_VERSION:-0.12.0} # x-release-please-version
-    entrypoint: ["/app/integrios", "delivery-api"]
+    entrypoint: ["/app/integrios", "subscriber"]
     restart: unless-stopped
     depends_on:
       bootstrap:
@@ -140,10 +140,10 @@ services:
     environment:
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=data_runtime;Password=${INTEGRIOS_DATA_RUNTIME_PASSWORD}
       DOTNET_ENVIRONMENT: Production
-    # Subscribers on this host only; set INTEGRIOS_DELIVERY_API_BIND=0.0.0.0 to accept remote ones.
+    # Subscribers on this host only; set INTEGRIOS_SUBSCRIBER_BIND=0.0.0.0 to accept remote ones.
     ports:
-      - "${INTEGRIOS_DELIVERY_API_BIND:-127.0.0.1}:${INTEGRIOS_DELIVERY_API_PORT:-5241}:8080"
-      - "127.0.0.1:${INTEGRIOS_DELIVERY_API_OPERATIONAL_PORT:-5242}:5299"
+      - "${INTEGRIOS_SUBSCRIBER_BIND:-127.0.0.1}:${INTEGRIOS_SUBSCRIBER_PORT:-5241}:8080"
+      - "127.0.0.1:${INTEGRIOS_SUBSCRIBER_OPERATIONAL_PORT:-5242}:5299"
 
 volumes:
   postgres_data:

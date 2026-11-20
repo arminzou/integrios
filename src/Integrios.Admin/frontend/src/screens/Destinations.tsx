@@ -862,7 +862,7 @@ function DestinationInspector({ tenantId, destinationId }: { tenantId: string; d
   if (!destination.data) return <Inspector label="Destination detail">Loading…</Inspector>;
 
   const current = destination.data;
-  const pull = connectors.data?.items.find((connector) => connector.id === current.connector_id)?.key === "subscriber";
+  const pull = connectors.data?.items.find((connector) => connector.id === current.connector_id)?.key === "pull";
   return (
     <Inspector label="Destination detail">
       {/* The identity on the left, the state that qualifies it on the right: the two things an

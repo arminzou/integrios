@@ -111,7 +111,7 @@ jobs:
           dotnet test tests/Integrios.Admin.UnitTests/Integrios.Admin.UnitTests.csproj --configuration Release --no-build
           dotnet test tests/Integrios.Ingestion.UnitTests/Integrios.Ingestion.UnitTests.csproj --configuration Release --no-build
           dotnet test tests/Integrios.Worker.UnitTests/Integrios.Worker.UnitTests.csproj --configuration Release --no-build
-          dotnet test tests/Integrios.Subscriber.UnitTests/Integrios.Subscriber.UnitTests.csproj --configuration Release --no-build
+          dotnet test tests/Integrios.Client.UnitTests/Integrios.Client.UnitTests.csproj --configuration Release --no-build
           dotnet test tests/Integrios.UnitTests/Integrios.UnitTests.csproj --configuration Release --no-build
 
   frontend:
@@ -336,7 +336,7 @@ jobs:
           dotnet test tests/Integrios.Admin.UnitTests/Integrios.Admin.UnitTests.csproj --configuration Release --no-build
           dotnet test tests/Integrios.Ingestion.UnitTests/Integrios.Ingestion.UnitTests.csproj --configuration Release --no-build
           dotnet test tests/Integrios.Worker.UnitTests/Integrios.Worker.UnitTests.csproj --configuration Release --no-build
-          dotnet test tests/Integrios.Subscriber.UnitTests/Integrios.Subscriber.UnitTests.csproj --configuration Release --no-build
+          dotnet test tests/Integrios.Client.UnitTests/Integrios.Client.UnitTests.csproj --configuration Release --no-build
           dotnet test tests/Integrios.UnitTests/Integrios.UnitTests.csproj --configuration Release --no-build
           INTEGRIOS_TEST_DATABASE_PROVIDER=postgres dotnet test tests/Integrios.FunctionalTests/Integrios.FunctionalTests.csproj --configuration Release --no-build
           INTEGRIOS_TEST_DATABASE_PROVIDER=sqlserver dotnet test tests/Integrios.FunctionalTests/Integrios.FunctionalTests.csproj --configuration Release --no-build

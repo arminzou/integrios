@@ -31,7 +31,7 @@ make up
 cd src/Integrios.Ingestion && dotnet run --project ../Integrios --launch-profile ingestion
 cd src/Integrios.Admin && dotnet run --project ../Integrios --launch-profile admin
 cd src/Integrios.Worker && dotnet run --project ../Integrios --launch-profile worker
-cd src/Integrios.DeliveryApi && dotnet run --project ../Integrios --launch-profile delivery-api
+cd src/Integrios.Subscriber && dotnet run --project ../Integrios --launch-profile subscriber
 
 # Apply C# formatting (per .editorconfig)
 dotnet format Integrios.slnx
@@ -55,7 +55,7 @@ opening a PR; local proof supplements the shared CI gate.
 
 - `Integrios.slnx` is the solution entry point.
 - `src/Integrios` is the `integrios` executable that starts any role: `integrios ingestion`,
-  `integrios admin`, `integrios worker`, or `integrios delivery-api`. It is the only executable; the
+  `integrios admin`, `integrios worker`, or `integrios subscriber`. It is the only executable; the
   four projects below are host libraries it references, one per role.
 - `src/Integrios.Ingestion` owns intake, Tenant authentication, and the durable acceptance boundary.
   Data plane, port 5231.
@@ -63,7 +63,7 @@ opening a PR; local proof supplements the shared CI gate.
   and Subscription management; and it serves the Operator dashboard. Control plane, port 5150.
 - `src/Integrios.Worker` owns outbox polling, fanout to Subscriptions, delivery, and retry and
   dead-letter behavior.
-- `src/Integrios.DeliveryApi` owns pull delivery: Subscribers claim and settle deliveries for a
+- `src/Integrios.Subscriber` owns pull delivery: Subscribers claim and settle deliveries for a
   pull Destination through it. Data plane, port 5241, loopback only by default.
 - `src/Integrios.Application` holds the use cases: commands, queries, their handlers, and the ports
   they need, grouped by responsibility (such as `Authoring`, `Ingestion`, `Delivery`) and then by
@@ -71,7 +71,7 @@ opening a PR; local proof supplements the shared CI gate.
 - `src/Integrios.Infrastructure` implements those ports: persistence, messaging, secret resolution,
   and other external-system adapters.
 - `src/Integrios.Domain` holds entities, enums, and value objects.
-- `src/Integrios.Subscriber` is the unpublished .NET SDK preview for team-owned Subscriber hosts.
+- `src/Integrios.Client` is the unpublished .NET SDK preview for team-owned Subscriber hosts.
   It depends only on the Delivery API's HTTP protocol, with no server-project references.
 - `src/Integrios.Migrations.Postgres/` and `src/Integrios.Migrations.SqlServer/` hold the
   provider-specific EF Core migrations.

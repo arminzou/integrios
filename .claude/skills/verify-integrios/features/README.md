@@ -53,7 +53,7 @@ and `Gotchas`.
   a Destination in the dashboard and the Admin API.
 - [Subscriptions](./subscriptions.md) covers creating, activating, and deactivating a Subscription
   in the dashboard and the Admin API.
-- [Pull delivery](./pull-delivery.md) covers a Subscriber claiming from the `delivery-api` role
-  through the `Integrios.Subscriber` SDK or raw HTTP, and every SDK outcome.
+- [Pull delivery](./pull-delivery.md) covers a Subscriber claiming from the `subscriber` role
+  through the `Integrios.Client` SDK or raw HTTP, and every SDK outcome.
 - [Database CLI](./database-cli.md) covers `integrios admin database migrate`, `info`, and
   `grant-runtime`.

@@ -16,7 +16,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Integrios.Admin\Integrios.Admin.csproj" />
-    <ProjectReference Include="..\Integrios.DeliveryApi\Integrios.DeliveryApi.csproj" />
+    <ProjectReference Include="..\Integrios.Subscriber\Integrios.Subscriber.csproj" />
     <ProjectReference Include="..\Integrios.Ingestion\Integrios.Ingestion.csproj" />
     <ProjectReference Include="..\Integrios.Worker\Integrios.Worker.csproj" />
   </ItemGroup>

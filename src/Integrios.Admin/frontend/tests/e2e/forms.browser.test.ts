@@ -503,30 +503,30 @@ describe("Create forms, filled through a real browser", () => {
     await view.close();
   }, 60_000);
 
-  it("sends a pull Destination on the built-in subscriber Connector with no configuration", async () => {
+  it("sends a pull Destination on the built-in pull Connector with no configuration", async () => {
     const { page: view, writes } = await open(`/tenants/${tenantId}/destinations`);
-    const subscriber = {
+    const pullConnector = {
       ...connector,
       id: "cccccccc-cccc-cccc-cccc-cccccccccccc",
-      key: "subscriber",
-      name: "Subscriber",
+      key: "pull",
+      name: "Pull",
       direction: "destination",
     };
-    await view.route("**/admin/connectors?*", (route) => route.fulfill({ json: page([connector, subscriber]) }));
-    await view.route(`**/admin/connectors/${subscriber.id}`, (route) =>
+    await view.route("**/admin/connectors?*", (route) => route.fulfill({ json: page([connector, pullConnector]) }));
+    await view.route(`**/admin/connectors/${pullConnector.id}`, (route) =>
       route.fulfill({
         json: {
-          ...subscriber,
+          ...pullConnector,
           manifest_schema_version: 1,
           manifest: {
             manifest_schema_version: 1,
-            key: "subscriber",
+            key: "pull",
             contract_version: 1,
             direction: "destination",
             destination_configuration_schema: { type: "object", properties: {}, additionalProperties: false },
             source_verification: { allow_unverified: true, schemes: [] },
             destination_authentication: { allow_unauthenticated: true, schemes: [] },
-            presentation: { name: "Subscriber", event_types: [], authoring_presets: [] },
+            presentation: { name: "Pull", event_types: [], authoring_presets: [] },
           },
         },
       }),
@@ -535,14 +535,14 @@ describe("Create forms, filled through a real browser", () => {
 
     await view.click("text=New Destination");
     const form = formNamed(view, "Create a Destination");
-    await choose(form.getByLabel("Connector"), /Subscriber/);
+    await choose(form.getByLabel("Connector"), /Pull/);
     await form.getByText("This Connector requires no Destination configuration.").waitFor();
     expect(await form.getByLabel("Base URI").count()).toBe(0);
     await form.getByLabel("Name", { exact: true }).fill("orders-service");
     await view.click("text=Create Destination");
 
     const sent = await submitted(writes);
-    expect(sent.body.connector_id).toBe(subscriber.id);
+    expect(sent.body.connector_id).toBe(pullConnector.id);
     expect(sent.body.configuration).toEqual({});
     expect(sent.body.authentication).toBeNull();
     await view.close();

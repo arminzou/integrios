@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Proves the Integrios.Subscriber SDK against this run's delivery-api: seeds a pull Destination,
-# builds a generic-host consumer from src/Integrios.Subscriber, accepts one Event per handler
+# Proves the Integrios.Client SDK against this run's subscriber: seeds a pull Destination,
+# builds a generic-host consumer from src/Integrios.Client, accepts one Event per handler
 # outcome, and checks each delivery's recorded result through the Admin API.
 # Requires a run from control.sh up and its env (source artifacts/verify/<run>/state/env).
 set -euo pipefail
@@ -22,12 +22,12 @@ cat >"$C/Subscriber.csproj" <<XML
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.15" />
-    <ProjectReference Include="$ROOT/src/Integrios.Subscriber/Integrios.Subscriber.csproj" />
+    <ProjectReference Include="$ROOT/src/Integrios.Client/Integrios.Client.csproj" />
   </ItemGroup>
 </Project>
 XML
 cat >"$C/Program.cs" <<'CS'
-using Integrios.Subscriber;
+using Integrios.Client;
 
 var builder = Host.CreateApplicationBuilder(args);
 builder.Services.AddIntegriosSubscriber<OrderHandler>(options =>
@@ -48,7 +48,7 @@ sealed class OrderHandler(ILogger<OrderHandler> logger) : IDeliveryHandler
         {
             case "slow": await Task.Delay(TimeSpan.FromSeconds(45), cancellationToken); return DeliveryResult.Ack;
             case "retry": return delivery.AttemptNumber == 1 ? DeliveryResult.Retry(TimeSpan.FromSeconds(2), "not yet") : DeliveryResult.Ack;
-            case "fail": throw new PermanentDeliveryFailureException("order rejected");
+            case "reject": throw new PermanentDeliveryFailureException("order rejected");
             case "throw": throw new InvalidOperationException("transient boom");
             default: return DeliveryResult.Ack;
         }
@@ -61,7 +61,7 @@ DELIVERY_API=$DELIVERY_API SUBSCRIBER_KEY=$SUBSCRIBER_KEY dotnet run --no-build 
 pid=$!
 trap 'kill "$pid" 2>/dev/null || true' EXIT
 declare -A events
-for outcome in ack retry fail throw slow; do
+for outcome in ack retry reject throw slow; do
   events[$outcome]=$(curl -fsS --max-time 10 -X POST "$INGESTION/events?source_id=$SOURCE" -H "Authorization: Bearer $TOKEN" \
     -H 'Content-Type: application/json' \
     -d "{\"event_type\":\"payment.created\",\"source_event_id\":\"sdk-$outcome-$SLUG\",\"payload\":{\"outcome\":\"$outcome\"}}" | jq -er .event_id)
@@ -82,7 +82,7 @@ expect() {
 }
 expect ack '.status == "succeeded" and .lifetime_attempt_count == 1' "Ack succeeds on the first attempt"
 expect retry '.status == "succeeded" and .lifetime_attempt_count == 2' "Retry(2s) is claimed again and then acked"
-expect fail '.status == "dead_lettered"' "PermanentDeliveryFailureException dead-letters"
+expect reject '.status == "dead_lettered"' "PermanentDeliveryFailureException dead-letters"
 expect throw '.lifetime_attempt_count >= 1 and .status != "succeeded"' "another exception nacks under platform backoff"
 expect slow '.status == "succeeded"' "a handler past a third of the lease renews and then acks"
 grep -q 'POST .*/renew' "$E/subscriber.log" || { echo "FAIL slow: no renew request in subscriber.log" | tee -a "$E/result.txt"; exit 1; }

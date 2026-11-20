@@ -16,7 +16,7 @@ public sealed class ApplicationArchitectureTests
         "Integrios.Application.EventMonitoring",
         "Integrios.Application.Ingestion",
         "Integrios.Application.Delivery",
-        "Integrios.Application.DeliveryApi",
+        "Integrios.Application.Subscriber",
         "Integrios.Application.Secrets",
         "Integrios.Application.Transforms"
     ];
