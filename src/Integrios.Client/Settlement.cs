@@ -10,8 +10,8 @@ internal sealed record Settlement(string Action, int? RetryAfterSeconds, string?
 
     public static Settlement Nack(int? retryAfterSeconds, string? error) => new("nack", retryAfterSeconds, Truncate(error));
 
-    public static Settlement Fail(string error) =>
-        new("fail", null, Truncate(string.IsNullOrWhiteSpace(error) ? "The handler reported a permanent failure." : error));
+    public static Settlement Reject(string error) =>
+        new("reject", null, Truncate(string.IsNullOrWhiteSpace(error) ? "The handler reported a permanent failure." : error));
 
     // The Delivery API rejects longer error text, and a rejected settlement would never be recorded.
     private static string? Truncate(string? error) => error?.Length > MaxErrorLength ? error[..MaxErrorLength] : error;

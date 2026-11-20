@@ -91,7 +91,7 @@ public sealed class DeliveryLoopTests : IAsyncDisposable
 
         await Eventually(() => transport.Settled.Count == 1);
 
-        transport.Settled.Single().Settlement.ShouldBe(new Settlement("fail", null, "order rejected"));
+        transport.Settled.Single().Settlement.ShouldBe(new Settlement("reject", null, "order rejected"));
     }
 
     [Fact]

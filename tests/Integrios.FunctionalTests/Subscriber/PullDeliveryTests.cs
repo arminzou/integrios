@@ -200,7 +200,7 @@ public sealed class PullDeliveryTests : IClassFixture<WorkerRoutingFixture>, IAs
         await fixture.FanoutPullDeliveryAsync("order.placed");
         PullDelivery claimed = (await ClaimAsync(A)).ShouldHaveSingleItem();
 
-        (await fixture.PullQueue.SettleAsync(Owner(A, claimed), PullSettlement.Fail("order rejected"), CancellationToken.None))
+        (await fixture.PullQueue.SettleAsync(Owner(A, claimed), PullSettlement.Reject("order rejected"), CancellationToken.None))
             .ShouldBe(PullSettlementStatus.Applied);
 
         (await fixture.GetEventDeliveryAsync(claimed.DeliveryId)).Status.ShouldBe("dead_lettered");
@@ -227,8 +227,8 @@ public sealed class PullDeliveryTests : IClassFixture<WorkerRoutingFixture>, IAs
 
         PullDelivery claimed = (await ClaimAsync(A)).ShouldHaveSingleItem();
         PullAttemptOwner owner = Owner(A, claimed);
-        PullSettlement original = terminal ? PullSettlement.Fail("rejected") : PullSettlement.Nack("retry", null);
-        PullSettlement different = terminal ? PullSettlement.Nack(null, null) : PullSettlement.Fail("rejected");
+        PullSettlement original = terminal ? PullSettlement.Reject("rejected") : PullSettlement.Nack("retry", null);
+        PullSettlement different = terminal ? PullSettlement.Nack(null, null) : PullSettlement.Reject("rejected");
 
         (await fixture.PullQueue.SettleAsync(owner, original, CancellationToken.None))
             .ShouldBe(PullSettlementStatus.Applied);

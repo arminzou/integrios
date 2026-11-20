@@ -24,7 +24,7 @@ public static class DeliveryEndpoints
         attempt.MapPost("/renew", Renew).WithName(nameof(Renew)).Produces<RenewResponse>();
         attempt.MapPost("/ack", Ack).WithName(nameof(Ack)).Produces(StatusCodes.Status204NoContent);
         attempt.MapPost("/nack", Nack).WithName(nameof(Nack)).Produces(StatusCodes.Status204NoContent);
-        attempt.MapPost("/fail", Fail).WithName(nameof(Fail)).Produces(StatusCodes.Status204NoContent);
+        attempt.MapPost("/reject", Reject).WithName(nameof(Reject)).Produces(StatusCodes.Status204NoContent);
     }
 
     private static async Task<IResult> Claim(
@@ -101,10 +101,10 @@ public static class DeliveryEndpoints
             user, deliveryId, attemptId, PullSettlement.Nack(request?.Error, retryAfter), mediator, cancellationToken);
     }
 
-    private static async Task<IResult> Fail(
+    private static async Task<IResult> Reject(
         Guid deliveryId,
         Guid attemptId,
-        FailRequest request,
+        RejectRequest request,
         ClaimsPrincipal user,
         IMediator mediator,
         CancellationToken cancellationToken)
@@ -116,7 +116,7 @@ public static class DeliveryEndpoints
             });
 
         return await Settle(
-            user, deliveryId, attemptId, PullSettlement.Fail(request.Error), mediator, cancellationToken);
+            user, deliveryId, attemptId, PullSettlement.Reject(request.Error), mediator, cancellationToken);
     }
 
     private static async Task<IResult> Settle(
@@ -152,7 +152,7 @@ internal sealed record ClaimRequest(int? Max, int? WaitSeconds);
 
 internal sealed record NackRequest(int? RetryAfterSeconds, string? Error);
 
-internal sealed record FailRequest(string? Error);
+internal sealed record RejectRequest(string? Error);
 
 internal sealed record ClaimResponse(IReadOnlyList<ClaimedDelivery> Deliveries);
 

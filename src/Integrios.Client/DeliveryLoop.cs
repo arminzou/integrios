@@ -73,7 +73,7 @@ internal sealed class DeliveryLoop<THandler>(
         }
         catch (PermanentDeliveryFailureException exception)
         {
-            return Settlement.Fail(exception.Message);
+            return Settlement.Reject(exception.Message);
         }
         catch (Exception exception)
         {

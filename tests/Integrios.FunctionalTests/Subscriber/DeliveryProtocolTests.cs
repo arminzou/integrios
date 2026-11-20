@@ -235,8 +235,8 @@ public sealed class DeliveryProtocolTests : IClassFixture<WorkerRoutingFixture>,
         await fixture.FanoutPullDeliveryAsync("order.placed");
         JsonElement delivery = await ClaimOne(subscriberA);
 
-        (await Post(subscriberA, delivery, "fail", new { error = "order rejected" })).StatusCode.ShouldBe(HttpStatusCode.NoContent);
-        (await Post(subscriberA, delivery, "fail", new { error = "order rejected" })).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await Post(subscriberA, delivery, "reject", new { error = "order rejected" })).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await Post(subscriberA, delivery, "reject", new { error = "order rejected" })).StatusCode.ShouldBe(HttpStatusCode.NoContent);
 
         (await fixture.GetEventDeliveryAsync(DeliveryId(delivery))).Status.ShouldBe("dead_lettered");
         (await fixture.GetDeliveryAttemptsAsync(DeliveryId(delivery))).ShouldHaveSingleItem().ErrorMessage.ShouldBe("order rejected");
@@ -253,7 +253,7 @@ public sealed class DeliveryProtocolTests : IClassFixture<WorkerRoutingFixture>,
         await ShouldBeConflict(await Post(subscriberA, first, "renew"), "ownership_lost");
         await ShouldBeConflict(await Post(subscriberA, first, "ack"), "ownership_lost");
         await ShouldBeConflict(await Post(subscriberA, first, "nack"), "ownership_lost");
-        await ShouldBeConflict(await Post(subscriberA, first, "fail", new { error = "late" }), "ownership_lost");
+        await ShouldBeConflict(await Post(subscriberA, first, "reject", new { error = "late" }), "ownership_lost");
         (await Post(subscriberA, second, "ack")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
     }
 
@@ -267,7 +267,7 @@ public sealed class DeliveryProtocolTests : IClassFixture<WorkerRoutingFixture>,
 
         await ShouldBeConflict(await Post(subscriberB, delivery, "renew"), "ownership_lost");
         await ShouldBeConflict(await Post(subscriberB, delivery, "ack"), "ownership_lost");
-        await ShouldBeConflict(await Post(subscriberB, delivery, "fail", new { error = "not mine" }), "ownership_lost");
+        await ShouldBeConflict(await Post(subscriberB, delivery, "reject", new { error = "not mine" }), "ownership_lost");
         (await fixture.GetEventDeliveryAsync(DeliveryId(delivery))).Status.ShouldBe("in_flight");
     }
 
@@ -281,7 +281,7 @@ public sealed class DeliveryProtocolTests : IClassFixture<WorkerRoutingFixture>,
         string attempt = $"/delivery/v1/deliveries/{Guid.NewGuid()}/attempts/{Guid.NewGuid()}";
 
         (await Claim(anonymous)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
-        foreach (string action in new[] { "renew", "ack", "nack", "fail" })
+        foreach (string action in new[] { "renew", "ack", "nack", "reject" })
             (await anonymous.PostAsync($"{attempt}/{action}", null)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
         (await fixture.GetLastPolledAtAsync(A)).ShouldBeNull();
     }
@@ -328,9 +328,9 @@ public sealed class DeliveryProtocolTests : IClassFixture<WorkerRoutingFixture>,
 
         (await Post(subscriberA, delivery, "nack", new { retry_after_seconds = -1 })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await Post(subscriberA, delivery, "nack", new { retry_after_seconds = 901 })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-        (await Post(subscriberA, delivery, "fail", new { error = " " })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-        (await Post(subscriberA, delivery, "fail", new { error = new string('x', 2001) })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-        (await Post(subscriberA, delivery, "fail")).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await Post(subscriberA, delivery, "reject", new { error = " " })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await Post(subscriberA, delivery, "reject", new { error = new string('x', 2001) })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await Post(subscriberA, delivery, "reject")).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
 
         (await fixture.GetEventDeliveryAsync(DeliveryId(delivery))).Status.ShouldBe("in_flight");
     }
