@@ -34,6 +34,8 @@ ADMIN_DB=$(pg admin_runtime admin_runtime_dev)
 DATA_DB=$(pg data_runtime data_runtime_dev)
 
 compose() {
+  # Pin the owner credentials OWNER_DB uses; otherwise a local .env's POSTGRES_* wins.
+  POSTGRES_USER=integrios POSTGRES_PASSWORD=integrios_dev \
   INTEGRIOS_POSTGRES_PORT=$PG_PORT INTEGRIOS_MOCKSINK_PORT=$MOCKSINK_PORT \
     docker compose -p "$PROJECT" -f "$ROOT/compose.yml" "$@"
 }

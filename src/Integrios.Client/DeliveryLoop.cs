@@ -55,8 +55,8 @@ internal sealed class DeliveryLoop<THandler>(
         if (await renewing is not { } leaseExpiresAt)
         {
             logger.LogWarning(
-                "Delivery {DeliveryId} attempt {AttemptId} lost ownership; its outcome is not reported.",
-                delivery.DeliveryId, delivery.AttemptId);
+                "Delivery {DeliveryId} attempt {AttemptNumber} lost ownership; its outcome is not reported.",
+                delivery.DeliveryId, delivery.AttemptNumber);
             return;
         }
         await SettleAsync(delivery, settlement, leaseExpiresAt, stoppingToken);
@@ -78,7 +78,7 @@ internal sealed class DeliveryLoop<THandler>(
         catch (Exception exception)
         {
             logger.LogWarning(exception, "Handler failed delivery {DeliveryId}; it will be retried.", delivery.DeliveryId);
-            return Settlement.Nack(null, exception.Message);
+            return Settlement.Release(null, exception.Message);
         }
     }
 
@@ -138,8 +138,8 @@ internal sealed class DeliveryLoop<THandler>(
                 using var deadline = new CancellationTokenSource(remaining, time);
                 if (!await transport.SettleAsync(delivery, settlement, deadline.Token))
                     logger.LogWarning(
-                        "Delivery {DeliveryId} attempt {AttemptId} lost ownership before its outcome was recorded.",
-                        delivery.DeliveryId, delivery.AttemptId);
+                        "Delivery {DeliveryId} attempt {AttemptNumber} lost ownership before its outcome was recorded.",
+                        delivery.DeliveryId, delivery.AttemptNumber);
                 return;
             }
             catch (Exception exception) when (!stoppingToken.IsCancellationRequested)

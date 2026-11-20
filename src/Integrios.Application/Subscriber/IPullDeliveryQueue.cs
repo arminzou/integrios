@@ -44,7 +44,7 @@ public sealed record PullSettlement(
 {
     public static PullSettlement Ack() => new(true, false, null, null, null);
 
-    public static PullSettlement Nack(string? errorMessage, TimeSpan? retryAfter) =>
+    public static PullSettlement Release(string? errorMessage, TimeSpan? retryAfter) =>
         new(false, false, DeliveryFailurePhase.Subscriber, errorMessage, retryAfter);
 
     public static PullSettlement Reject(string errorMessage) =>

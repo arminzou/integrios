@@ -27,7 +27,7 @@ internal sealed class HttpDeliveryTransport(HttpClient client) : IDeliveryTransp
     public async Task<IReadOnlyList<Delivery>> ClaimAsync(int max, int waitSeconds, CancellationToken cancellationToken)
     {
         using HttpResponseMessage response = await client.PostAsJsonAsync(
-            "delivery/v1/claims", new ClaimBody(max, waitSeconds), Json, cancellationToken);
+            "delivery/v1/deliveries:claim", new ClaimBody(max, waitSeconds), Json, cancellationToken);
         if (response.StatusCode == HttpStatusCode.NoContent)
             return [];
         response.EnsureSuccessStatusCode();
@@ -37,7 +37,8 @@ internal sealed class HttpDeliveryTransport(HttpClient client) : IDeliveryTransp
 
     public async Task<DateTimeOffset?> RenewAsync(Delivery delivery, CancellationToken cancellationToken)
     {
-        using HttpResponseMessage response = await client.PostAsync(AttemptPath(delivery, "renew"), null, cancellationToken);
+        using HttpResponseMessage response = await client.PostAsJsonAsync(
+            DeliveryPath(delivery, "renew"), new LeaseBody(delivery.LeaseToken), Json, cancellationToken);
         if (response.StatusCode == HttpStatusCode.Conflict)
             return null;
         response.EnsureSuccessStatusCode();
@@ -47,19 +48,19 @@ internal sealed class HttpDeliveryTransport(HttpClient client) : IDeliveryTransp
 
     public async Task<bool> SettleAsync(Delivery delivery, Settlement settlement, CancellationToken cancellationToken)
     {
-        using HttpContent? body = settlement == Settlement.Ack
-            ? null
-            : JsonContent.Create(new SettlementBody(settlement.RetryAfterSeconds, settlement.Error), options: Json);
-        using HttpResponseMessage response = await client.PostAsync(
-            AttemptPath(delivery, settlement.Action), body, cancellationToken);
+        using HttpResponseMessage response = await client.PostAsJsonAsync(
+            DeliveryPath(delivery, settlement.Action),
+            new SettlementBody(delivery.LeaseToken, settlement.RetryAfterSeconds, settlement.Error),
+            Json,
+            cancellationToken);
         if (response.StatusCode == HttpStatusCode.Conflict)
             return false;
         response.EnsureSuccessStatusCode();
         return true;
     }
 
-    private static string AttemptPath(Delivery delivery, string action) =>
-        $"delivery/v1/deliveries/{delivery.DeliveryId}/attempts/{delivery.AttemptId}/{action}";
+    private static string DeliveryPath(Delivery delivery, string verb) =>
+        $"delivery/v1/deliveries/{delivery.DeliveryId}:{verb}";
 
     private sealed record ClaimBody(int Max, int WaitSeconds);
 
@@ -67,5 +68,7 @@ internal sealed class HttpDeliveryTransport(HttpClient client) : IDeliveryTransp
 
     private sealed record RenewedLease(DateTimeOffset LeaseExpiresAt);
 
-    private sealed record SettlementBody(int? RetryAfterSeconds, string? Error);
+    private sealed record LeaseBody(string LeaseToken);
+
+    private sealed record SettlementBody(string LeaseToken, int? RetryAfterSeconds, string? Error);
 }

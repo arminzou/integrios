@@ -83,7 +83,7 @@ expect() {
 expect ack '.status == "succeeded" and .lifetime_attempt_count == 1' "Ack succeeds on the first attempt"
 expect retry '.status == "succeeded" and .lifetime_attempt_count == 2' "Retry(2s) is claimed again and then acked"
 expect reject '.status == "dead_lettered"' "PermanentDeliveryFailureException dead-letters"
-expect throw '.lifetime_attempt_count >= 1 and .status != "succeeded"' "another exception nacks under platform backoff"
+expect throw '.lifetime_attempt_count >= 1 and .status != "succeeded"' "another exception releases under platform backoff"
 expect slow '.status == "succeeded"' "a handler past a third of the lease renews and then acks"
-grep -q 'POST .*/renew' "$E/subscriber.log" || { echo "FAIL slow: no renew request in subscriber.log" | tee -a "$E/result.txt"; exit 1; }
+grep -q 'POST .*:renew' "$E/subscriber.log" || { echo "FAIL slow: no renew request in subscriber.log" | tee -a "$E/result.txt"; exit 1; }
 echo "PASS evidence in $E" | tee -a "$E/result.txt"

@@ -1,6 +1,6 @@
 namespace Integrios.Client;
 
-/// The outcome reported for one attempt. Action is the attempt route's final path segment.
+/// The outcome reported for one attempt. Action is the verb after the colon in the settlement route.
 internal sealed record Settlement(string Action, int? RetryAfterSeconds, string? Error)
 {
     public static readonly TimeSpan MaxRetryAfter = TimeSpan.FromSeconds(900);
@@ -8,7 +8,7 @@ internal sealed record Settlement(string Action, int? RetryAfterSeconds, string?
 
     public static readonly Settlement Ack = new("ack", null, null);
 
-    public static Settlement Nack(int? retryAfterSeconds, string? error) => new("nack", retryAfterSeconds, Truncate(error));
+    public static Settlement Release(int? retryAfterSeconds, string? error) => new("release", retryAfterSeconds, Truncate(error));
 
     public static Settlement Reject(string error) =>
         new("reject", null, Truncate(string.IsNullOrWhiteSpace(error) ? "The handler reported a permanent failure." : error));

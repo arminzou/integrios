@@ -162,7 +162,7 @@ public sealed class PullDeliveryTests : IClassFixture<WorkerRoutingFixture>, IAs
             .ShouldBe(PullSettlementStatus.Applied);
         (await fixture.PullQueue.SettleAsync(Owner(A, claimed), PullSettlement.Ack(), CancellationToken.None))
             .ShouldBe(PullSettlementStatus.AlreadyApplied);
-        (await fixture.PullQueue.SettleAsync(Owner(A, claimed), PullSettlement.Nack(null, null), CancellationToken.None))
+        (await fixture.PullQueue.SettleAsync(Owner(A, claimed), PullSettlement.Release(null, null), CancellationToken.None))
             .ShouldBe(PullSettlementStatus.OwnershipLost);
 
         (await fixture.GetEventDeliveryAsync(claimed.DeliveryId)).Status.ShouldBe("succeeded");
@@ -172,14 +172,14 @@ public sealed class PullDeliveryTests : IClassFixture<WorkerRoutingFixture>, IAs
     }
 
     [Fact]
-    public async Task Nack_SchedulesARetryRecordedAsASubscriberFailure()
+    public async Task Release_SchedulesARetryRecordedAsASubscriberFailure()
     {
         await fixture.FanoutPullDeliveryAsync("order.placed");
         PullDelivery claimed = (await ClaimAsync(A)).ShouldHaveSingleItem();
 
         (await fixture.PullQueue.SettleAsync(
                 Owner(A, claimed),
-                PullSettlement.Nack("provider unavailable", TimeSpan.FromMinutes(5)),
+                PullSettlement.Release("provider unavailable", TimeSpan.FromMinutes(5)),
                 CancellationToken.None))
             .ShouldBe(PullSettlementStatus.Applied);
 
@@ -227,8 +227,8 @@ public sealed class PullDeliveryTests : IClassFixture<WorkerRoutingFixture>, IAs
 
         PullDelivery claimed = (await ClaimAsync(A)).ShouldHaveSingleItem();
         PullAttemptOwner owner = Owner(A, claimed);
-        PullSettlement original = terminal ? PullSettlement.Reject("rejected") : PullSettlement.Nack("retry", null);
-        PullSettlement different = terminal ? PullSettlement.Nack(null, null) : PullSettlement.Reject("rejected");
+        PullSettlement original = terminal ? PullSettlement.Reject("rejected") : PullSettlement.Release("retry", null);
+        PullSettlement different = terminal ? PullSettlement.Release(null, null) : PullSettlement.Reject("rejected");
 
         (await fixture.PullQueue.SettleAsync(owner, original, CancellationToken.None))
             .ShouldBe(PullSettlementStatus.Applied);

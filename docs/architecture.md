@@ -212,14 +212,14 @@ work. The protocol is a preview and may still change.
 
 | Call | Body | Answer |
 | --- | --- | --- |
-| `POST /delivery/v1/claims` | `max` (1 to 32), `wait_seconds` (0 to 20) | `200` with `deliveries`, or `204` when none arrived within the wait |
-| `POST /delivery/v1/deliveries/{id}/attempts/{attempt}/renew` | none | `200` with the new `lease_expires_at` |
-| `.../ack` | none | `204` |
-| `.../nack` | optional `retry_after_seconds` (0 to 900) and `error` | `204`; the delivery retries under the platform policy |
-| `.../reject` | `error` | `204`; the delivery dead-letters |
+| `POST /delivery/v1/deliveries:claim` | `max` (1 to 32), `wait_seconds` (0 to 20) | `200` with `deliveries`, or `204` when none arrived within the wait |
+| `POST /delivery/v1/deliveries/{id}:renew` | `lease_token` | `200` with the new `lease_expires_at` |
+| `.../{id}:ack` | `lease_token` | `204` |
+| `.../{id}:release` | `lease_token`, optional `retry_after_seconds` (0 to 900) and `error` | `204`; the delivery retries under the platform policy |
+| `.../{id}:reject` | `lease_token`, `error` | `204`; the delivery dead-letters |
 
 A claim spends an attempt exactly as a push claim does, and returns the mapped payload with the
-Event, delivery and attempt identifiers, the Event type, Topic, accepted time, lease expiry and
+Event and delivery identifiers, an opaque `lease_token` for this attempt, the attempt number, the Event type, Topic, accepted time, lease expiry and
 `traceparent`. An idle claim holds the request open and re-checks about once a second until work
 arrives or the wait ends; an empty wait spends nothing. Each claim also records the Destination's
 last poll time, at most once a minute, which the dashboard shows on the Destination so a stopped
@@ -227,7 +227,7 @@ Subscriber does not look like a quiet queue.
 
 Renew extends the lease by `Integrios:Delivery:LeaseDuration`, capped at
 `Integrios:Subscriber:MaxAttemptDuration` from the attempt's start; past that it answers `409`
-with code `max_attempt_duration`. Every attempt call is fenced by the attempt id: once another
+with code `max_attempt_duration`. Every call after a claim is fenced by its `lease_token`: once another
 claim has reclaimed the delivery, or a different outcome was recorded, the call answers `409` with
 code `ownership_lost`. Repeating the settlement that was already recorded answers its original
 success, so a Subscriber whose response was lost can retry it safely. Pull attempts appear in the
@@ -239,8 +239,8 @@ dependency on server projects. `AddIntegriosSubscriber<THandler>` registers a sc
 SubscriberKey, Delivery API address, and concurrency limit. Each claim loop holds one delivery
 at a time, renews at a third of the remaining lease, and cancels the handler on lease loss or
 host shutdown. `DeliveryResult.Ack` acknowledges completion, `DeliveryResult.Retry` requests a
-retry, and `PermanentDeliveryFailureException` dead-letters the delivery. Other exceptions nack
-under the platform's retry policy. The SDK retries transport failures with backoff and limits
+retry, and `PermanentDeliveryFailureException` dead-letters the delivery. Other exceptions release
+the delivery under the platform's retry policy. The SDK retries transport failures with backoff and limits
 renewal and settlement requests to the known lease expiry.
 
 Cancellation is cooperative and cannot undo external effects. Subscribers still own safe

@@ -195,7 +195,7 @@ public sealed class SubscriberSdkTests : IClassFixture<WorkerRoutingFixture>, IA
         do
         {
             await fixture.ForceLeaseExpiredAsync(deliveryId);
-            reclaim = await other.PostAsJsonAsync("/delivery/v1/claims", new { max = 1, wait_seconds = 0 }, timeout.Token);
+            reclaim = await other.PostAsJsonAsync("/delivery/v1/deliveries:claim", new { max = 1, wait_seconds = 0 }, timeout.Token);
             if (reclaim.StatusCode == HttpStatusCode.NoContent)
                 reclaim.Dispose();
         }
@@ -206,9 +206,9 @@ public sealed class SubscriberSdkTests : IClassFixture<WorkerRoutingFixture>, IA
         await cancelled.Task.WaitAsync(TimeSpan.FromSeconds(10));
         EventDeliveryState state = await fixture.GetEventDeliveryAsync(deliveryId);
         state.Status.ShouldBe("in_flight");
-        state.ActiveAttemptId.ShouldBe(second.GetProperty("attempt_id").GetGuid());
+        state.ActiveAttemptId!.Value.ToString("N").ShouldBe(second.GetProperty("lease_token").GetString());
         (await fixture.GetDeliveryAttemptsAsync(deliveryId)).ShouldNotContain(
-            attempt => attempt.Id == first.AttemptId && attempt.Status == "succeeded");
+            attempt => attempt.Id.ToString("N") == first.LeaseToken && attempt.Status == "succeeded");
     }
 
     private sealed class DelegateHandler(Func<Delivery, CancellationToken, Task<DeliveryResult>> handle) : IDeliveryHandler
