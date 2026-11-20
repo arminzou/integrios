@@ -7,7 +7,7 @@
     <IsPackable>true</IsPackable>
     <PackageId>Integrios.Client</PackageId>
     <!-- The SDK versions apart from the server; release-please updates this line. -->
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <Description>Consume an Integrios pull Destination from a .NET generic host.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <Authors>Integrios</Authors>
@@ -20,16 +20,16 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="README.md" Pack="true" PackagePath="/" />
+    <None Include="README.md" Pack="true" PackagePath="/"/>
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.15" />
-    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.15" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.15"/>
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.15"/>
   </ItemGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="Integrios.Client.UnitTests" />
+    <InternalsVisibleTo Include="Integrios.Client.UnitTests"/>
   </ItemGroup>
 
 </Project>
