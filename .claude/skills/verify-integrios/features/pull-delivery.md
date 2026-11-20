@@ -10,7 +10,7 @@ authenticated by a SubscriberKey scoped to that Destination, and reports each ou
 - `pull-sdk-retry` asks for a retry after a delay; the next attempt is claimed again.
 - `pull-sdk-reject` dead-letters a delivery when the handler throws
   `PermanentDeliveryFailureException`.
-- `pull-sdk-nack` retries under the platform's backoff when the handler throws anything else.
+- `pull-sdk-release` retries under the platform's backoff when the handler throws anything else.
 - `pull-sdk-renew` renews the lease while a handler runs past a third of it.
 - `pull-protocol` covers the raw HTTP protocol: rejected keys, empty claims, Destination isolation.
 
@@ -19,8 +19,8 @@ authenticated by a SubscriberKey scoped to that Destination, and reports each ou
 - Operator: create a Destination on the built-in `pull` Connector, then a SubscriberKey on it
   (`$ADMIN/admin/tenants/<tenant>/destinations/<destination>/subscriber-keys`, shown once), then an
   active Subscription to that Destination.
-- Subscriber: `POST $DELIVERY_API/delivery/v1/claims` with `Authorization: Bearer <SubscriberKey>`,
-  then `.../deliveries/<delivery>/attempts/<attempt>/renew|ack|nack|reject`. With the SDK, call
+- Subscriber: `POST $DELIVERY_API/delivery/v1/deliveries:claim` with `Authorization: Bearer <SubscriberKey>`,
+  then `.../deliveries/<delivery>:renew|ack|release|reject` with the claim's `lease_token` in the body. With the SDK, call
   `AddIntegriosSubscriber<THandler>` with `BaseAddress` and `SubscriberKey`.
 
 ## Driving it with prove-pull.sh
@@ -38,8 +38,8 @@ Preconditions: `up` and `doctor` pass, and the run's env is loaded.
   `payment.created` Event (see [Event intake](./event-intake.md)). The generated
   `artifacts/verify/<run>/subscriber` project is a working starting point.
 - **Drive the protocol by hand.** Claim with
-  `curl -sS -w '%{http_code}' -X POST "$DELIVERY_API/delivery/v1/claims" -H "Authorization: Bearer $SUBSCRIBER_KEY" -H 'Content-Type: application/json' -d '{"max":1,"wait_seconds":0}'`.
-  `204` means nothing is ready; `200` returns `deliveries[]` with `delivery_id` and `attempt_id`.
+  `curl -sS -w '%{http_code}' -X POST "$DELIVERY_API/delivery/v1/deliveries:claim" -H "Authorization: Bearer $SUBSCRIBER_KEY" -H 'Content-Type: application/json' -d '{"max":1,"wait_seconds":0}'`.
+  `204` means nothing is ready; `200` returns `deliveries[]` with `delivery_id` and `lease_token`.
   Settling with another Destination's key answers `409` with code `ownership_lost`.
 
 ## Gotchas

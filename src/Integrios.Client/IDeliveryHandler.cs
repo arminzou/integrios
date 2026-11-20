@@ -19,7 +19,7 @@ public sealed class DeliveryResult
     public static DeliveryResult Ack { get; } = new(Settlement.Ack);
 
     /// True for <see cref="Retry"/>, false for <see cref="Ack"/>.
-    public bool IsRetry => Settlement.Action == "nack";
+    public bool IsRetry => Settlement.Action == "release";
 
     /// The retry delay a handler asked for, rounded up to whole seconds; null when it left the delay to the platform.
     public TimeSpan? RetryAfter => Settlement.RetryAfterSeconds is { } seconds ? TimeSpan.FromSeconds(seconds) : null;
@@ -30,10 +30,10 @@ public sealed class DeliveryResult
     public static DeliveryResult Retry(TimeSpan? after = null, string? reason = null)
     {
         if (after is not { } delay)
-            return new(Settlement.Nack(null, reason));
+            return new(Settlement.Release(null, reason));
         if (delay < TimeSpan.Zero || delay > Settlement.MaxRetryAfter)
             throw new ArgumentOutOfRangeException(nameof(after), delay, "A retry delay must be from zero to 15 minutes.");
-        return new(Settlement.Nack((int)Math.Ceiling(delay.TotalSeconds), reason));
+        return new(Settlement.Release((int)Math.Ceiling(delay.TotalSeconds), reason));
     }
 }
 

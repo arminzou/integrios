@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Integrios.FunctionalTests.Worker;
 using Integrios.Subscriber;
 using Integrios.Tests.Shared;
@@ -52,7 +53,7 @@ public sealed class DeliveryProtocolTests : IClassFixture<WorkerRoutingFixture>,
     }
 
     private static Task<HttpResponseMessage> Claim(HttpClient client, int max = 32, int waitSeconds = 0) =>
-        client.PostAsJsonAsync("/delivery/v1/claims", new { max, wait_seconds = waitSeconds });
+        client.PostAsJsonAsync("/delivery/v1/deliveries:claim", new { max, wait_seconds = waitSeconds });
 
     private static async Task<JsonElement> ClaimOne(HttpClient client)
     {
@@ -62,13 +63,12 @@ public sealed class DeliveryProtocolTests : IClassFixture<WorkerRoutingFixture>,
         return body.GetProperty("deliveries").EnumerateArray().ShouldHaveSingleItem();
     }
 
-    private static string AttemptPath(JsonElement delivery, string action) =>
-        $"/delivery/v1/deliveries/{delivery.GetProperty("delivery_id").GetGuid()}/attempts/{delivery.GetProperty("attempt_id").GetGuid()}/{action}";
-
-    private static Task<HttpResponseMessage> Post(HttpClient client, JsonElement delivery, string action, object? body = null) =>
-        body is null
-            ? client.PostAsync(AttemptPath(delivery, action), null)
-            : client.PostAsJsonAsync(AttemptPath(delivery, action), body);
+    private static Task<HttpResponseMessage> Post(HttpClient client, JsonElement delivery, string verb, object? body = null)
+    {
+        JsonObject request = body is null ? [] : JsonSerializer.SerializeToNode(body)!.AsObject();
+        request.TryAdd("lease_token", delivery.GetProperty("lease_token").GetString());
+        return client.PostAsJsonAsync($"/delivery/v1/deliveries/{DeliveryId(delivery)}:{verb}", request);
+    }
 
     private static async Task ShouldBeConflict(HttpResponseMessage response, string code)
     {
@@ -93,10 +93,10 @@ public sealed class DeliveryProtocolTests : IClassFixture<WorkerRoutingFixture>,
         delivery.GetProperty("event_id").GetGuid().ShouldNotBe(Guid.Empty);
         delivery.GetProperty("lease_expires_at").GetDateTimeOffset().ShouldBeGreaterThan(DateTimeOffset.UtcNow);
         delivery.EnumerateObject().Select(property => property.Name).ShouldBe(
-            ["delivery_id", "attempt_id", "attempt_number", "event_id", "event_type", "topic", "accepted_at", "payload", "lease_expires_at", "traceparent"]);
+            ["delivery_id", "lease_token", "attempt_number", "event_id", "event_type", "topic", "accepted_at", "payload", "lease_expires_at", "traceparent"]);
         EventDeliveryState state = await fixture.GetEventDeliveryAsync(deliveryId);
         state.Status.ShouldBe("in_flight");
-        state.ActiveAttemptId.ShouldBe(delivery.GetProperty("attempt_id").GetGuid());
+        state.ActiveAttemptId!.Value.ToString("N").ShouldBe(delivery.GetProperty("lease_token").GetString());
     }
 
     [Fact]
@@ -153,7 +153,7 @@ public sealed class DeliveryProtocolTests : IClassFixture<WorkerRoutingFixture>,
         var elapsed = Stopwatch.StartNew();
 
         await Should.ThrowAsync<OperationCanceledException>(() => subscriberA.PostAsJsonAsync(
-            "/delivery/v1/claims", new { max = 1, wait_seconds = 20 }, cancel.Token));
+            "/delivery/v1/deliveries:claim", new { max = 1, wait_seconds = 20 }, cancel.Token));
         elapsed.Elapsed.ShouldBeLessThan(TimeSpan.FromSeconds(5));
         Guid deliveryId = await fixture.FanoutPullDeliveryAsync("order.placed");
         await Task.Delay(TimeSpan.FromSeconds(1.5));
@@ -195,19 +195,19 @@ public sealed class DeliveryProtocolTests : IClassFixture<WorkerRoutingFixture>,
 
         (await Post(subscriberA, delivery, "ack")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
         (await Post(subscriberA, delivery, "ack")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
-        await ShouldBeConflict(await Post(subscriberA, delivery, "nack"), "ownership_lost");
+        await ShouldBeConflict(await Post(subscriberA, delivery, "release"), "ownership_lost");
 
         (await fixture.GetEventDeliveryAsync(DeliveryId(delivery))).Status.ShouldBe("succeeded");
         (await fixture.GetDeliveryAttemptsAsync(DeliveryId(delivery))).ShouldHaveSingleItem().Status.ShouldBe("succeeded");
     }
 
     [Fact]
-    public async Task Nack_SchedulesTheRetryAfterTheRequestedDelay()
+    public async Task Release_SchedulesTheRetryAfterTheRequestedDelay()
     {
         await fixture.FanoutPullDeliveryAsync("order.placed");
         JsonElement delivery = await ClaimOne(subscriberA);
 
-        (await Post(subscriberA, delivery, "nack", new { retry_after_seconds = 300, error = "provider unavailable" }))
+        (await Post(subscriberA, delivery, "release", new { retry_after_seconds = 300, error = "provider unavailable" }))
             .StatusCode.ShouldBe(HttpStatusCode.NoContent);
 
         EventDeliveryState state = await fixture.GetEventDeliveryAsync(DeliveryId(delivery));
@@ -219,12 +219,12 @@ public sealed class DeliveryProtocolTests : IClassFixture<WorkerRoutingFixture>,
     }
 
     [Fact]
-    public async Task Nack_WithoutABodyUsesTheDefaultBackoff()
+    public async Task Release_WithoutABodyUsesTheDefaultBackoff()
     {
         await fixture.FanoutPullDeliveryAsync("order.placed");
         JsonElement delivery = await ClaimOne(subscriberA);
 
-        (await Post(subscriberA, delivery, "nack")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await Post(subscriberA, delivery, "release")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
 
         (await fixture.GetEventDeliveryAsync(DeliveryId(delivery))).Status.ShouldBe("pending");
     }
@@ -252,7 +252,7 @@ public sealed class DeliveryProtocolTests : IClassFixture<WorkerRoutingFixture>,
 
         await ShouldBeConflict(await Post(subscriberA, first, "renew"), "ownership_lost");
         await ShouldBeConflict(await Post(subscriberA, first, "ack"), "ownership_lost");
-        await ShouldBeConflict(await Post(subscriberA, first, "nack"), "ownership_lost");
+        await ShouldBeConflict(await Post(subscriberA, first, "release"), "ownership_lost");
         await ShouldBeConflict(await Post(subscriberA, first, "reject", new { error = "late" }), "ownership_lost");
         (await Post(subscriberA, second, "ack")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
     }
@@ -278,11 +278,11 @@ public sealed class DeliveryProtocolTests : IClassFixture<WorkerRoutingFixture>,
     {
         await fixture.FanoutPullDeliveryAsync("order.placed");
         using HttpClient anonymous = Client(token);
-        string attempt = $"/delivery/v1/deliveries/{Guid.NewGuid()}/attempts/{Guid.NewGuid()}";
+        string delivery = $"/delivery/v1/deliveries/{Guid.NewGuid()}";
 
         (await Claim(anonymous)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
-        foreach (string action in new[] { "renew", "ack", "nack", "reject" })
-            (await anonymous.PostAsync($"{attempt}/{action}", null)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        foreach (string verb in new[] { "renew", "ack", "release", "reject" })
+            (await anonymous.PostAsJsonAsync($"{delivery}:{verb}", new { lease_token = Guid.NewGuid().ToString("N") })).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
         (await fixture.GetLastPolledAtAsync(A)).ShouldBeNull();
     }
 
@@ -298,7 +298,7 @@ public sealed class DeliveryProtocolTests : IClassFixture<WorkerRoutingFixture>,
             new AuthenticationHeaderValue("Bearer", await fixture.SeedSubscriberKeyAsync(A));
 
         HttpResponseMessage response = await client.PostAsync(
-            "/delivery/v1/claims", new StringContent(body, System.Text.Encoding.UTF8, "application/json"));
+            "/delivery/v1/deliveries:claim", new StringContent(body, System.Text.Encoding.UTF8, "application/json"));
 
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         logs.Records.ShouldNotContain(record => record.Level >= LogLevel.Error);
@@ -313,7 +313,7 @@ public sealed class DeliveryProtocolTests : IClassFixture<WorkerRoutingFixture>,
     public async Task Claim_RejectsOutOfRangeRequests(string body, string field)
     {
         HttpResponseMessage response = await subscriberA.PostAsync(
-            "/delivery/v1/claims", new StringContent(body, System.Text.Encoding.UTF8, "application/json"));
+            "/delivery/v1/deliveries:claim", new StringContent(body, System.Text.Encoding.UTF8, "application/json"));
 
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         response.Content.Headers.ContentType!.MediaType.ShouldBe("application/problem+json");
@@ -326,11 +326,16 @@ public sealed class DeliveryProtocolTests : IClassFixture<WorkerRoutingFixture>,
         await fixture.FanoutPullDeliveryAsync("order.placed");
         JsonElement delivery = await ClaimOne(subscriberA);
 
-        (await Post(subscriberA, delivery, "nack", new { retry_after_seconds = -1 })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-        (await Post(subscriberA, delivery, "nack", new { retry_after_seconds = 901 })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await Post(subscriberA, delivery, "release", new { retry_after_seconds = -1 })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await Post(subscriberA, delivery, "release", new { retry_after_seconds = 901 })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await Post(subscriberA, delivery, "reject", new { error = " " })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await Post(subscriberA, delivery, "reject", new { error = new string('x', 2001) })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await Post(subscriberA, delivery, "reject")).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        foreach (string verb in new[] { "renew", "ack", "release" })
+        {
+            (await Post(subscriberA, delivery, verb, new { lease_token = (string?)null })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+            (await Post(subscriberA, delivery, verb, new { lease_token = "not-a-token" })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        }
 
         (await fixture.GetEventDeliveryAsync(DeliveryId(delivery))).Status.ShouldBe("in_flight");
     }

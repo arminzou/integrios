@@ -37,7 +37,7 @@ public sealed class DeliveryLoopTests : IAsyncDisposable
     private Delivery Enqueue()
     {
         var delivery = new Delivery(
-            Guid.NewGuid(), Guid.NewGuid(), 1, Guid.NewGuid(), "order.placed", null, time.GetUtcNow(),
+            Guid.NewGuid(), Guid.NewGuid().ToString("N"), 1, Guid.NewGuid(), "order.placed", null, time.GetUtcNow(),
             JsonDocument.Parse("{}").RootElement, time.GetUtcNow() + Lease, null);
         transport.Queue.Writer.TryWrite(delivery);
         return delivery;
@@ -58,29 +58,29 @@ public sealed class DeliveryLoopTests : IAsyncDisposable
 
         await Eventually(() => transport.Settled.Count == 1);
 
-        transport.Settled.ShouldHaveSingleItem().ShouldBe((delivery.AttemptId, Settlement.Ack));
+        transport.Settled.ShouldHaveSingleItem().ShouldBe((delivery.LeaseToken, Settlement.Ack));
     }
 
     [Fact]
-    public async Task ARetryResultNacksWithItsDelayInWholeSeconds()
+    public async Task ARetryResultReleasesWithItsDelayInWholeSeconds()
     {
         await StartAsync((_, _) => Task.FromResult(DeliveryResult.Retry(TimeSpan.FromSeconds(90.2), "busy")));
         Enqueue();
 
         await Eventually(() => transport.Settled.Count == 1);
 
-        transport.Settled.Single().Settlement.ShouldBe(new Settlement("nack", 91, "busy"));
+        transport.Settled.Single().Settlement.ShouldBe(new Settlement("release", 91, "busy"));
     }
 
     [Fact]
-    public async Task AHandlerExceptionNacksWithThePlatformBackoff()
+    public async Task AHandlerExceptionReleasesWithThePlatformBackoff()
     {
         await StartAsync((_, _) => throw new InvalidOperationException("boom"));
         Enqueue();
 
         await Eventually(() => transport.Settled.Count == 1);
 
-        transport.Settled.Single().Settlement.ShouldBe(new Settlement("nack", null, "boom"));
+        transport.Settled.Single().Settlement.ShouldBe(new Settlement("release", null, "boom"));
     }
 
     [Fact]
@@ -191,7 +191,7 @@ public sealed class DeliveryLoopTests : IAsyncDisposable
 
         await loop!.StopAsync(CancellationToken.None);
 
-        transport.Settled.ShouldHaveSingleItem().Settlement.Action.ShouldBe("nack");
+        transport.Settled.ShouldHaveSingleItem().Settlement.Action.ShouldBe("release");
     }
 
     [Fact]
@@ -358,7 +358,7 @@ public sealed class DeliveryLoopTests : IAsyncDisposable
 
         public Channel<Delivery> Queue { get; } = Channel.CreateUnbounded<Delivery>();
         public ConcurrentQueue<DateTimeOffset> Renewals { get; } = new();
-        public ConcurrentQueue<(Guid AttemptId, Settlement Settlement)> Settled { get; } = new();
+        public ConcurrentQueue<(string LeaseToken, Settlement Settlement)> Settled { get; } = new();
         public int ClaimFailures { get; set; }
         public Func<DateTimeOffset?> RenewAnswer { get; set; } = () => time.GetUtcNow() + Lease;
         public Func<CancellationToken, Task<DateTimeOffset?>>? RenewRequest { get; set; }
@@ -384,7 +384,7 @@ public sealed class DeliveryLoopTests : IAsyncDisposable
             if (SettleRequest is { } request)
                 return request(cancellationToken);
             bool answer = SettleAnswer();
-            Settled.Enqueue((delivery.AttemptId, settlement));
+            Settled.Enqueue((delivery.LeaseToken, settlement));
             return Task.FromResult(answer);
         }
     }

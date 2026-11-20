@@ -17,14 +17,12 @@ public static class DeliveryEndpoints
     public static void MapDeliveryEndpoints(this IEndpointRouteBuilder app)
     {
         RouteGroupBuilder group = app.MapGroup("/delivery/v1").RequireAuthorization();
-        group.MapPost("/claims", Claim).WithName(nameof(Claim))
+        group.MapPost("/deliveries:claim", Claim).WithName(nameof(Claim))
             .Produces<ClaimResponse>().Produces(StatusCodes.Status204NoContent);
-
-        RouteGroupBuilder attempt = group.MapGroup("/deliveries/{deliveryId:guid}/attempts/{attemptId:guid}");
-        attempt.MapPost("/renew", Renew).WithName(nameof(Renew)).Produces<RenewResponse>();
-        attempt.MapPost("/ack", Ack).WithName(nameof(Ack)).Produces(StatusCodes.Status204NoContent);
-        attempt.MapPost("/nack", Nack).WithName(nameof(Nack)).Produces(StatusCodes.Status204NoContent);
-        attempt.MapPost("/reject", Reject).WithName(nameof(Reject)).Produces(StatusCodes.Status204NoContent);
+        group.MapPost("/deliveries/{deliveryId:guid}:renew", Renew).WithName(nameof(Renew)).Produces<RenewResponse>();
+        group.MapPost("/deliveries/{deliveryId:guid}:ack", Ack).WithName(nameof(Ack)).Produces(StatusCodes.Status204NoContent);
+        group.MapPost("/deliveries/{deliveryId:guid}:release", Release).WithName(nameof(Release)).Produces(StatusCodes.Status204NoContent);
+        group.MapPost("/deliveries/{deliveryId:guid}:reject", Reject).WithName(nameof(Reject)).Produces(StatusCodes.Status204NoContent);
     }
 
     private static async Task<IResult> Claim(
@@ -54,14 +52,16 @@ public static class DeliveryEndpoints
 
     private static async Task<IResult> Renew(
         Guid deliveryId,
-        Guid attemptId,
+        LeaseRequest request,
         ClaimsPrincipal user,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        PullLeaseRenewalResult result = await mediator.Send(
-            new RenewPullLeaseCommand(new PullAttemptOwner(DestinationId(user), deliveryId, attemptId)),
-            cancellationToken);
+        var errors = new Dictionary<string, string[]>();
+        if (Owner(user, deliveryId, request.LeaseToken, errors) is not { } owner)
+            return Results.ValidationProblem(errors);
+
+        PullLeaseRenewalResult result = await mediator.Send(new RenewPullLeaseCommand(owner), cancellationToken);
         return result.Status switch
         {
             PullLeaseRenewalStatus.Renewed => Results.Ok(new RenewResponse(result.LeaseExpiresAt!.Value)),
@@ -72,67 +72,76 @@ public static class DeliveryEndpoints
         };
     }
 
-    private static Task<IResult> Ack(
+    private static async Task<IResult> Ack(
         Guid deliveryId,
-        Guid attemptId,
-        ClaimsPrincipal user,
-        IMediator mediator,
-        CancellationToken cancellationToken) =>
-        Settle(user, deliveryId, attemptId, PullSettlement.Ack(), mediator, cancellationToken);
-
-    private static async Task<IResult> Nack(
-        Guid deliveryId,
-        Guid attemptId,
-        NackRequest? request,
+        LeaseRequest request,
         ClaimsPrincipal user,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
         var errors = new Dictionary<string, string[]>();
-        if (request?.RetryAfterSeconds is not (null or (>= 0 and <= MaxRetryAfterSeconds)))
+        if (Owner(user, deliveryId, request.LeaseToken, errors) is not { } owner)
+            return Results.ValidationProblem(errors);
+        return await Settle(owner, PullSettlement.Ack(), mediator, cancellationToken);
+    }
+
+    private static async Task<IResult> Release(
+        Guid deliveryId,
+        ReleaseRequest request,
+        ClaimsPrincipal user,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var errors = new Dictionary<string, string[]>();
+        PullAttemptOwner? owner = Owner(user, deliveryId, request.LeaseToken, errors);
+        if (request.RetryAfterSeconds is not (null or (>= 0 and <= MaxRetryAfterSeconds)))
             errors["retry_after_seconds"] = [$"retry_after_seconds must be an integer from 0 to {MaxRetryAfterSeconds}."];
-        if (request?.Error?.Length > MaxErrorLength)
+        if (request.Error?.Length > MaxErrorLength)
             errors["error"] = [$"error must be at most {MaxErrorLength} characters."];
         if (errors.Count > 0)
             return Results.ValidationProblem(errors);
 
-        TimeSpan? retryAfter = request?.RetryAfterSeconds is { } delay ? TimeSpan.FromSeconds(delay) : null;
-        return await Settle(
-            user, deliveryId, attemptId, PullSettlement.Nack(request?.Error, retryAfter), mediator, cancellationToken);
+        TimeSpan? retryAfter = request.RetryAfterSeconds is { } delay ? TimeSpan.FromSeconds(delay) : null;
+        return await Settle(owner!, PullSettlement.Release(request.Error, retryAfter), mediator, cancellationToken);
     }
 
     private static async Task<IResult> Reject(
         Guid deliveryId,
-        Guid attemptId,
         RejectRequest request,
         ClaimsPrincipal user,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
+        var errors = new Dictionary<string, string[]>();
+        PullAttemptOwner? owner = Owner(user, deliveryId, request.LeaseToken, errors);
         if (string.IsNullOrWhiteSpace(request.Error) || request.Error.Length > MaxErrorLength)
-            return Results.ValidationProblem(new Dictionary<string, string[]>
-            {
-                ["error"] = [$"error is required and must be at most {MaxErrorLength} characters."]
-            });
+            errors["error"] = [$"error is required and must be at most {MaxErrorLength} characters."];
+        if (errors.Count > 0)
+            return Results.ValidationProblem(errors);
 
-        return await Settle(
-            user, deliveryId, attemptId, PullSettlement.Reject(request.Error), mediator, cancellationToken);
+        return await Settle(owner!, PullSettlement.Reject(request.Error!), mediator, cancellationToken);
     }
 
     private static async Task<IResult> Settle(
-        ClaimsPrincipal user,
-        Guid deliveryId,
-        Guid attemptId,
+        PullAttemptOwner owner,
         PullSettlement settlement,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        PullSettlementStatus status = await mediator.Send(
-            new SettlePullDeliveryCommand(new PullAttemptOwner(DestinationId(user), deliveryId, attemptId), settlement),
-            cancellationToken);
+        PullSettlementStatus status = await mediator.Send(new SettlePullDeliveryCommand(owner, settlement), cancellationToken);
         // AlreadyApplied answers like Applied, so a Subscriber whose first response was lost can
         // repeat the same settlement safely.
         return status == PullSettlementStatus.OwnershipLost ? OwnershipLost() : Results.NoContent();
+    }
+
+    // The lease token is opaque to Subscribers; today it carries the attempt id.
+    private static PullAttemptOwner? Owner(
+        ClaimsPrincipal user, Guid deliveryId, string? leaseToken, Dictionary<string, string[]> errors)
+    {
+        if (Guid.TryParseExact(leaseToken, "N", out Guid attemptId))
+            return new PullAttemptOwner(DestinationId(user), deliveryId, attemptId);
+        errors["lease_token"] = ["lease_token is required and must be a token from a claim response."];
+        return null;
     }
 
     private static Guid DestinationId(ClaimsPrincipal user) =>
@@ -150,15 +159,17 @@ public static class DeliveryEndpoints
 
 internal sealed record ClaimRequest(int? Max, int? WaitSeconds);
 
-internal sealed record NackRequest(int? RetryAfterSeconds, string? Error);
+internal sealed record LeaseRequest(string? LeaseToken);
 
-internal sealed record RejectRequest(string? Error);
+internal sealed record ReleaseRequest(string? LeaseToken, int? RetryAfterSeconds, string? Error);
+
+internal sealed record RejectRequest(string? LeaseToken, string? Error);
 
 internal sealed record ClaimResponse(IReadOnlyList<ClaimedDelivery> Deliveries);
 
 internal sealed record ClaimedDelivery(
     Guid DeliveryId,
-    Guid AttemptId,
+    string LeaseToken,
     int AttemptNumber,
     Guid EventId,
     string EventType,
@@ -170,7 +181,7 @@ internal sealed record ClaimedDelivery(
 {
     public static ClaimedDelivery From(PullDelivery delivery) => new(
         delivery.DeliveryId,
-        delivery.AttemptId,
+        delivery.AttemptId.ToString("N"),
         delivery.AttemptNumber,
         delivery.EventId,
         delivery.EventType,
