@@ -574,7 +574,7 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
 
     private async Task AssertBootstrapStateAsync()
     {
-        long connectors = await ScalarAsync<long>("SELECT COUNT(*) FROM connectors WHERE key <> 'subscriber'");
+        long connectors = await ScalarAsync<long>("SELECT COUNT(*) FROM connectors WHERE key <> 'pull'");
         long liveOperatorKeys = await ScalarAsync<long>(
             "SELECT COUNT(*) FROM operator_keys WHERE revoked_at IS NULL");
         if (connectors != 0 || liveOperatorKeys != 1)

@@ -216,7 +216,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
                 (@B1,@TenantId,@TopicId,'to-pull-b',{{{database.Json("@ShippedRules")}}},@BId,4,'active',NULL);
             """, new
         {
-            ConnectorId = BuiltInConnectors.Subscriber.Id,
+            ConnectorId = BuiltInConnectors.Pull.Id,
             AId = PullDestinationAId,
             BId = PullDestinationBId,
             TenantId,

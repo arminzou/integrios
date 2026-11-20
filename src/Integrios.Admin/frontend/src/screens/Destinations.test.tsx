@@ -294,10 +294,10 @@ describe("A selected Destination", () => {
   });
 
   it("links a pull Destination to its Subscriber keys", async () => {
-    const subscriber = { ...connector, key: "subscriber", name: "Subscriber", direction: "destination" };
+    const pullConnector = { ...connector, key: "pull", name: "Pull", direction: "destination" };
     stubHttp(({ url }) => {
       if (url.pathname.endsWith(`/destinations/${destinationId}`)) return { status: 200, body: destination };
-      if (url.pathname.endsWith("/connectors")) return { status: 200, body: page([subscriber]) };
+      if (url.pathname.endsWith("/connectors")) return { status: 200, body: page([pullConnector]) };
       return { status: 200, body: page([]) };
     });
     renderScreen(<DestinationsScreen tenantId={tenantId} selectedDestinationId={destinationId} />);
@@ -309,11 +309,11 @@ describe("A selected Destination", () => {
   });
 
   it("shows when a Subscriber last polled a pull Destination", async () => {
-    const subscriber = { ...connector, key: "subscriber", name: "Subscriber", direction: "destination" };
+    const pullConnector = { ...connector, key: "pull", name: "Pull", direction: "destination" };
     stubHttp(({ url }) => {
       if (url.pathname.endsWith(`/destinations/${destinationId}`))
         return { status: 200, body: { ...destination, last_polled_at: "2026-11-16T09:30:00Z" } };
-      if (url.pathname.endsWith("/connectors")) return { status: 200, body: page([subscriber]) };
+      if (url.pathname.endsWith("/connectors")) return { status: 200, body: page([pullConnector]) };
       return { status: 200, body: page([]) };
     });
     renderScreen(<DestinationsScreen tenantId={tenantId} selectedDestinationId={destinationId} />);

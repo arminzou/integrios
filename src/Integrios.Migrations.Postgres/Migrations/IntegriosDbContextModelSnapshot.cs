@@ -99,10 +99,10 @@ namespace Integrios.Migrations.Postgres.Migrations
                             CreatedAt = new DateTimeOffset(new DateTime(2026, 11, 16, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
                             Description = "A Subscriber service claims deliveries for this Destination and reports each outcome, instead of receiving HTTP requests.",
                             Direction = "destination",
-                            Key = "subscriber",
-                            Manifest = "{\"manifest_schema_version\":1,\"key\":\"subscriber\",\"contract_version\":1,\"direction\":\"destination\",\"destination_configuration_schema\":{\"type\":\"object\",\"properties\":{},\"additionalProperties\":false},\"source_verification\":{\"allow_unverified\":true,\"schemes\":[]},\"destination_authentication\":{\"allow_unauthenticated\":true,\"schemes\":[]},\"presentation\":{\"name\":\"Subscriber\",\"description\":\"A Subscriber service claims deliveries for this Destination and reports each outcome, instead of receiving HTTP requests.\",\"event_types\":[],\"authoring_presets\":[]}}",
+                            Key = "pull",
+                            Manifest = "{\"manifest_schema_version\":1,\"key\":\"pull\",\"contract_version\":1,\"direction\":\"destination\",\"destination_configuration_schema\":{\"type\":\"object\",\"properties\":{},\"additionalProperties\":false},\"source_verification\":{\"allow_unverified\":true,\"schemes\":[]},\"destination_authentication\":{\"allow_unauthenticated\":true,\"schemes\":[]},\"presentation\":{\"name\":\"Pull\",\"description\":\"A Subscriber service claims deliveries for this Destination and reports each outcome, instead of receiving HTTP requests.\",\"event_types\":[],\"authoring_presets\":[]}}",
                             ManifestSchemaVersion = 1,
-                            Name = "Subscriber",
+                            Name = "Pull",
                             UpdatedAt = new DateTimeOffset(new DateTime(2026, 11, 16, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0))
                         });
                 });

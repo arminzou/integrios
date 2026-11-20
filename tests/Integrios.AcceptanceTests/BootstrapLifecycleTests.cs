@@ -26,8 +26,8 @@ public sealed class BootstrapLifecycleTests(DatabaseLifecycleFixture fixture)
         (await CountColumnsAsync(database, "subscriptions", "delivery_policy", "dlq_enabled")).ShouldBe(0L);
         (await CountColumnsAsync(database, "operator_keys", "tenant_id")).ShouldBe(0L);
         (await CountColumnsAsync(database, "tenant_api_keys", "scopes")).ShouldBe(0L);
-        (await CountAsync(database, "connectors", "key = 'subscriber'")).ShouldBe(1L);
-        (await CountAsync(database, "connectors", "key <> 'subscriber'")).ShouldBe(0L);
+        (await CountAsync(database, "connectors", "key = 'pull'")).ShouldBe(1L);
+        (await CountAsync(database, "connectors", "key <> 'pull'")).ShouldBe(0L);
         (await CountAsync(database, "operator_keys")).ShouldBe(0L);
 
         BootstrapProcessResult missingSecret =
@@ -36,7 +36,7 @@ public sealed class BootstrapLifecycleTests(DatabaseLifecycleFixture fixture)
         missingSecret.ExitCode.ShouldNotBe(0);
         missingSecret.StandardError.ShouldContain("requires a non-empty", Case.Insensitive);
         missingSecret.Output.ShouldNotContain("shown once", Case.Insensitive);
-        (await CountAsync(database, "connectors", "key <> 'subscriber'")).ShouldBe(0L);
+        (await CountAsync(database, "connectors", "key <> 'pull'")).ShouldBe(0L);
         (await CountAsync(database, "operator_keys")).ShouldBe(0L);
 
         const string suppliedSecret = "acceptance-production-secret";
@@ -45,7 +45,7 @@ public sealed class BootstrapLifecycleTests(DatabaseLifecycleFixture fixture)
 
         firstBootstrap.ExitCode.ShouldBe(0);
         firstBootstrap.Output.ShouldNotContain(suppliedSecret, Case.Sensitive);
-        (await CountAsync(database, "connectors", "key <> 'subscriber'")).ShouldBe(0L);
+        (await CountAsync(database, "connectors", "key <> 'pull'")).ShouldBe(0L);
         (await CountAsync(database, "operator_keys", "revoked_at IS NULL")).ShouldBe(1L);
 
         BootstrapProcessResult secondBootstrap =
@@ -54,7 +54,7 @@ public sealed class BootstrapLifecycleTests(DatabaseLifecycleFixture fixture)
         secondBootstrap.ExitCode.ShouldBe(0);
         secondBootstrap.StandardOutput.ShouldContain("no-op", Case.Insensitive);
         secondBootstrap.Output.ShouldNotContain("unused-second-secret", Case.Sensitive);
-        (await CountAsync(database, "connectors", "key <> 'subscriber'")).ShouldBe(0L);
+        (await CountAsync(database, "connectors", "key <> 'pull'")).ShouldBe(0L);
         (await DatabaseLifecycleFixture.ScalarAsync<string>(
             database,
             "SELECT secret_hash FROM operator_keys WHERE revoked_at IS NULL")).ShouldBe(Hash(suppliedSecret));

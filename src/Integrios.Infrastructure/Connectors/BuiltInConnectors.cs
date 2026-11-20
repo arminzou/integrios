@@ -9,13 +9,13 @@ internal static class BuiltInConnectors
 {
     private static readonly DateTimeOffset SeededAt = new(2026, 11, 16, 0, 0, 0, TimeSpan.Zero);
 
-    public static Connector Subscriber { get; } = new()
+    public static Connector Pull { get; } = new()
     {
         Id = Guid.Parse("5ab5c71b-e000-4000-8000-000000000001"),
-        Key = Connector.SubscriberConnectorKey,
+        Key = Connector.PullConnectorKey,
         ContractVersion = 1,
         ManifestSchemaVersion = 1,
-        Name = "Subscriber",
+        Name = "Pull",
         Description = "A Subscriber service claims deliveries for this Destination and reports each outcome, instead of receiving HTTP requests.",
         Direction = ConnectorDirection.Destination,
         CreatedAt = SeededAt,
@@ -23,7 +23,7 @@ internal static class BuiltInConnectors
         Manifest = new ConnectorManifest
         {
             ManifestSchemaVersion = 1,
-            Key = Connector.SubscriberConnectorKey,
+            Key = Connector.PullConnectorKey,
             ContractVersion = 1,
             Direction = "destination",
             DestinationConfigurationSchema = JsonDocument.Parse(
@@ -32,7 +32,7 @@ internal static class BuiltInConnectors
             DestinationAuthentication = new ConnectorDestinationAuthenticationManifest { AllowUnauthenticated = true },
             Presentation = new ConnectorPresentationManifest
             {
-                Name = "Subscriber",
+                Name = "Pull",
                 Description = "A Subscriber service claims deliveries for this Destination and reports each outcome, instead of receiving HTTP requests.",
             },
         },

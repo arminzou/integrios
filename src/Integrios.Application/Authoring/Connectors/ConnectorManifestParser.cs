@@ -91,8 +91,8 @@ public static partial class ConnectorManifestParser
             throw Invalid("manifest_schema_version must be 1.");
         if (string.IsNullOrWhiteSpace(manifest.Key) || !ConnectorKeyPattern().IsMatch(manifest.Key))
             throw Invalid("key must use lower snake_case and start with a letter.");
-        if (manifest.Key == Connector.SubscriberConnectorKey)
-            throw Invalid($"key '{Connector.SubscriberConnectorKey}' is reserved for the built-in pull Connector.");
+        if (manifest.Key == Connector.PullConnectorKey)
+            throw Invalid($"key '{Connector.PullConnectorKey}' is reserved for the built-in pull Connector.");
         if (manifest.ContractVersion < 1)
             throw Invalid("contract_version must be a positive integer.");
         if (!document.TryGetProperty("source_verification", out JsonElement sourceVerificationDocument)

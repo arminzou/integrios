@@ -48,6 +48,6 @@ internal sealed class ConnectorConfiguration : IEntityTypeConfiguration<Connecto
             .HasDefaultValueSql("now()")
             .HasColumnName("updated_at");
 
-        entity.HasData(BuiltInConnectors.Subscriber);
+        entity.HasData(BuiltInConnectors.Pull);
     }
 }

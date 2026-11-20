@@ -61,7 +61,7 @@ public sealed class PullSubscriptionAdminTests(AdminApiFixture fixture) : Subscr
         HttpResponseMessage response = await SendAsync(
             HttpMethod.Post,
             $"/admin/tenants/{Fixture.TenantId}/destinations",
-            new { connector_id = BuiltInConnectors.Subscriber.Id, name = "orders-service", configuration = new { } });
+            new { connector_id = BuiltInConnectors.Pull.Id, name = "orders-service", configuration = new { } });
         response.StatusCode.ShouldBe(HttpStatusCode.Created);
         return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
     }

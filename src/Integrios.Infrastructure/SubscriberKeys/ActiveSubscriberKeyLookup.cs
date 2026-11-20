@@ -19,9 +19,9 @@ internal sealed class ActiveSubscriberKeyLookup(IDbConnectionFactory connectionF
             WHERE k.key_hash = @KeyHash AND k.revoked_at IS NULL AND k.deleted_at IS NULL
               AND t.status = 'active'
               AND d.status = 'active' AND d.deleted_at IS NULL
-              AND d.connector_id = @SubscriberConnectorId
+              AND d.connector_id = @PullConnectorId
             """;
         return await connection.QuerySingleOrDefaultAsync<SubscriberIdentity>(
-            new CommandDefinition(sql, new { KeyHash = keyHash, SubscriberConnectorId = BuiltInConnectors.Subscriber.Id }, cancellationToken: cancellationToken));
+            new CommandDefinition(sql, new { KeyHash = keyHash, PullConnectorId = BuiltInConnectors.Pull.Id }, cancellationToken: cancellationToken));
     }
 }

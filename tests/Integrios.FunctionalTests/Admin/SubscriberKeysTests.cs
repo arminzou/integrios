@@ -36,7 +36,7 @@ public sealed class SubscriberKeysTests(AdminApiFixture fixture) : AdminApiTestB
     private async Task<Guid> CreatePullDestinationAsync(string name)
     {
         HttpResponseMessage response = await admin.SendAsync(AdminRequest(HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/destinations",
-            new { connector_id = BuiltInConnectors.Subscriber.Id, name, configuration = new { } }));
+            new { connector_id = BuiltInConnectors.Pull.Id, name, configuration = new { } }));
         response.StatusCode.ShouldBe(HttpStatusCode.Created);
         return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
     }

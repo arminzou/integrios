@@ -304,7 +304,7 @@ public sealed class PullDeliveryTests : IClassFixture<WorkerRoutingFixture>, IAs
 
         (await fixture.GetEventDeliveryAsync(deliveryId)).Status.ShouldBe("dead_lettered");
         metrics.ForInstrument("integrios_deliveries_dead_lettered")
-            .ShouldContain(measurement => Equals(measurement.Tag("connector_key"), "subscriber"));
+            .ShouldContain(measurement => Equals(measurement.Tag("connector_key"), "pull"));
         fixture.PullClaimLogs.AnyMessageContains(deliveryId.ToString()).ShouldBeTrue();
     }
 

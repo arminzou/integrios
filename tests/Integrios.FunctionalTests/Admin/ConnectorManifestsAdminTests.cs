@@ -138,9 +138,9 @@ public sealed class ConnectorManifestsAdminTests : IClassFixture<AdminApiFixture
     }
 
     [Fact]
-    public async Task BuiltInSubscriberConnector_IsProvisionedAndRefusesEveryManifest()
+    public async Task BuiltInPullConnector_IsProvisionedAndRefusesEveryManifest()
     {
-        ConnectorDto builtIn = await GetSubscriberAsync();
+        ConnectorDto builtIn = await GetPullConnectorAsync();
         builtIn.Direction.ShouldBe("destination");
         builtIn.Manifest.GetProperty("destination_configuration_schema").GetProperty("properties")
             .EnumerateObject().ShouldBeEmpty();
@@ -152,15 +152,15 @@ public sealed class ConnectorManifestsAdminTests : IClassFixture<AdminApiFixture
             manifest["presentation"]!["name"] = "Renamed";
             using HttpResponseMessage response = await SendAsync(
                 HttpMethod.Put,
-                $"/admin/connectors/subscriber/versions/{contractVersion}",
+                $"/admin/connectors/pull/versions/{contractVersion}",
                 JsonSerializer.SerializeToElement(manifest));
             response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
         }
 
-        ConnectorDto retained = await GetSubscriberAsync();
-        retained.Name.ShouldBe("Subscriber");
+        ConnectorDto retained = await GetPullConnectorAsync();
+        retained.Name.ShouldBe("Pull");
         retained.UpdatedAt.ShouldBe(builtIn.UpdatedAt);
-        using HttpResponseMessage version2 = await SendAsync(HttpMethod.Get, "/admin/connectors/subscriber/versions/2");
+        using HttpResponseMessage version2 = await SendAsync(HttpMethod.Get, "/admin/connectors/pull/versions/2");
         version2.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
@@ -333,9 +333,9 @@ public sealed class ConnectorManifestsAdminTests : IClassFixture<AdminApiFixture
         return await response.Content.ReadFromJsonAsync<ConnectorDto>(HostJson.Options);
     }
 
-    private async Task<ConnectorDto> GetSubscriberAsync()
+    private async Task<ConnectorDto> GetPullConnectorAsync()
     {
-        using HttpResponseMessage response = await SendAsync(HttpMethod.Get, "/admin/connectors/subscriber/versions/1");
+        using HttpResponseMessage response = await SendAsync(HttpMethod.Get, "/admin/connectors/pull/versions/1");
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         return (await response.Content.ReadFromJsonAsync<ConnectorDto>(HostJson.Options))!;
     }
