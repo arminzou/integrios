@@ -1,0 +1,19 @@
+src/Integrios.Client/README.md
+  s_078b68cf5414fc::t_18cd68f747bd19 7-12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "d0c2ff1488c4bb6fa8c29ba3fede23fdabed056f",
+  "prompts": {},
+  "sessions": {
+    "s_078b68cf5414fc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c74907d1-dae6-49f6-b97c-ae8e88e72918",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Armin Zou <arminzou@outlook.com>"
+    }
+  }
+}
