@@ -645,13 +645,18 @@ jobs:
       - name: Publish the archive and asset checksums
         shell: bash
         run: |
-          gh release upload "$GITHUB_REF_NAME" windows-zip/* --clobber
-          gh release download "$GITHUB_REF_NAME" --dir release-assets
+          mkdir -p release-assets
+          # A first run finds nothing attached; a rerun brings back every earlier asset.
+          if [[ -n "$(gh release view "$GITHUB_REF_NAME" --json assets -q '.assets[].name')" ]]; then
+            gh release download "$GITHUB_REF_NAME" --dir release-assets
+          fi
+          # The manifest is computed over the final set before anything is uploaded, so the
+          # rebuilt archive and the checksum that describes it go up in one upload.
+          cp windows-zip/* release-assets/
           cd release-assets
-          # Reruns download the previous manifest along with the assets it covers.
           shopt -s extglob
           sha256sum -- !(checksums.txt) > checksums.txt
-          gh release upload "$GITHUB_REF_NAME" checksums.txt --clobber
+          gh release upload "$GITHUB_REF_NAME" ../windows-zip/* checksums.txt --clobber
 
       - name: Update release notes
         shell: bash
