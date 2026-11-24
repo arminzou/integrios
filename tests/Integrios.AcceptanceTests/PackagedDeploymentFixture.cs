@@ -782,13 +782,40 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
         Timeout = TimeSpan.FromSeconds(5),
     };
 
+    private static readonly HashSet<int> AllocatedPorts = [];
+
+    // Below both the Linux (32768-60999) and Windows (49152-65535) ephemeral ranges: an OS-assigned
+    // port is released before the image build, and the build's outbound connections draw their
+    // local ports from that range, so one can take it before Docker publishes it.
     private static int GetAvailablePort()
     {
-        var listener = new TcpListener(IPAddress.Loopback, 0);
-        listener.Start();
-        int port = ((IPEndPoint)listener.LocalEndpoint).Port;
-        listener.Stop();
-        return port;
+        lock (AllocatedPorts)
+        {
+            for (int attempt = 0; attempt < 200; attempt++)
+            {
+                int port = Random.Shared.Next(20000, 32768);
+                if (AllocatedPorts.Contains(port))
+                    continue;
+                var listener = new TcpListener(IPAddress.Any, port);
+                try
+                {
+                    listener.Start();
+                }
+                catch (SocketException)
+                {
+                    continue;
+                }
+                finally
+                {
+                    listener.Stop();
+                }
+
+                AllocatedPorts.Add(port);
+                return port;
+            }
+
+            throw new InvalidOperationException("No free host port in 20000-32767.");
+        }
     }
 
     private static string ResolveRepoRoot()
