@@ -1,0 +1,33 @@
+tests/Integrios.FunctionalTests/Ingestion/EventsAcceptanceBoundaryTests.cs
+  s_f3e8aadbe2a1d4::t_84d3a3ff1af70d 3-4,9-10,13,131-147,216-226,291-367
+  s_f3e8aadbe2a1d4::t_164426df7cd7c4 368
+tests/Integrios.FunctionalTests/Admin/DestinationsAdminTests.cs
+  s_f3e8aadbe2a1d4::t_84d3a3ff1af70d 273-300
+tests/Integrios.FunctionalTests/Admin/SourcesAdminTests.cs
+  s_f3e8aadbe2a1d4::t_84d3a3ff1af70d 158-178
+tests/Integrios.FunctionalTests/Admin/SubscriptionTransformAdminTests.cs
+  s_f3e8aadbe2a1d4::t_84d3a3ff1af70d 244-266
+  s_f3e8aadbe2a1d4::t_b1daf54a88b377 243
+tests/Integrios.FunctionalTests/Admin/AdminOnboardingFlowTests.cs
+  s_f3e8aadbe2a1d4::t_84d3a3ff1af70d 39-50
+  s_f3e8aadbe2a1d4::t_71877493ab253f 38
+tests/Integrios.FunctionalTests/Admin/DeliveryRecoveryAdminTests.cs
+  s_f3e8aadbe2a1d4::t_84d3a3ff1af70d 332-344
+  s_f3e8aadbe2a1d4::t_ec4b1566980820 331
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "1811322e3efea02a9507096b0edbaed40810a90d",
+  "prompts": {},
+  "sessions": {
+    "s_f3e8aadbe2a1d4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "88fcd6b0-223d-4671-bf61-c55dcb9993ec",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Armin Zou <arminzou@outlook.com>"
+    }
+  }
+}
