@@ -474,6 +474,8 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository }}
           # Metadata-action adds latest automatically for stable semver tags.
+          # shortcut: rerunning an older release's run moves latest back to it; add a promotion job
+          # that picks the highest stable version if releases ever come from more than one line.
           tags: |
             type=sha
             type=ref,event=branch
@@ -582,8 +584,10 @@ jobs:
         with:
           subject-path: ${{ steps.archive.outputs.archive }}
 
+      # A tag push only: a dispatch on a tag skips `package`, so release-assets would not refresh
+      # checksums.txt for a replaced archive.
       - name: Attach the archive to the release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
           ARCHIVE: ${{ steps.archive.outputs.archive }}
