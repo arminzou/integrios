@@ -1,0 +1,21 @@
+src/Integrios.Infrastructure/Delivery/HttpDeliveryClient.cs
+  s_b19acd4aae4d50::t_e9cdbef5f0e057 56-61,64-65,80,111,115,120-122
+src/Integrios.Infrastructure/DependencyInjection.cs
+  s_b19acd4aae4d50::t_60cec2342305b1 196-198,338
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "e3c67a47207b49a00f9838ffcbbaa12863788253",
+  "prompts": {},
+  "sessions": {
+    "s_b19acd4aae4d50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "01ddce99-a00c-49f1-9f76-21f5af0490d8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Armin Zou <arminzou@outlook.com>"
+    }
+  }
+}
