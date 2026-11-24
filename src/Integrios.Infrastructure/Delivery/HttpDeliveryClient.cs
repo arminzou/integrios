@@ -139,15 +139,20 @@ internal sealed class HttpDeliveryClient(HttpClient httpClient) : IDeliveryClien
     private static async Task<(byte[] Body, bool MoreRemained)> ReadCappedAsync(
         HttpResponseMessage response, int cap, CancellationToken cancellationToken)
     {
+        // A declared length past the cap already shows that more remains, so the read stops at the
+        // cap rather than waiting on a byte a stalled destination may never send.
+        bool declaredBeyondCap = response.Content.Headers.ContentLength > cap;
+        long limit = declaredBeyondCap ? cap : cap + 1L;
         await using Stream stream = await response.Content.ReadAsStreamAsync(cancellationToken);
         using var buffer = new MemoryStream();
         byte[] chunk = new byte[8192];
         int read;
-        while (buffer.Length <= cap && (read = await stream.ReadAsync(chunk, cancellationToken)) > 0)
+        while (buffer.Length < limit && (read = await stream.ReadAsync(chunk, cancellationToken)) > 0)
             buffer.Write(chunk, 0, read);
 
         byte[] body = buffer.ToArray();
-        return body.Length > cap ? (body[..cap], true) : (body, false);
+        bool moreRemained = declaredBeyondCap || body.Length > cap;
+        return (body.Length > cap ? body[..cap] : body, moreRemained);
     }
 
     // Decoded with `flush: false` so a multi-byte character split by the ceiling is dropped rather
