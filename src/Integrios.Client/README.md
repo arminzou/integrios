@@ -4,6 +4,12 @@ Consume an Integrios pull Destination from a .NET generic host. The SDK claims d
 Delivery API, renews their leases while your handler runs, and settles each one with the result
 your handler returns.
 
+## Compatibility
+
+Requires an Integrios server at 0.13.0 or later, the first release with the Delivery API. Before
+1.0, a server release can change the Delivery API; the changelog names the server version each
+client release needs.
+
 ```csharp
 using Integrios.Client;
 
