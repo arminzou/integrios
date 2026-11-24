@@ -594,7 +594,7 @@ jobs:
           path: ${{ steps.archive.outputs.archive }}
           if-no-files-found: error
           overwrite: true
-          retention-days: 7
+          retention-days: 90
 
       - name: Record the archive digest
         shell: bash
