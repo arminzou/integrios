@@ -234,8 +234,9 @@ success, so a Subscriber whose response was lost can retry it safely. Pull attem
 same delivery history as push attempts, with failure phase `subscriber` and the Subscriber's error
 text in place of an HTTP status.
 
-`Integrios.Client` is an unpublished .NET SDK preview for generic-host processes. It has no
-dependency on server projects. `AddIntegriosSubscriber<THandler>` registers a scoped handler,
+`Integrios.Client` is a .NET SDK preview for generic-host processes, published on
+[nuget.org](https://www.nuget.org/packages/Integrios.Client). It requires an Integrios server at
+0.13.0 or later and has no dependency on server projects. `AddIntegriosSubscriber<THandler>` registers a scoped handler,
 SubscriberKey, Delivery API address, and concurrency limit. Each claim loop holds one delivery
 at a time, renews at a third of the remaining lease, and cancels the handler on lease loss or
 host shutdown. `DeliveryResult.Ack` acknowledges completion, `DeliveryResult.Retry` requests a

@@ -78,6 +78,16 @@ release, and that tag starts the release run above.
 Merging is the release decision. Nothing publishes while the pull request sits open, so leaving it
 open until a body of work is complete costs nothing.
 
+The `Integrios.Client` SDK has its own version line. Release-please opens a separate pull request
+for commits under `src/Integrios.Client` and tags its merge `client-v<version>`, which starts
+`.github/workflows/client-release.yml`: it tests and packs the SDK and pushes it to
+[nuget.org](https://www.nuget.org/packages/Integrios.Client). nuget.org is the SDK's only channel.
+Its GitHub release carries no files, and the workflow hands GitHub's Latest badge back to the
+newest server release, so the Releases page always leads with the server.
+
+A client release that needs a server change ships with or after the server release that has it.
+The SDK's README states the minimum server version, and its changelog notes each change to it.
+
 ## What the default pipeline does
 
 The main and release flows publish one image to GitHub Container Registry (GHCR) under:
@@ -86,9 +96,9 @@ The main and release flows publish one image to GitHub Container Registry (GHCR)
 ghcr.io/<owner>/<repo>
 ```
 
-Main images are tagged with the commit SHA, branch name, and `latest`. Release images are
-tagged with the commit SHA and, for `v*` tags, semantic-version tags. Each image includes
-an SBOM and build provenance attestation.
+Main images are tagged with the commit SHA and `main`. Release images are tagged with the commit
+SHA, the version and its `<major>.<minor>`, and `latest`, so `latest` always means the newest
+stable release. Each image includes an SBOM and build provenance attestation.
 
 The image holds all three roles. Its entrypoint is `/app/integrios`, and each container names its
 role as the first argument: `ingestion`, `admin`, or `worker`. Each role still composes only its
@@ -115,8 +125,13 @@ commands, test logs and TRX results, resolved external image digests, and the pu
 digest.
 
 Each release also attaches `integrios-<version>-win-x64.zip`, a self-contained Windows build
-cross-published on the Linux runner. The evidence records its SHA-256 and its build provenance
-attestation under `windows-archive/`.
+cross-published on the Linux runner, and `checksums.txt` with the SHA-256 of every attached file.
+Both are attached together, only after the image is published. The evidence records the archive's
+SHA-256 and its build provenance attestation under `windows-archive/`.
+
+The release notes open with an Install section: the image pinned by digest, a `docker pull`
+command, and links to `deploy/compose.yml` and `deploy/azure/` at the release tag. Rerunning the
+release replaces that section rather than adding another.
 
 The repository pins its .NET SDK, NuGet dependency graph, container versions, and
 GitHub Actions. Action references use release-version tags such as `@v7.0.1`;
