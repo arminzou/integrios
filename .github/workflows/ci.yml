@@ -473,12 +473,12 @@ jobs:
         uses: docker/metadata-action@v6.2.0
         with:
           images: ghcr.io/${{ github.repository }}
+          # Metadata-action adds latest automatically for stable semver tags.
           tags: |
             type=sha
             type=ref,event=branch
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push the image
         id: build
@@ -612,6 +612,73 @@ jobs:
           if-no-files-found: error
           overwrite: true
           retention-days: 90
+
+  release-assets:
+    needs: [package, windows-archive]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_REPO: ${{ github.repository }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Download image digest
+        uses: actions/download-artifact@v8.0.1
+        with:
+          name: release-image-digest-${{ github.run_id }}
+          path: image-digest
+
+      - name: Publish asset checksums
+        shell: bash
+        run: |
+          gh release download "$GITHUB_REF_NAME" --dir release-assets
+          cd release-assets
+          # Reruns download the previous manifest along with the assets it covers.
+          shopt -s extglob
+          sha256sum -- !(checksums.txt) > checksums.txt
+          gh release upload "$GITHUB_REF_NAME" checksums.txt --clobber
+
+      - name: Update release notes
+        shell: bash
+        run: |
+          image=$(sed -n 's/^image=//p' image-digest/integrios.txt)
+          digest=$(sed -n 's/^digest=//p' image-digest/integrios.txt)
+          if [[ -z "$image" || ! "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo 'The release image digest artifact is missing a valid image or digest.' >&2
+            exit 1
+          fi
+          image_ref="${image,,}:${GITHUB_REF_NAME#v}@$digest"
+          repo_url="https://github.com/$GITHUB_REPOSITORY"
+          body=$(gh release view "$GITHUB_REF_NAME" --json body -q .body)
+
+          # Replace only the generated section at the top of the release notes.
+          install_start=$'## Install\n<!-- install -->\n'
+          install_end=$'\n<!-- /install -->'
+          if [[ "$body" == "$install_start"*"$install_end"* ]]; then
+            body=${body#*"$install_end"}
+            body=${body#$'\n\n'}
+          fi
+
+          cat > release-notes.md <<EOF
+          ## Install
+          <!-- install -->
+
+          Container image: \`$image_ref\`
+
+          \`\`\`bash
+          docker pull $image_ref
+          \`\`\`
+
+          - [Docker Compose]($repo_url/blob/$GITHUB_REF_NAME/deploy/compose.yml)
+          - [Azure deployment]($repo_url/tree/$GITHUB_REF_NAME/deploy/azure)
+
+          \`checksums.txt\` lists the SHA-256 of every other release asset.
+
+          <!-- /install -->
+          EOF
+          printf '\n%s\n' "$body" >> release-notes.md
+          gh release edit "$GITHUB_REF_NAME" --notes-file release-notes.md
 
   retain-release-evidence:
     needs: [acceptance, package, windows-archive]

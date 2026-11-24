@@ -2,13 +2,14 @@ name: client-release
 
 # Publishes the Integrios.Client SDK to nuget.org. Release-please versions the SDK apart from the
 # server and tags its releases client-v*, which ci.yml's v* release run does not match.
+# The client's GitHub release carries no assets: nuget.org is the SDK's channel. GitHub marks the
+# newest release Latest, so the last step hands that badge back to the newest server release.
 
 on:
   push:
     tags: ['client-v*']
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   publish:
@@ -50,7 +51,15 @@ jobs:
           NUGET_API_KEY: ${{ steps.nuget.outputs.NUGET_API_KEY }}
         run: dotnet nuget push "out/*.nupkg" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
 
-      - name: Attach the package to the release
+      - name: Restore the Latest badge to the server release
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "$GITHUB_REF_NAME" out/*.nupkg out/*.snupkg --clobber
+        run: |
+          server_tag=$(gh release list --exclude-drafts --exclude-pre-releases --limit 100 --json tagName |
+            jq -r '.[] | .tagName | select(test("^v[0-9]"))' | sort -V | tail -n 1)
+          if [[ -z "$server_tag" ]]; then
+            echo "No stable server release found."
+            exit 0
+          fi
+          gh release edit "$server_tag" --latest
