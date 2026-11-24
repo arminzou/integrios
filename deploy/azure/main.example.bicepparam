@@ -9,7 +9,7 @@ param registryResourceGroupName = 'rg-container-images'
 // deploy.ps1 imports this release into the registry when absent and deploys it pinned by digest.
 // To deploy an image you built yourself, remove release and set image to a full
 // <registry>.azurecr.io/<repository>@sha256:<digest> reference instead.
-param release = '0.12.0' // x-release-please-version
+param release = '0.13.0' // x-release-please-version
 
 param databaseProvider = 'sqlserver'
 
