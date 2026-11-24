@@ -788,6 +788,8 @@ resource worker 'Microsoft.App/containerApps@2025-07-01' = {
           { type: 'Readiness', httpGet: { path: '/ready', port: 5299, scheme: 'HTTP' }, initialDelaySeconds: 10, periodSeconds: 10 }
         ]
       }, workerCollectorContainer]
+      // Above Integrios:Delivery:ShutdownGracePeriod (60s by default), so in-flight attempts finish on stop.
+      terminationGracePeriodSeconds: 75
       scale: { minReplicas: runtimeReplicaCount, maxReplicas: max(runtimeReplicaCount, 1) }
     }
   }
