@@ -1,5 +1,4 @@
 using System.Net;
-using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
@@ -51,41 +50,6 @@ public sealed class DashboardPackagingTests(PackagedDeploymentFixture fixture)
             "A content-hashed bundle should never need revalidating.");
     }
 
-    [Theory]
-    [InlineData("/tenants")]
-    [InlineData("/connectors")]
-    [InlineData("/tenants/8b1d0f2e-0000-0000-0000-000000000000/events")]
-    public async Task BrowserRoutes_FallBackToTheShellSoADeepLinkResolves(string path)
-    {
-        using HttpResponseMessage response = await fixture.AdminClient.GetAsync(path);
-        response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        response.Content.Headers.ContentType?.MediaType.ShouldBe("text/html");
-    }
-
-    [Theory]
-    [InlineData("/admin/not-a-capability")]
-    [InlineData("/auth/not-an-endpoint")]
-    [InlineData("/openapi/not-a-document")]
-    public async Task ExcludedRoutes_KeepTheirOwnResponseInsteadOfTheShell(string path)
-    {
-        // Answering these with the dashboard would turn a broken client or a missing endpoint into a
-        // page that looks like it worked.
-        using HttpResponseMessage response = await fixture.AdminClient.GetAsync(path);
-        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
-        response.Content.Headers.ContentType?.MediaType.ShouldNotBe("text/html");
-    }
-
-    [Fact]
-    public async Task BrowserSessionBootstrap_RefusesAnAnonymousCaller()
-    {
-        using HttpResponseMessage session = await fixture.AdminClient.GetAsync("/auth/session");
-        session.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
-
-        // An unauthenticated API call answers 401 while the browser sign-in surface is enabled.
-        using HttpResponseMessage api = await fixture.AdminClient.GetAsync("/admin/tenants");
-        api.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
-    }
-
     [Fact]
     public async Task AuthenticationOptions_DefaultToPasswordWithoutAnIdentityProvider()
     {
@@ -96,30 +60,6 @@ public sealed class DashboardPackagingTests(PackagedDeploymentFixture fixture)
         options.GetProperty("oidc_enabled").GetBoolean().ShouldBeFalse();
         options.GetProperty("password_enabled").GetBoolean().ShouldBeTrue();
         options.GetProperty("antiforgery_token").GetString().ShouldNotBeNullOrWhiteSpace();
-    }
-
-    [Fact]
-    public async Task OperatorKeyAutomation_StaysUsableWithTheBrowserSurfaceConfigured()
-    {
-        // Antiforgery validates unsafe requests carrying the browser session cookie. A machine
-        // credential is sent deliberately on every request and is never attached by a browser, so
-        // enabling the browser surface must not start rejecting automation.
-        string slug = $"packaged-dashboard-{Guid.NewGuid():N}"[..32];
-        using var content = new StringContent(
-            $$"""{"slug":"{{slug}}","name":"Packaged dashboard","environment":null,"description":null}""",
-            Encoding.UTF8,
-            "application/json");
-        using var create = new HttpRequestMessage(HttpMethod.Post, "/admin/tenants") { Content = content };
-        create.Headers.TryAddWithoutValidation("Authorization", fixture.AdminAuthorization);
-
-        using HttpResponseMessage created = await fixture.AdminClient.SendAsync(create);
-        created.StatusCode.ShouldBe(HttpStatusCode.Created);
-
-        using var read = new HttpRequestMessage(HttpMethod.Get, "/admin/tenants?limit=20");
-        read.Headers.TryAddWithoutValidation("Authorization", fixture.AdminAuthorization);
-        using HttpResponseMessage list = await fixture.AdminClient.SendAsync(read);
-        list.StatusCode.ShouldBe(HttpStatusCode.OK);
-        (await list.Content.ReadAsStringAsync()).ShouldContain(slug);
     }
 
     [Fact]

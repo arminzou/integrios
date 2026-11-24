@@ -19,6 +19,8 @@ public static class AdminHost
 
     public static async Task<int> RunAsync(string[] args)
     {
+        if (args is ["setup", ..])
+            return await SetupCli.RunAsync(args);
         if (args is ["bootstrap", ..])
             return await BootstrapCli.RunAsync(args);
         if (args is ["operator-key", ..])

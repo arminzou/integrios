@@ -60,15 +60,15 @@ source artifacts/verify/default/state/env
 with `--dashboard` on a cold `npm ci`. It:
 
 1. Refuses to start if the run's state directory exists or any of its ports is taken.
-2. Starts `postgres` and `mocksink` from `compose.yml` under the Compose project
+2. Starts `postgres` from `compose.yml` and `mocksink` from `scripts/sink/compose.yml` under the Compose project
    `integrios-verify-<run>`, with its own volume, and waits for them to be healthy.
 3. Builds `src/Integrios` with `dotnet build` and records the commit only after it succeeds.
    There is no build-skip option: an older binary must not pass the revision check.
 4. With `--dashboard`, runs `npm ci` (only when `node_modules` is missing) and `npm run build:assets`
    in `src/Integrios.Admin/frontend`.
-5. Runs the same bootstrap the Compose stack runs (see `docs/setup.md`): `database migrate` as the
-   owner, `database grant-runtime` for `admin_runtime` and `data_runtime`, `bootstrap` for the
-   OperatorKey `global_operator_key:operator_bootstrap_secret`, and `operator-user create
+5. Runs the same `setup` job the Compose stack runs (see `docs/setup.md`): `integrios admin setup`
+   as the owner, which migrates, grants `admin_runtime` and `data_runtime`, and creates the
+   OperatorKey `global_operator_key:operator_bootstrap_secret`. Then it runs `operator-user create
    --password-file` for `operator@example.test` with a random password stored in the state
    directory.
 6. Starts `admin`, `ingestion`, `worker`, and `subscriber` as background `dotnet integrios.dll <role>`

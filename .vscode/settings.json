@@ -2,15 +2,13 @@
   "rest-client.environmentVariables": {
     "local": {
       "ADMIN_BASE_URL": "http://localhost:5150",
-      "SINK_BASE": "http://localhost:5054",
-      "INGESTION_BASE_URL": "http://localhost:5231",
-      "MOCKSINK_ADMIN_BASE_URL": "http://localhost:5054"
+      "SINK_BASE": "http://localhost:8080",
+      "INGESTION_BASE_URL": "http://localhost:5231"
     },
     "docker": {
       "ADMIN_BASE_URL": "http://localhost:5150",
-      "SINK_BASE": "http://mocksink:8080",
-      "INGESTION_BASE_URL": "http://localhost:5231",
-      "MOCKSINK_ADMIN_BASE_URL": "http://localhost:5054"
+      "SINK_BASE": "http://host.docker.internal:8080",
+      "INGESTION_BASE_URL": "http://localhost:5231"
     },
   },
   "editor.formatOnSave": true,

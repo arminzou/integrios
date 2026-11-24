@@ -36,7 +36,7 @@ using Respawn;
 
 namespace Integrios.FunctionalTests.Worker;
 
-public sealed class WorkerRoutingFixture : IAsyncLifetime
+public class WorkerRoutingFixture : IAsyncLifetime
 {
     public const string TenantToken = "intg_f0f0e1e1d2d2c3c3aabbccddeeff00112233445566778899aabbccddeeff0011";
     public const string LedgerSinkUrl = "http://test-sink/ledger";
@@ -74,13 +74,13 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
     internal EventDeliveryQueue DeliveryQueue { get; private set; } = null!;
     internal BacklogSnapshotReader BacklogSnapshotReader { get; private set; } = null!;
 
-    public async Task InitializeAsync()
+    public virtual async Task InitializeAsync()
     {
         await database.StartAsync();
         respawner = await database.CreateRespawnerAsync();
 
         infrastructureProvider = new ServiceCollection()
-            .AddWorkerInfrastructureServices(database.Configuration)
+            .AddWorkerInfrastructureServices(WorkerConfiguration(database.Configuration))
             .BuildServiceProvider();
         var connectionFactory = infrastructureProvider.GetRequiredService<IDbConnectionFactory>();
         BacklogSnapshotReader = new BacklogSnapshotReader(connectionFactory);
@@ -106,7 +106,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         services.AddSingleton<IEventDeliveryQueue>(DeliveryQueue);
         services.AddSingleton<IPullDeliveryQueue>(DeliveryQueue);
         services.AddSingleton<IDestinationPollRecorder>(new DestinationPollRecorder(connectionFactory));
-        services.AddSingleton<IDeliveryClient>(_ => DeliveryClient);
+        services.AddSingleton(ResolveDeliveryClient(infrastructureProvider));
         services.AddSingleton<IDestinationAuthenticator, ApiKeyHeaderAuthenticator>();
         services.AddSingleton<IDestinationAuthenticator, BearerTokenAuthenticator>();
         services.AddSingleton<IDestinationAuthenticator>(_ => new OAuth2ClientCredentialsAuthenticator(
@@ -120,7 +120,11 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         mediator = applicationProvider.GetRequiredService<IMediator>();
     }
 
-    public async Task DisposeAsync()
+    protected virtual IConfiguration WorkerConfiguration(IConfiguration databaseConfiguration) => databaseConfiguration;
+
+    protected virtual IDeliveryClient ResolveDeliveryClient(IServiceProvider infrastructure) => DeliveryClient;
+
+    public virtual async Task DisposeAsync()
     {
         await applicationProvider.DisposeAsync();
         await dbContext.DisposeAsync();
@@ -128,7 +132,7 @@ public sealed class WorkerRoutingFixture : IAsyncLifetime
         await database.DisposeAsync();
     }
 
-    public async Task ResetAsync()
+    public virtual async Task ResetAsync()
     {
         DeliveryClient.Reset();
         OAuthTokenEndpoint.Reset();

@@ -37,7 +37,7 @@ compose() {
   # Pin the owner credentials OWNER_DB uses; otherwise a local .env's POSTGRES_* wins.
   POSTGRES_USER=integrios POSTGRES_PASSWORD=integrios_dev \
   INTEGRIOS_POSTGRES_PORT=$PG_PORT INTEGRIOS_MOCKSINK_PORT=$MOCKSINK_PORT \
-    docker compose -p "$PROJECT" -f "$ROOT/compose.yml" "$@"
+    docker compose -p "$PROJECT" -f "$ROOT/compose.yml" -f "$ROOT/scripts/sink/compose.yml" "$@"
 }
 
 port_open() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
@@ -93,14 +93,7 @@ up() {
     npm --prefix "$frontend" run build:assets
   fi
 
-  ConnectionStrings__Postgres=$OWNER_DB integrios admin database migrate
-  ConnectionStrings__Postgres=$OWNER_DB \
-    Database__RuntimePrincipals__0__Name=admin_runtime Database__RuntimePrincipals__0__Scope=control-plane \
-    Database__RuntimePrincipals__0__Password=admin_runtime_dev \
-    Database__RuntimePrincipals__1__Name=data_runtime Database__RuntimePrincipals__1__Scope=data-plane \
-    Database__RuntimePrincipals__1__Password=data_runtime_dev \
-    integrios admin database grant-runtime
-  ConnectionStrings__Postgres=$ADMIN_DB INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET=${OPERATOR_KEY#*:} integrios admin bootstrap
+  ConnectionStrings__Postgres=$OWNER_DB     Database__RuntimePrincipals__0__Name=admin_runtime Database__RuntimePrincipals__0__Scope=control-plane     Database__RuntimePrincipals__0__Password=admin_runtime_dev     Database__RuntimePrincipals__1__Name=data_runtime Database__RuntimePrincipals__1__Scope=data-plane     Database__RuntimePrincipals__1__Password=data_runtime_dev     INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET=${OPERATOR_KEY#*:} integrios admin setup
   printf %s "verify-$(date +%s)-$RANDOM-operator" >"$STATE/operator-password"
   ConnectionStrings__Postgres=$ADMIN_DB integrios admin operator-user create \
     --display-name "Verification Operator" --email "$OPERATOR_EMAIL" --password-file "$STATE/operator-password"

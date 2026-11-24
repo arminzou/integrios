@@ -41,20 +41,6 @@
         "DOTNET_ENVIRONMENT": "Development"
       },
       "console": "integratedTerminal"
-    },
-    {
-      "name": "MockSink",
-      "type": "coreclr",
-      "request": "launch",
-      "preLaunchTask": "build-mocksink",
-      "program": "${workspaceFolder}/src/Integrios.MockSink/bin/Debug/net10.0/Integrios.MockSink.dll",
-      "args": [],
-      "cwd": "${workspaceFolder}/src/Integrios.MockSink",
-      "env": {
-        "ASPNETCORE_ENVIRONMENT": "Development",
-        "ASPNETCORE_URLS": "http://localhost:5054"
-      },
-      "console": "integratedTerminal"
     }
   ],
   "compounds": [
@@ -63,16 +49,14 @@
       "configurations": [
         "Ingestion",
         "Admin",
-        "Worker",
-        "MockSink"
+        "Worker"
       ]
     },
     {
       "name": "Data Plane",
       "configurations": [
         "Ingestion",
-        "Worker",
-        "MockSink"
+        "Worker"
       ]
     }
   ]

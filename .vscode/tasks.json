@@ -26,16 +26,6 @@
       "problemMatcher": "$msCompile"
     },
     {
-      "label": "build-mocksink",
-      "command": "dotnet",
-      "type": "process",
-      "args": [
-        "build",
-        "${workspaceFolder}/src/Integrios.MockSink/Integrios.MockSink.csproj"
-      ],
-      "problemMatcher": "$msCompile"
-    },
-    {
       "label": "test",
       "command": "dotnet",
       "type": "process",

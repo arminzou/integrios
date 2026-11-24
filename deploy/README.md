@@ -21,10 +21,10 @@ docker compose run --rm admin operator-user create \
 ```
 
 Set `INTEGRIOS_ADMIN_RUNTIME_PASSWORD` and `INTEGRIOS_DATA_RUNTIME_PASSWORD` in `.env` to strong,
-unique values. Startup order is enforced by `depends_on`: `postgres` becomes healthy, `migrate`
-runs EF Core migrations as the database owner, `grant-runtime` creates or updates the two runtime
-principals, `bootstrap` runs as the control-plane principal, then `ingestion`, `admin`, `worker`,
-and `subscriber` start with their matching scope. Existing volumes are upgraded in place; no principal is dropped.
+unique values. Startup order is enforced by `depends_on`: `postgres` becomes healthy, then the
+`setup` one-shot runs `integrios admin setup` as the database owner. It applies EF Core migrations,
+creates or updates the two runtime principals, and bootstraps the first OperatorKey. Then
+`ingestion`, `admin`, `worker`, and `subscriber` start with their matching scope. Existing volumes are upgraded in place; no principal is dropped.
 
 `operator-user create` prompts for a masked, confirmed password and creates an Operator account;
 run it again for each person who needs one. For an OIDC-only or API-only deployment, explicitly set
@@ -33,8 +33,10 @@ sign-in.
 
 ## Bootstrap semantics
 
-The `bootstrap` service is idempotent and safe to re-run. It creates no Connectors and, only if no
-live deployment-wide OperatorKey exists yet, creates the first OperatorKey.
+The `setup` service is idempotent and safe to re-run: each step converges on the state it finds.
+Its Bootstrap step creates no Connectors and, only if no live deployment-wide OperatorKey exists
+yet, creates the first OperatorKey. A Production run without a supplied secret fails before any
+step changes the database.
 
 The OperatorKey secret comes from `INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET`. Production bootstrap requires a
 non-empty Operator-supplied value and never prints the secret. The OperatorKey credential format is:
@@ -198,22 +200,24 @@ docker compose pull
 docker compose up -d
 ```
 
-`migrate`, `grant-runtime`, and `bootstrap` run automatically in that order on every `up` before
-the application services start.
+`setup` runs automatically on every `up` before the application services start.
+
+Releases before the single setup job ran separate `migrate`, `grant-runtime`, and `bootstrap`
+services. If you copied an older `compose.yml`, take the new one, then remove the stopped one-shot
+containers with `docker compose up -d --remove-orphans`.
 
 ## Using a managed Postgres
 
 Remove the `postgres` service from `compose.yml`, then point `ConnectionStrings__Postgres` in
-`migrate`, `grant-runtime`, `bootstrap`, `ingestion`, `admin`, `worker`, and `subscriber` at your
-database. Keep
-the migration connection on the schema owner. Configure both `Database__RuntimePrincipals` entries
-on `grant-runtime` with unique Password values or existing-principal grant-only mode; never put
+`setup`, `ingestion`, `admin`, `worker`, and `subscriber` at your database. Keep the `setup`
+connection on the schema owner. Configure both `Database__RuntimePrincipals` entries on `setup`
+with unique Password values or existing-principal grant-only mode; never put
 secret values in command-line configuration.
 
 ## Using SQL Server 2022+
 
 Use an externally managed SQL Server 2022 or later, remove the bundled `postgres` service. On
-`migrate`, `grant-runtime`, `bootstrap`, `ingestion`, `admin`, `worker`, and `subscriber`, replace the
+`setup`, `ingestion`, `admin`, `worker`, and `subscriber`, replace the
 PostgreSQL connection setting with:
 
 ```yaml
@@ -222,9 +226,9 @@ environment:
   ConnectionStrings__SqlServer: ${INTEGRIOS_SQLSERVER_CONNECTION_STRING}
 ```
 
-Keep the same startup order and matched image version. The migration one-shot selects the SQL
+Keep the same startup order and matched image version. The `setup` one-shot selects the SQL
 Server migration assembly automatically. Set `Database__Provider: sqlserver` and give each
-`grant-runtime` principal the EntraClientId required by its identity or configure passwords.
+`setup` runtime principal the EntraClientId required by its identity or configure passwords.
 Both `READ_COMMITTED_SNAPSHOT` settings are supported;
 see [Database backends](../docs/database-backends.md) for the queue-locking policy.
 

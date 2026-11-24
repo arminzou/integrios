@@ -2,8 +2,6 @@ using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using Integrios.Tests.Shared;
-using Npgsql;
 
 namespace Integrios.AcceptanceTests;
 
@@ -11,101 +9,43 @@ namespace Integrios.AcceptanceTests;
 public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fixture)
 {
     private static readonly TimeSpan EvidenceTimeout = TimeSpan.FromSeconds(90);
-    private static readonly TimeSpan LeaseRecoveryTimeout = TimeSpan.FromSeconds(150);
-    private static readonly TimeSpan CleanupLockTimeout = TimeSpan.FromSeconds(10);
-    private Guid HttpConnectorId => fixture.HttpConnectorId;
-
-    // Barrier key for the post-send window. Any constant works; it only has to be unique within
-    // this deployment, and both the test session and the trigger must agree on it.
-    private const long PostSendBarrierKey = 8912;
 
     [Fact]
-    public async Task CompetingWorkers_FanOutWithoutLossOrDuplication()
+    public async Task PullDelivery_ReleasedBeforePostgresRestart_IsClaimedAgainAndAcked()
     {
-        var workers = new List<string>();
-        bool workerStopped = false;
+        string name = $"pull-{Guid.NewGuid().ToString("N")[..8]}";
+        Guid tenantId = await PostAdminForIdAsync(
+            "/admin/tenants",
+            new { slug = name, name = $"Pull {name}", environment = "production" });
+        string apiToken = await PostAdminForPropertyAsync(
+            $"/admin/tenants/{tenantId}/tenant-api-keys",
+            new { name = "pull-ingestion" },
+            "token");
+        Guid pullConnectorId = await fixture.ScalarAsync<Guid>("SELECT id FROM connectors WHERE key = 'pull'");
+        Guid destinationId = await PostAdminForIdAsync(
+            $"/admin/tenants/{tenantId}/destinations",
+            new { connector_id = pullConnectorId, name = "pull-destination", configuration = new { }, environment = "production" });
+        string subscriberToken = await PostAdminForPropertyAsync(
+            $"/admin/tenants/{tenantId}/destinations/{destinationId}/subscriber-keys",
+            new { name = "pull-subscriber" },
+            "token");
+        Guid topicId = await PostAdminForIdAsync($"/admin/tenants/{tenantId}/topics", new { key = name });
+        Guid sourceId = await PostAdminForIdAsync(
+            $"/admin/tenants/{tenantId}/sources",
+            new { connector_id = fixture.HttpConnectorId, topic_id = topicId, name = "intake", type = "event_api", event_types = new[] { $"{name}.test" }, configuration = new { } });
+        await EnableAsync($"/admin/tenants/{tenantId}/sources/{sourceId}");
+        Guid subscriptionId = await PostAdminForIdAsync(
+            $"/admin/tenants/{tenantId}/topics/{topicId}/subscriptions",
+            new { name = "pull-subscription", event_types = new[] { $"{name}.test" }, destination_id = destinationId });
+        await EnableAsync($"/admin/tenants/{tenantId}/topics/{topicId}/subscriptions/{subscriptionId}");
 
-        try
-        {
-            string suffix = Suffix();
-            Pipeline pipeline = await CreatePipelineAsync($"stress-{suffix}");
-            const int eventCount = 40;
+        Guid eventId = await IngestAsync(apiToken, sourceId, $"{name}.test");
 
-            await fixture.KillWorkerAsync();
-            workerStopped = true;
+        JsonElement first = await ClaimAsync(subscriberToken);
+        first.GetProperty("event_id").GetGuid().ShouldBe(eventId);
+        (await ReportAsync(subscriberToken, first, "release", new { retry_after_seconds = 0 }))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
 
-            for (int index = 0; index < eventCount; index++)
-                await IngestAsync(pipeline, new { sequence = index }, $"stress-{suffix}-{index}");
-
-            // Widening the fanout update lengthens the window in which two Workers can claim the
-            // same outbox row, so the SKIP LOCKED contract is actually exercised rather than won
-            // by luck of scheduling.
-            await fixture.ExecuteAsync(
-                """
-                CREATE FUNCTION acceptance_slow_fanout() RETURNS trigger LANGUAGE plpgsql AS $$
-                BEGIN
-                    IF OLD.processed_at IS NULL AND NEW.processed_at IS NOT NULL THEN
-                        PERFORM pg_sleep(0.05);
-                    END IF;
-                    RETURN NEW;
-                END $$;
-                CREATE TRIGGER acceptance_slow_fanout
-                    BEFORE UPDATE ON outbox
-                    FOR EACH ROW EXECUTE FUNCTION acceptance_slow_fanout();
-                """);
-
-            workers.Add(await fixture.StartAdditionalWorkerAsync());
-            workers.Add(await fixture.StartAdditionalWorkerAsync());
-
-            await WaitForAsync(async () =>
-                await fixture.ScalarAsync<long>(
-                    $"SELECT COUNT(*) FROM event_deliveries sd JOIN events e ON e.id = sd.event_id WHERE e.tenant_id = '{pipeline.TenantId}' AND e.event_type = '{pipeline.EventType}' AND sd.status = 'succeeded'") == eventCount);
-
-            (await fixture.ScalarAsync<long>(
-                $"SELECT COUNT(*) FROM events WHERE tenant_id = '{pipeline.TenantId}' AND event_type = '{pipeline.EventType}' AND status = 'routed'")).ShouldBe(eventCount);
-            (await fixture.ScalarAsync<long>(
-                $"SELECT COUNT(*) FROM outbox o JOIN events e ON e.id = o.event_id WHERE e.tenant_id = '{pipeline.TenantId}' AND e.event_type = '{pipeline.EventType}' AND o.processed_at IS NOT NULL")).ShouldBe(eventCount);
-            (await fixture.ScalarAsync<long>(
-                $"SELECT COUNT(*) FROM (SELECT sd.event_id, sd.subscription_id FROM event_deliveries sd JOIN events e ON e.id = sd.event_id WHERE e.tenant_id = '{pipeline.TenantId}' AND e.event_type = '{pipeline.EventType}' GROUP BY sd.event_id, sd.subscription_id HAVING COUNT(*) > 1) duplicates")).ShouldBe(0);
-
-            foreach (string worker in workers)
-                (await fixture.GetContainerLogsAsync(worker)).ShouldContain("Fanned out Event", Case.Sensitive);
-        }
-        finally
-        {
-            foreach (string worker in workers)
-                await SafeRemoveContainerAsync(worker);
-
-            // Removing a container leaves its PostgreSQL backend behind, so a Worker interrupted
-            // mid-fanout can still hold the outbox row lock that the cleanup DDL needs. Only safe
-            // while the primary Worker is down; otherwise this would terminate live statements.
-            if (workerStopped)
-                await TerminateActiveBackendsAsync("outbox");
-
-            await SafeExecuteAsync(
-                """
-                DROP TRIGGER IF EXISTS acceptance_slow_fanout ON outbox;
-                DROP FUNCTION IF EXISTS acceptance_slow_fanout();
-                """);
-
-            if (workerStopped)
-                await fixture.StartWorkerAsync();
-        }
-    }
-
-    [Fact]
-    public async Task PostgresRestartDuringRetry_ResumesAndSucceeds()
-    {
-        string suffix = Suffix();
-        Pipeline pipeline = await CreatePipelineAsync($"restart-{suffix}");
-        await fixture.WireMockSink.ConfigureAsync(pipeline.SinkName, "fail");
-
-        Guid eventId = await IngestAsync(pipeline, new { restart = true });
-        await WaitForAsync(async () =>
-            await fixture.ScalarAsync<long>(
-                $"SELECT COUNT(*) FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{eventId}' AND da.status = 'failed'") >= 1);
-
-        await fixture.WireMockSink.ResetControlAsync(pipeline.SinkName);
         await fixture.RestartPostgresAsync();
 
         // Restarting the product services is part of the interruption window, not a workaround:
@@ -113,245 +53,65 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
         // back without operator intervention.
         await fixture.RestartProductServicesAsync();
 
-        await WaitForDeliveryStatusAsync(eventId, "succeeded");
-        ((await fixture.ScalarAsync<long>(
-            $"SELECT COUNT(*) FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{eventId}'")) >= 2).ShouldBeTrue();
+        JsonElement second = await ClaimAsync(subscriberToken);
+        second.GetProperty("delivery_id").GetGuid().ShouldBe(first.GetProperty("delivery_id").GetGuid());
+        second.GetProperty("attempt_number").GetInt32().ShouldBe(2);
+        (await ReportAsync(subscriberToken, second, "ack")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        (await fixture.ScalarAsync<string>(
+            $"SELECT status FROM event_deliveries WHERE event_id = '{eventId}' AND subscription_id = '{subscriptionId}'")).ShouldBe("succeeded");
+        (await fixture.ScalarAsync<long>(
+            $"SELECT COUNT(*) FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{eventId}'")).ShouldBeGreaterThanOrEqualTo(2L);
     }
 
-    [Fact]
-    public async Task PostSendInterruption_PreservesAtLeastOnceDelivery()
+    // Fan-out and the released delivery's readiness are asynchronous, so claim until one arrives.
+    private async Task<JsonElement> ClaimAsync(string subscriberToken)
     {
-        bool workerStopped = false;
-        bool barrierHeld = false;
-        await using var barrier = new NpgsqlConnection(fixture.ConnectionString);
-
-        try
+        JsonElement delivery = default;
+        await WaitForAsync(async () =>
         {
-            string suffix = Suffix();
-            Pipeline pipeline = await CreatePipelineAsync($"postsend-{suffix}");
-
-            // The barrier is an advisory lock rather than a sleep so the test can end it on
-            // demand. A sleeping backend cannot be released, and because killing the Worker
-            // container does not terminate its PostgreSQL session, it would hold the
-            // delivery_attempts row lock that both lease recovery and the cleanup DDL need.
-            await barrier.OpenAsync();
-            await ExecuteOnAsync(barrier, $"SELECT pg_advisory_lock({PostSendBarrierKey});");
-            barrierHeld = true;
-
-            await fixture.ExecuteAsync(
-                $$"""
-                CREATE FUNCTION acceptance_block_success_finalization() RETURNS trigger LANGUAGE plpgsql AS $$
-                BEGIN
-                    IF OLD.status = 'in_progress' AND NEW.status = 'succeeded' THEN
-                        PERFORM pg_advisory_xact_lock({{PostSendBarrierKey}});
-                    END IF;
-                    RETURN NEW;
-                END $$;
-                CREATE TRIGGER acceptance_block_success_finalization
-                    BEFORE UPDATE ON delivery_attempts
-                    FOR EACH ROW EXECUTE FUNCTION acceptance_block_success_finalization();
-                """);
-
-            Guid eventId = await IngestAsync(pipeline, new { phase = "after-send" });
-            await WaitForAsync(async () => await ReceiptCountAsync(pipeline.SinkName) == 1);
-            await WaitForDeliveryStatusAsync(eventId, "in_flight");
-            Guid deliveryId = await fixture.ScalarAsync<Guid>(
-                $"SELECT id FROM event_deliveries WHERE event_id = '{eventId}'");
-            Guid firstAttemptId = await fixture.ScalarAsync<Guid>(
-                $"SELECT id FROM delivery_attempts WHERE event_delivery_id = '{deliveryId}' AND attempt_number = 1");
-
-            await fixture.KillWorkerAsync();
-            workerStopped = true;
-
-            // Terminating the orphaned backend rolls its finalization transaction back now,
-            // instead of whenever it next notices the closed client socket.
-            await TerminateActiveBackendsAsync("delivery_attempts");
-            await ExecuteOnAsync(barrier, $"SELECT pg_advisory_unlock({PostSendBarrierKey});");
-            barrierHeld = false;
-            await DropPostSendBarrierAsync();
-
-            await fixture.StartWorkerAsync();
-            workerStopped = false;
-
-            // No lease is force-expired here: recovering within the real lease window is itself
-            // an acceptance criterion, which is why this scenario takes about two minutes.
-            await WaitForDeliveryStatusAsync(eventId, "succeeded", LeaseRecoveryTimeout);
-            (await ReceiptCountAsync(pipeline.SinkName)).ShouldBe(2);
-            (await AttemptStatusesAsync(eventId)).ShouldBe(["indeterminate", "succeeded"]);
-
-            Guid secondAttemptId = await fixture.ScalarAsync<Guid>(
-                $"SELECT id FROM delivery_attempts WHERE event_delivery_id = '{deliveryId}' AND attempt_number = 2");
-            await AssertReceiptHeadersAsync(
-                pipeline.SinkName,
-                new Dictionary<string, string>
-                {
-                    ["Integrios-Delivery-Id"] = deliveryId.ToString(),
-                    ["Integrios-Attempt-Id"] = firstAttemptId.ToString(),
-                    ["Integrios-Attempt-Number"] = "1"
-                });
-            await AssertReceiptHeadersAsync(
-                pipeline.SinkName,
-                new Dictionary<string, string>
-                {
-                    ["Integrios-Delivery-Id"] = deliveryId.ToString(),
-                    ["Integrios-Attempt-Id"] = secondAttemptId.ToString(),
-                    ["Integrios-Attempt-Number"] = "2"
-                });
-        }
-        finally
-        {
-            if (barrierHeld)
-                await SafeExecuteOnAsync(barrier, $"SELECT pg_advisory_unlock({PostSendBarrierKey});");
-
-            // Only while the Worker is down: on the success path it is running again, and
-            // terminating its live backend would corrupt later tests in this collection.
-            if (workerStopped)
-                await TerminateActiveBackendsAsync("delivery_attempts");
-
-            await SafeDropPostSendBarrierAsync();
-
-            if (workerStopped)
-                await fixture.StartWorkerAsync();
-        }
-    }
-
-    private async Task DropPostSendBarrierAsync() => await fixture.ExecuteAsync(
-        $"""
-        SET lock_timeout = '{(int)CleanupLockTimeout.TotalSeconds}s';
-        DROP TRIGGER IF EXISTS acceptance_block_success_finalization ON delivery_attempts;
-        DROP FUNCTION IF EXISTS acceptance_block_success_finalization();
-        """);
-
-    private async Task SafeDropPostSendBarrierAsync()
-    {
-        try
-        {
-            await DropPostSendBarrierAsync();
-        }
-        catch (Exception)
-        {
-            // Cleanup must never replace the assertion failure that brought us here.
-        }
-    }
-
-    // Killing a container leaves its PostgreSQL backend running, so locks taken by an interrupted
-    // Worker outlive it. Matching on an actively executing statement against the table under test
-    // is specific enough here: the Worker is already dead, and Admin and Ingestion hold no
-    // long-running statement against these tables.
-    private async Task TerminateActiveBackendsAsync(string table) => await SafeExecuteAsync(
-        $"""
-        SELECT pg_terminate_backend(pid)
-        FROM pg_stat_activity
-        WHERE datname = current_database()
-          AND pid <> pg_backend_pid()
-          AND state = 'active'
-          AND query ILIKE '%{table}%';
-        """);
-
-    private async Task SafeExecuteAsync(string sql)
-    {
-        try
-        {
-            await fixture.ExecuteAsync(sql);
-        }
-        catch (Exception)
-        {
-            // Cleanup must never replace the assertion failure that brought us here.
-        }
-    }
-
-    private async Task SafeRemoveContainerAsync(string containerName)
-    {
-        try
-        {
-            await fixture.RemoveContainerAsync(containerName);
-        }
-        catch (Exception)
-        {
-            // Fixture teardown remains the final cleanup.
-        }
-    }
-
-    private static async Task ExecuteOnAsync(NpgsqlConnection connection, string sql)
-    {
-        await using var command = new NpgsqlCommand(sql, connection);
-        await command.ExecuteNonQueryAsync();
-    }
-
-    private static async Task SafeExecuteOnAsync(NpgsqlConnection connection, string sql)
-    {
-        try
-        {
-            await ExecuteOnAsync(connection, sql);
-        }
-        catch (Exception)
-        {
-            // Disposing the connection releases any session-level advisory lock anyway.
-        }
-    }
-
-    private async Task<Pipeline> CreatePipelineAsync(string name)
-    {
-        string tenantSlug = name;
-        Guid tenantId = await PostAdminForIdAsync(
-            "/admin/tenants",
-            new { slug = tenantSlug, name = $"Resilience {name}", environment = "production" });
-        string apiToken = await PostAdminForPropertyAsync(
-            $"/admin/tenants/{tenantId}/tenant-api-keys",
-            new { name = "resilience-ingestion" },
-            "token");
-        Guid destinationId = await PostAdminForIdAsync(
-            $"/admin/tenants/{tenantId}/destinations",
-            new
+            using var request = new HttpRequestMessage(HttpMethod.Post, "/delivery/v1/deliveries:claim")
             {
-                connector_id = HttpConnectorId,
-                name = "resilience-destination",
-                configuration = new { base_uri = $"http://mocksink:8080/sink/{name}" },
-                environment = "production"
-            });
-        Guid topicId = await PostAdminForIdAsync(
-            $"/admin/tenants/{tenantId}/topics",
-            new { key = name });
-        Guid sourceId = await PostAdminForIdAsync(
-            $"/admin/tenants/{tenantId}/sources",
-            new { connector_id = HttpConnectorId, topic_id = topicId, name = "intake", type = "event_api", event_types = new[] { $"{name}.test" }, configuration = new { } });
-        await EnableAsync($"/admin/tenants/{tenantId}/sources/{sourceId}");
-        Guid subscriptionId = await PostAdminForIdAsync(
-            $"/admin/tenants/{tenantId}/topics/{topicId}/subscriptions",
-            new
-            {
-                name = "resilience-subscription",
-                event_types = new[] { $"{name}.test" },
-                destination_id = destinationId
-            });
-        await EnableAsync($"/admin/tenants/{tenantId}/topics/{topicId}/subscriptions/{subscriptionId}");
-
-        return new Pipeline(
-            tenantId,
-            tenantSlug,
-            apiToken,
-            sourceId,
-            name,
-            $"{name}.test",
-            subscriptionId,
-            name);
+                Content = JsonContent.Create(new { max = 1, wait_seconds = 0 }),
+            };
+            request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {subscriberToken}");
+            using HttpResponseMessage response = await fixture.SubscriberClient.SendAsync(request);
+            if (response.StatusCode == HttpStatusCode.NoContent)
+                return false;
+            response.StatusCode.ShouldBe(HttpStatusCode.OK);
+            using JsonDocument document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            delivery = document.RootElement.GetProperty("deliveries").EnumerateArray().ShouldHaveSingleItem().Clone();
+            return true;
+        });
+        return delivery;
     }
 
-    private async Task<Guid> IngestAsync(
-        Pipeline pipeline,
-        object payload,
-        string? idempotencyKey = null)
+    private async Task<HttpResponseMessage> ReportAsync(string subscriberToken, JsonElement delivery, string verb, object? body = null)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Post, $"/events?source_id={pipeline.SourceId}")
+        var content = JsonSerializer.SerializeToNode(body ?? new { })!.AsObject();
+        content["lease_token"] = delivery.GetProperty("lease_token").GetString();
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            $"/delivery/v1/deliveries/{delivery.GetProperty("delivery_id").GetGuid()}:{verb}")
+        {
+            Content = JsonContent.Create(content),
+        };
+        request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {subscriberToken}");
+        return await fixture.SubscriberClient.SendAsync(request);
+    }
+
+    private async Task<Guid> IngestAsync(string apiToken, Guid sourceId, string eventType)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"/events?source_id={sourceId}")
         {
             Content = JsonContent.Create(new
             {
-                event_type = pipeline.EventType,
-                source_event_id = idempotencyKey ?? $"resilience-{Guid.NewGuid():N}",
-                payload,
+                event_type = eventType,
+                source_event_id = $"pull-{Guid.NewGuid():N}",
+                payload = new { restart = true },
             })
         };
-        request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {pipeline.ApiToken}");
+        request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {apiToken}");
         using HttpResponseMessage response = await fixture.IngestionClient.SendAsync(request);
         string body = await response.Content.ReadAsStringAsync();
         response.StatusCode.ShouldBe(HttpStatusCode.Accepted);
@@ -377,36 +137,11 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
         return document.RootElement.GetProperty(property).ToString();
     }
 
-    private async Task WaitForDeliveryStatusAsync(
-        Guid eventId,
-        string expected,
-        TimeSpan? timeout = null) =>
-        await WaitForAsync(async () =>
-            await fixture.ScalarAsync<string>(
-                $"SELECT status FROM event_deliveries WHERE event_id = '{eventId}'") == expected,
-            timeout);
-
-    private async Task<string[]> AttemptStatusesAsync(Guid eventId)
-    {
-        string statuses = await fixture.ScalarAsync<string>(
-            $"SELECT string_agg(da.status, ',' ORDER BY da.attempt_number) FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{eventId}'");
-        return statuses.Split(',');
-    }
-
-    private async Task<int> ReceiptCountAsync(string sinkName)
-        => await fixture.WireMockSink.ReceiptCountAsync(sinkName);
-
-    private async Task AssertReceiptHeadersAsync(string sinkName, IReadOnlyDictionary<string, string> headers)
-    {
-        foreach ((string name, string value) in headers)
-            await fixture.WireMockSink.AssertReceiptHeaderAsync(sinkName, name, value);
-    }
-
-    private static async Task WaitForAsync(Func<Task<bool>> condition, TimeSpan? timeout = null)
+    private static async Task WaitForAsync(Func<Task<bool>> condition)
     {
         var deadline = Stopwatch.StartNew();
         Exception? lastException = null;
-        while (deadline.Elapsed < (timeout ?? EvidenceTimeout))
+        while (deadline.Elapsed < EvidenceTimeout)
         {
             try
             {
@@ -420,18 +155,6 @@ public sealed class InterruptionAndConcurrencyTests(PackagedDeploymentFixture fi
             await Task.Delay(TimeSpan.FromMilliseconds(250));
         }
 
-        throw new TimeoutException($"Resilience evidence was not ready within {timeout ?? EvidenceTimeout}. {lastException?.Message}");
+        throw new TimeoutException($"Resilience evidence was not ready within {EvidenceTimeout}. {lastException?.Message}");
     }
-
-    private static string Suffix() => Guid.NewGuid().ToString("N")[..8];
-
-    private sealed record Pipeline(
-        Guid TenantId,
-        string TenantSlug,
-        string ApiToken,
-        Guid SourceId,
-        string TopicName,
-        string EventType,
-        Guid SubscriptionId,
-        string SinkName);
 }

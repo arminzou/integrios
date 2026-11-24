@@ -129,9 +129,7 @@ var appNames = {
   subscriber: '${namePrefix}-subscriber'
 }
 var jobNames = {
-  migrate: '${namePrefix}-migrate'
-  grantRuntime: '${namePrefix}-grant'
-  bootstrap: '${namePrefix}-bootstrap'
+  setup: '${namePrefix}-setup'
   validateSecrets: '${namePrefix}-validate'
 }
 var registryServer = '${registryName}.azurecr.io'
@@ -167,7 +165,6 @@ var ingestionDatabaseEnvironment = databaseEnvironment(databaseProvider, databas
 var workerDatabaseEnvironment = databaseEnvironment(databaseProvider, databaseServerFqdn, workerIdentity.name, workerIdentity.properties.clientId)
 var subscriberDatabaseEnvironment = databaseEnvironment(databaseProvider, databaseServerFqdn, subscriberIdentity.name, subscriberIdentity.properties.clientId)
 var migrateDatabaseEnvironment = databaseEnvironment(databaseProvider, databaseServerFqdn, migrateIdentity.name, migrateIdentity.properties.clientId)
-var bootstrapDatabaseEnvironment = databaseEnvironment(databaseProvider, databaseServerFqdn, bootstrapIdentity.name, bootstrapIdentity.properties.clientId)
 // Worker and the secret-validation job share Worker's identity and its Destination-secret vault.
 var destinationSecretsEnvironment = [
   { name: 'Integrios__KeyVault__Uri', value: destinationSecretsVault.properties.vaultUri }
@@ -614,10 +611,6 @@ resource migrateIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-
   name: 'id-${namePrefix}-migrate'
   location: location
 }
-resource bootstrapIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
-  name: 'id-${namePrefix}-bootstrap'
-  location: location
-}
 
 module acrPull 'acr-pull.bicep' = {
   name: 'acr-pull'
@@ -630,7 +623,6 @@ module acrPull 'acr-pull.bicep' = {
       workerIdentity.properties.principalId
       subscriberIdentity.properties.principalId
       migrateIdentity.properties.principalId
-      bootstrapIdentity.properties.principalId
     ]
   }
 }
@@ -640,10 +632,10 @@ resource adminOidcSecret 'Microsoft.Authorization/roleAssignments@2022-04-01' = 
   name: guid(adminOidcClientSecretResource.id, adminIdentity.id, keyVaultSecretsUserRoleId)
   properties: { principalId: adminIdentity.properties.principalId, principalType: 'ServicePrincipal', roleDefinitionId: keyVaultSecretsUserRoleId }
 }
-resource bootstrapOperatorSecret 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+resource setupOperatorSecret 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   scope: operatorKeySecretResource
-  name: guid(operatorKeySecretResource.id, bootstrapIdentity.id, keyVaultSecretsUserRoleId)
-  properties: { principalId: bootstrapIdentity.properties.principalId, principalType: 'ServicePrincipal', roleDefinitionId: keyVaultSecretsUserRoleId }
+  name: guid(operatorKeySecretResource.id, migrateIdentity.id, keyVaultSecretsUserRoleId)
+  properties: { principalId: migrateIdentity.properties.principalId, principalType: 'ServicePrincipal', roleDefinitionId: keyVaultSecretsUserRoleId }
 }
 
 // Only Ingestion reads Source secrets; only Worker, and the secret-validation job that runs as
@@ -841,8 +833,11 @@ resource subscriber 'Microsoft.App/containerApps@2025-07-01' = {
   dependsOn: [acrPull]
 }
 
-resource migrateJob 'Microsoft.App/jobs@2025-07-01' = {
-  name: jobNames.migrate
+// One idempotent job before the runtimes start: migrations, runtime principal grants, then the
+// first OperatorKey. It runs as the database administrator identity, the only one allowed to
+// change the schema.
+resource setupJob 'Microsoft.App/jobs@2025-07-01' = {
+  name: jobNames.setup
   location: location
   identity: { type: 'UserAssigned', userAssignedIdentities: { '${migrateIdentity.id}': {} } }
   properties: {
@@ -853,98 +848,39 @@ resource migrateJob 'Microsoft.App/jobs@2025-07-01' = {
       replicaRetryLimit: 1
       manualTriggerConfig: { parallelism: 1, replicaCompletionCount: 1 }
       registries: [{ server: registryServer, identity: migrateIdentity.id }]
-      secrets: []
+      secrets: [
+        { name: 'operator-key', keyVaultUrl: operatorKeySecretResource.properties.secretUriWithVersion, identity: migrateIdentity.id }
+      ]
     }
     template: {
       containers: [{
-        name: 'migrate'
+        name: 'setup'
         image: image
-        args: ['admin', 'database', 'migrate']
-        env: migrateDatabaseEnvironment
-        resources: { cpu: json('0.5'), memory: '1Gi' }
-      }]
-    }
-  }
-  dependsOn: [acrPull, sqlServerEntraOnlyAuthentication]
-}
-
-resource grantRuntimeJob 'Microsoft.App/jobs@2025-07-01' = {
-  name: jobNames.grantRuntime
-  location: location
-  identity: { type: 'UserAssigned', userAssignedIdentities: { '${migrateIdentity.id}': {} } }
-  properties: {
-    environmentId: environment.id
-    configuration: {
-      triggerType: 'Manual'
-      replicaTimeout: 600
-      replicaRetryLimit: 1
-      manualTriggerConfig: { parallelism: 1, replicaCompletionCount: 1 }
-      registries: [{ server: registryServer, identity: migrateIdentity.id }]
-      secrets: []
-    }
-    template: {
-      containers: [{
-        name: 'grant-runtime'
-        image: image
-        args: ['admin', 'database', 'grant-runtime']
+        args: ['admin', 'setup']
         env: concat(migrateDatabaseEnvironment, [
           { name: 'Database__RuntimePrincipals__0__Name', value: adminIdentity.name }
           { name: 'Database__RuntimePrincipals__0__Scope', value: 'control-plane' }
           { name: 'Database__RuntimePrincipals__0__EntraClientId', value: adminIdentity.properties.clientId }
           { name: 'Database__RuntimePrincipals__0__EntraObjectId', value: adminIdentity.properties.principalId }
-          { name: 'Database__RuntimePrincipals__1__Name', value: bootstrapIdentity.name }
-          { name: 'Database__RuntimePrincipals__1__Scope', value: 'control-plane' }
-          { name: 'Database__RuntimePrincipals__1__EntraClientId', value: bootstrapIdentity.properties.clientId }
-          { name: 'Database__RuntimePrincipals__1__EntraObjectId', value: bootstrapIdentity.properties.principalId }
-          { name: 'Database__RuntimePrincipals__2__Name', value: ingestionIdentity.name }
+          { name: 'Database__RuntimePrincipals__1__Name', value: ingestionIdentity.name }
+          { name: 'Database__RuntimePrincipals__1__Scope', value: 'data-plane' }
+          { name: 'Database__RuntimePrincipals__1__EntraClientId', value: ingestionIdentity.properties.clientId }
+          { name: 'Database__RuntimePrincipals__1__EntraObjectId', value: ingestionIdentity.properties.principalId }
+          { name: 'Database__RuntimePrincipals__2__Name', value: workerIdentity.name }
           { name: 'Database__RuntimePrincipals__2__Scope', value: 'data-plane' }
-          { name: 'Database__RuntimePrincipals__2__EntraClientId', value: ingestionIdentity.properties.clientId }
-          { name: 'Database__RuntimePrincipals__2__EntraObjectId', value: ingestionIdentity.properties.principalId }
-          { name: 'Database__RuntimePrincipals__3__Name', value: workerIdentity.name }
+          { name: 'Database__RuntimePrincipals__2__EntraClientId', value: workerIdentity.properties.clientId }
+          { name: 'Database__RuntimePrincipals__2__EntraObjectId', value: workerIdentity.properties.principalId }
+          { name: 'Database__RuntimePrincipals__3__Name', value: subscriberIdentity.name }
           { name: 'Database__RuntimePrincipals__3__Scope', value: 'data-plane' }
-          { name: 'Database__RuntimePrincipals__3__EntraClientId', value: workerIdentity.properties.clientId }
-          { name: 'Database__RuntimePrincipals__3__EntraObjectId', value: workerIdentity.properties.principalId }
-          { name: 'Database__RuntimePrincipals__4__Name', value: subscriberIdentity.name }
-          { name: 'Database__RuntimePrincipals__4__Scope', value: 'data-plane' }
-          { name: 'Database__RuntimePrincipals__4__EntraClientId', value: subscriberIdentity.properties.clientId }
-          { name: 'Database__RuntimePrincipals__4__EntraObjectId', value: subscriberIdentity.properties.principalId }
-        ])
-        resources: { cpu: json('0.5'), memory: '1Gi' }
-      }]
-    }
-  }
-  dependsOn: [acrPull, migrateJob]
-}
-
-resource bootstrapJob 'Microsoft.App/jobs@2025-07-01' = {
-  name: jobNames.bootstrap
-  location: location
-  identity: { type: 'UserAssigned', userAssignedIdentities: { '${bootstrapIdentity.id}': {} } }
-  properties: {
-    environmentId: environment.id
-    configuration: {
-      triggerType: 'Manual'
-      replicaTimeout: 600
-      replicaRetryLimit: 1
-      manualTriggerConfig: { parallelism: 1, replicaCompletionCount: 1 }
-      registries: [{ server: registryServer, identity: bootstrapIdentity.id }]
-      secrets: [
-        { name: 'operator-key', keyVaultUrl: operatorKeySecretResource.properties.secretUriWithVersion, identity: bootstrapIdentity.id }
-      ]
-    }
-    template: {
-      containers: [{
-        name: 'bootstrap'
-        image: image
-        args: ['admin', 'bootstrap']
-        env: concat(bootstrapDatabaseEnvironment, [
+          { name: 'Database__RuntimePrincipals__3__EntraClientId', value: subscriberIdentity.properties.clientId }
+          { name: 'Database__RuntimePrincipals__3__EntraObjectId', value: subscriberIdentity.properties.principalId }
           { name: 'INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET', secretRef: 'operator-key' }
         ])
         resources: { cpu: json('0.5'), memory: '1Gi' }
       }]
     }
   }
-  dependsOn: [acrPull, bootstrapOperatorSecret, grantRuntimeJob]
+  dependsOn: [acrPull, sqlServerEntraOnlyAuthentication, setupOperatorSecret]
 }
 
 resource validateSecretsJob 'Microsoft.App/jobs@2025-07-01' = {
@@ -971,7 +907,7 @@ resource validateSecretsJob 'Microsoft.App/jobs@2025-07-01' = {
       }]
     }
   }
-  dependsOn: [acrPull, workerDestinationSecrets, grantRuntimeJob]
+  dependsOn: [acrPull, workerDestinationSecrets, setupJob]
 }
 
 module telemetryPublisher 'telemetry-publisher.bicep' = {

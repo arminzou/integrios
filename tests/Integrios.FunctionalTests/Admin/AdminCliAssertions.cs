@@ -2,11 +2,11 @@ using System.Security.Cryptography;
 using System.Text;
 using Npgsql;
 
-namespace Integrios.AcceptanceTests;
+namespace Integrios.FunctionalTests.Admin;
 
-internal static class DatabaseLifecycleAssertions
+internal static class AdminCliAssertions
 {
-    public static async Task ExecuteAsync(AcceptanceDatabase database, string sql)
+    public static async Task ExecuteAsync(CliDatabase database, string sql)
     {
         await using var connection = new NpgsqlConnection(database.ConnectionString);
         await connection.OpenAsync();
@@ -15,26 +15,26 @@ internal static class DatabaseLifecycleAssertions
     }
 
     public static Task<long> CountAsync(
-        AcceptanceDatabase database,
+        CliDatabase database,
         string table,
         string where = "TRUE") =>
-        DatabaseLifecycleFixture.ScalarAsync<long>(database, $"SELECT COUNT(*) FROM {table} WHERE {where}");
+        AdminCliFixture.ScalarAsync<long>(database, $"SELECT COUNT(*) FROM {table} WHERE {where}");
 
     public static Task<string> ColumnShapeAsync(
-        AcceptanceDatabase database,
+        CliDatabase database,
         string table,
         string column) =>
-        DatabaseLifecycleFixture.ScalarAsync<string>(
+        AdminCliFixture.ScalarAsync<string>(
             database,
             $"SELECT data_type || '|' || is_nullable FROM information_schema.columns WHERE table_schema = 'public' AND table_name = '{table}' AND column_name = '{column}'");
 
     public static Task<long> CountColumnsAsync(
-        AcceptanceDatabase database,
+        CliDatabase database,
         string table,
         params string[] columns)
     {
         string names = string.Join(", ", columns.Select(column => $"'{column}'"));
-        return DatabaseLifecycleFixture.ScalarAsync<long>(
+        return AdminCliFixture.ScalarAsync<long>(
             database,
             $"SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'public' AND table_name = '{table}' AND column_name IN ({names})");
     }

@@ -55,5 +55,5 @@ and `Gotchas`.
   in the dashboard and the Admin API.
 - [Pull delivery](./pull-delivery.md) covers a Subscriber claiming from the `subscriber` role
   through the `Integrios.Client` SDK or raw HTTP, and every SDK outcome.
-- [Database CLI](./database-cli.md) covers `integrios admin database migrate`, `info`, and
-  `grant-runtime`.
+- [Database CLI](./database-cli.md) covers `integrios admin setup` and `integrios admin database
+  migrate`, `info`, and `grant-runtime`.

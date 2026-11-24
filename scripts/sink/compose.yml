@@ -1,0 +1,13 @@
+# A controllable HTTP Destination for local tooling, layered over the repository compose.yml:
+#   docker compose -f compose.yml -f scripts/sink/compose.yml up -d mocksink
+# It is not part of the product. Inside the Compose network the Worker reaches it at
+# http://mocksink:8080; WireMock's admin API answers on the host port. Relative paths resolve
+# against the repository root, the Compose project directory.
+services:
+  mocksink:
+    image: wiremock/wiremock:3.13.1
+    command: ["--global-response-templating"]
+    volumes:
+      - ./scripts/sink/mappings:/home/wiremock/mappings:ro
+    ports:
+      - "127.0.0.1:${INTEGRIOS_MOCKSINK_PORT:-5054}:8080"

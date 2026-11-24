@@ -1,6 +1,5 @@
 @baseUrl = {{ADMIN_BASE_URL}}
 @ingestionBaseUrl = {{INGESTION_BASE_URL}}
-@mocksinkAdmin = {{MOCKSINK_ADMIN_BASE_URL}}
 @sinkBase = {{SINK_BASE}}
 @operatorKey = Authorization: OperatorKey global_operator_key:operator_bootstrap_secret
 
@@ -11,14 +10,8 @@
 # The Tenant API key is shared by the Tenant, but only Event API intake uses it.
 #
 # Use a clean database: rerunning Shared setup returns 409 for the existing Tenant slug.
-# SINK_BASE must be reachable by Worker. Compose normally uses http://mocksink:8080.
-
-###
-# Shared setup — reset recorded deliveries
-DELETE {{mocksinkAdmin}}/__admin/requests
-
-###
-POST {{mocksinkAdmin}}/__admin/mappings/reset
+# SINK_BASE is an HTTP endpoint you control that the Worker can reach. Check each delivery in the
+# dashboard's Event history after the Worker runs.
 
 ###
 # Shared setup — apply one bidirectional Connector for all three journeys
@@ -169,16 +162,6 @@ Content-Type: application/json
   }
 }
 
-###
-# Journey 1.6 — rerun after Worker delivers; the response should contain one request
-POST {{mocksinkAdmin}}/__admin/requests/find
-Content-Type: application/json
-
-{
-  "method": "POST",
-  "urlPath": "/sink/orders-erp"
-}
-
 ###############################################################################
 # Journey 2 — HMAC Webhook -> Storefront Topic -> Audit Destination
 #
@@ -303,16 +286,6 @@ Content-Type: application/json
 
 {"delivery_id":"storefront-delivery-1001","result":"accepted"}
 
-###
-# Journey 2.6 — rerun after Worker delivers; the response should contain one request
-POST {{mocksinkAdmin}}/__admin/requests/find
-Content-Type: application/json
-
-{
-  "method": "POST",
-  "urlPath": "/sink/webhook-audit"
-}
-
 ###############################################################################
 # Journey 3 — Azure Service Bus -> Warehouse Topic -> WMS Destination
 #
@@ -422,12 +395,3 @@ POST {{baseUrl}}/admin/tenants/{{tenantId}}/topics/{{createWarehouseTopic.respon
 # Pipe this JSON into scripts/send-service-bus.cs using your private emulator connection string:
 # {"event_type":"warehouse.receipt.recorded","source_event_id":"receipt-1001","payload":{"receipt_id":"1001","status":"received"}}
 
-###
-# Journey 3.6 — rerun after the broker receiver and Worker finish; expect one request
-POST {{mocksinkAdmin}}/__admin/requests/find
-Content-Type: application/json
-
-{
-  "method": "POST",
-  "urlPath": "/sink/warehouse-wms"
-}

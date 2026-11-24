@@ -78,8 +78,9 @@ opening a PR; local proof supplements the shared CI gate.
 - `tests/` holds the xUnit test projects, including `tests/Integrios.UnitTests` for the `integrios`
   executable; a project's name states what it needs to run.
 - `docs/` holds the public documentation and is the source of the public site.
-- The development Compose stack includes WireMock as a controllable local sink for testing and
-  demos. It is not part of the deployable product.
+- `scripts/sink/compose.yml` layers a WireMock sink over the development stack for local tooling:
+  the seed scripts and the verification skill start it as a controllable HTTP Destination. It is
+  not part of the Compose stack or the deployable product.
 
 ## Choosing tests
 
