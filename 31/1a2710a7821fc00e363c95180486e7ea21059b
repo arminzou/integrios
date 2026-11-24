@@ -1,0 +1,19 @@
+docs/setup.md
+  s_f3e8aadbe2a1d4::t_cfd39a56c02c32 191
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "311a2710a7821fc00e363c95180486e7ea21059b",
+  "prompts": {},
+  "sessions": {
+    "s_f3e8aadbe2a1d4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "88fcd6b0-223d-4671-bf61-c55dcb9993ec",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Armin Zou <arminzou@outlook.com>"
+    }
+  }
+}
