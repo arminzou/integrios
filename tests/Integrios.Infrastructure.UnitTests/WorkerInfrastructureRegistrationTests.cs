@@ -130,6 +130,123 @@ public sealed class WorkerInfrastructureRegistrationTests
         observation.FirstRequest.ShouldContain("X-Api-Key: must-not-follow", Case.Insensitive);
     }
 
+    [Theory]
+    [InlineData(nameof(IDeliveryClient))]
+    [InlineData("oauth2-token")]
+    public async Task WorkerInfrastructureRegistration_OutboundClientsDoNotReplayCookies(string clientName)
+    {
+        // Both responses close the connection, so the second request needs a fresh one and any
+        // cookie it carries can only come from the handler's cookie store.
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        string destination = $"http://127.0.0.1:{((IPEndPoint)listener.LocalEndpoint).Port}/hook";
+        Task<List<string>> serverTask = ServeAsync(listener,
+        [
+            "HTTP/1.1 200 OK\r\nSet-Cookie: session=tenant-a; Path=/\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+            "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+        ]);
+        await using ServiceProvider provider = BuildWorkerProvider(BuildConfiguration([]));
+        HttpClient client = provider.GetRequiredService<IHttpClientFactory>().CreateClient(clientName);
+
+        (await client.PostAsync(destination, new StringContent("{}"))).Dispose();
+        (await client.PostAsync(destination, new StringContent("{}"))).Dispose();
+        List<string> requests = await serverTask;
+
+        requests.Count.ShouldBe(2);
+        requests[1].ShouldNotContain("Cookie:", Case.Insensitive);
+    }
+
+    [Fact]
+    public async Task WorkerInfrastructureRegistration_DeliveryClientReadsOnlyTheCappedBody()
+    {
+        // The response declares 10 MB, sends 64 KB, then stalls. A client that buffers the whole
+        // body waits for bytes that never arrive; a capped read finishes from what was sent.
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        string destination = $"http://127.0.0.1:{((IPEndPoint)listener.LocalEndpoint).Port}/hook";
+        using var stopServer = new CancellationTokenSource();
+        Task serverTask = StallAfterAsync(listener, declaredLength: 10_000_000, sentBytes: 64 * 1024, stopServer.Token);
+        await using ServiceProvider provider = BuildWorkerProvider(BuildConfiguration(ShortTimings()));
+
+        DeliveryResult result = await provider.GetRequiredService<IDeliveryClient>().DeliverAsync(
+            new OutboundHttpMessage("POST", destination, new Dictionary<string, string>(), "{}"),
+            null, CancellationToken.None);
+
+        await stopServer.CancelAsync();
+        await serverTask;
+        result.IsTimeout.ShouldBeFalse();
+        result.Succeeded.ShouldBeTrue();
+        result.ResponseBodyTruncated.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task WorkerInfrastructureRegistration_DeliveryClientTimesOutABodyThatStallsBelowTheCap()
+    {
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        string destination = $"http://127.0.0.1:{((IPEndPoint)listener.LocalEndpoint).Port}/hook";
+        using var stopServer = new CancellationTokenSource();
+        Task serverTask = StallAfterAsync(listener, declaredLength: 4096, sentBytes: 16, stopServer.Token);
+        await using ServiceProvider provider = BuildWorkerProvider(BuildConfiguration(ShortTimings()));
+
+        DeliveryResult result = await provider.GetRequiredService<IDeliveryClient>().DeliverAsync(
+            new OutboundHttpMessage("POST", destination, new Dictionary<string, string>(), "{}"),
+            null, CancellationToken.None);
+
+        await stopServer.CancelAsync();
+        await serverTask;
+        result.Succeeded.ShouldBeFalse();
+        result.IsTimeout.ShouldBeTrue();
+    }
+
+    private static Dictionary<string, string?> ShortTimings() => new()
+    {
+        ["Integrios:Delivery:HttpTimeout"] = "00:00:02",
+        ["Integrios:Delivery:AttemptDeadline"] = "00:00:03",
+        ["Integrios:Delivery:LeaseDuration"] = "00:00:10",
+        ["Integrios:Delivery:ShutdownGracePeriod"] = "00:00:05"
+    };
+
+    private static ServiceProvider BuildWorkerProvider(IConfiguration configuration)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddWorkerApplicationServices();
+        services.AddWorkerInfrastructureServices(configuration);
+        return services.BuildServiceProvider();
+    }
+
+    private static async Task<List<string>> ServeAsync(TcpListener listener, IReadOnlyList<string> responses)
+    {
+        var requests = new List<string>();
+        foreach (string response in responses)
+        {
+            using TcpClient client = await listener.AcceptTcpClientAsync();
+            requests.Add(await ReadHeadersAsync(client.GetStream(), CancellationToken.None));
+            await WriteResponseAsync(client.GetStream(), response, CancellationToken.None);
+        }
+
+        return requests;
+    }
+
+    private static async Task StallAfterAsync(
+        TcpListener listener, int declaredLength, int sentBytes, CancellationToken stop)
+    {
+        using TcpClient client = await listener.AcceptTcpClientAsync(stop);
+        NetworkStream stream = client.GetStream();
+        await ReadHeadersAsync(stream, stop);
+        await WriteResponseAsync(
+            stream, $"HTTP/1.1 200 OK\r\nContent-Length: {declaredLength}\r\n\r\n", stop);
+        await stream.WriteAsync(new byte[sentBytes], stop);
+        try
+        {
+            await Task.Delay(Timeout.Infinite, stop);
+        }
+        catch (OperationCanceledException) when (stop.IsCancellationRequested)
+        {
+        }
+    }
+
     private static IConfiguration BuildConfiguration(Dictionary<string, string?> values)
     {
         values["ConnectionStrings:Postgres"] = "Host=localhost;Database=integrios;Username=integrios;Password=integrios";
