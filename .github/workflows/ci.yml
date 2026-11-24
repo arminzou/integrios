@@ -526,7 +526,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
       id-token: write
       attestations: write
     steps:
@@ -584,14 +584,17 @@ jobs:
         with:
           subject-path: ${{ steps.archive.outputs.archive }}
 
-      # A tag push only: a dispatch on a tag skips `package`, so release-assets would not refresh
-      # checksums.txt for a replaced archive.
-      - name: Attach the archive to the release
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-        env:
-          GH_TOKEN: ${{ github.token }}
-          ARCHIVE: ${{ steps.archive.outputs.archive }}
-        run: gh release upload "$GITHUB_REF_NAME" "$ARCHIVE" --clobber
+      # release-assets attaches it together with checksums.txt, so a release never shows an
+      # archive its manifest does not describe (rebuilt archives are not byte-identical).
+      - name: Keep the archive for the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: release-windows-zip-${{ github.run_id }}
+          path: ${{ steps.archive.outputs.archive }}
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 7
 
       - name: Record the archive digest
         shell: bash
@@ -633,9 +636,16 @@ jobs:
           name: release-image-digest-${{ github.run_id }}
           path: image-digest
 
-      - name: Publish asset checksums
+      - name: Download the Windows archive
+        uses: actions/download-artifact@v8.0.1
+        with:
+          name: release-windows-zip-${{ github.run_id }}
+          path: windows-zip
+
+      - name: Publish the archive and asset checksums
         shell: bash
         run: |
+          gh release upload "$GITHUB_REF_NAME" windows-zip/* --clobber
           gh release download "$GITHUB_REF_NAME" --dir release-assets
           cd release-assets
           # Reruns download the previous manifest along with the assets it covers.
