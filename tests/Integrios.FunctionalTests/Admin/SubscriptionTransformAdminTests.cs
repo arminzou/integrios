@@ -241,6 +241,30 @@ public sealed class SubscriptionTransformAdminTests : SubscriptionAdminTestBase
     }
 
     [Fact]
+    public async Task PreviewMapping_UsesSampleInputAndContext_ReturnsTransformedOutput()
+    {
+        using var response = await client.SendAsync(AdminRequest(
+            HttpMethod.Post,
+            "/admin/transform/preview",
+            new
+            {
+                transform = new
+                {
+                    engine = "jsonata",
+                    version = "1",
+                    expression = """{ "kind": $context.event_type, "amount": amount, "topic": $context.topic_name }"""
+                },
+                sample_input = new { amount = 42 },
+                sample_context = new { event_type = "payment.created", topic_name = "payments" }
+            }));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        JsonElement body = await response.Content.ReadFromJsonAsync<JsonElement>(HostJson.Options);
+        JsonElement expected = JsonSerializer.SerializeToElement(new { kind = "payment.created", amount = 42, topic = "payments" });
+        JsonElement.DeepEquals(body.GetProperty("output"), expected).ShouldBeTrue();
+    }
+
+    [Fact]
     public async Task PreviewMapping_InvalidConfig_ReturnsBadRequestWithErrorBody()
     {
         var response = await client.SendAsync(AdminRequest(

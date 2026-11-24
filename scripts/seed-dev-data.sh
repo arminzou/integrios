@@ -5,7 +5,8 @@
 # Everything is created through the public Admin and Ingestion APIs -- no direct inserts -- so the
 # resulting rows are exactly what the platform itself would have written. Only the wipe touches SQL.
 #
-# Requires the Compose stack (`make up`), curl, jq, and docker compose. The Service Bus queue demo
+# Requires the Compose stack (`make up`), curl, jq, and docker compose. It starts the local
+# WireMock sink from scripts/sink/compose.yml as the demo Destinations. The Service Bus queue demo
 # is opt-in: set INTEGRIOS_SEED_QUEUE_DEMO=1 to start the emulator and seed the queue path, which
 # additionally needs the .NET SDK. The PowerShell twin, Seed-DevData.ps1, is kept in sync.
 set -euo pipefail
@@ -56,6 +57,10 @@ fi
 # --- 1. Wipe tenant-scoped data --------------------------------------------------------------
 # Connectors and OperatorKeys are deployment-level and survive: they are what bootstrap and the
 # manifest apply own, not demo data.
+say "starting the local sink"
+docker compose -f compose.yml -f scripts/sink/compose.yml up -d mocksink
+curl -fsS --retry 20 --retry-connrefused --retry-delay 1 "$MOCKSINK/__admin/health" > /dev/null
+
 say "clearing existing tenant data"
 psql_q "truncate table delivery_attempts, event_deliveries, outbox, events, subscriptions, sources, topics, destinations, tenant_api_keys, tenants cascade;"
 curl -fsS -X DELETE "$MOCKSINK/__admin/requests" > /dev/null

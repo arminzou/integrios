@@ -329,6 +329,20 @@ public sealed class DeliveryRecoveryAdminTests : AdminApiTestBase, IClassFixture
     }
 
     [Fact]
+    public async Task GetDeliveries_OtherTenantEvent_Returns404()
+    {
+        var (eventId, _) = await fixture.SeedDeadLetteredDeliveryAsync();
+
+        using var own = await client.SendAsync(AdminRequest(
+            HttpMethod.Get, $"/admin/tenants/{fixture.TenantId}/events/{eventId}/deliveries"));
+        own.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        using var other = await client.SendAsync(AdminRequest(
+            HttpMethod.Get, $"/admin/tenants/{fixture.OtherTenantId}/events/{eventId}/deliveries"));
+        other.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
     public async Task Replay_OtherTenantEvent_Returns404()
     {
         var (eventId, deliveryId) = await fixture.SeedDeadLetteredDeliveryAsync();

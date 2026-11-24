@@ -3,16 +3,16 @@ using Integrios.Admin;
 using Npgsql;
 using Testcontainers.PostgreSql;
 
-namespace Integrios.AcceptanceTests;
+namespace Integrios.FunctionalTests.Admin;
 
-public sealed class DatabaseLifecycleFixture : IAsyncLifetime
+public sealed class AdminCliFixture : IAsyncLifetime
 {
     private const string PostgresUser = "integrios";
     private const string PostgresPassword = "integrios_test";
 
     private readonly PostgreSqlContainer postgres;
 
-    public DatabaseLifecycleFixture()
+    public AdminCliFixture()
     {
         postgres = new PostgreSqlBuilder("postgres:16.14-alpine3.24")
             .WithDatabase("postgres")
@@ -25,9 +25,9 @@ public sealed class DatabaseLifecycleFixture : IAsyncLifetime
 
     public Task DisposeAsync() => postgres.DisposeAsync().AsTask();
 
-    public async Task<AcceptanceDatabase> CreateDatabaseAsync()
+    public async Task<CliDatabase> CreateDatabaseAsync()
     {
-        string databaseName = $"acceptance_{Guid.NewGuid():N}";
+        string databaseName = $"cli_{Guid.NewGuid():N}";
 
         await using (var connection = new NpgsqlConnection(postgres.GetConnectionString()))
         {
@@ -41,10 +41,10 @@ public sealed class DatabaseLifecycleFixture : IAsyncLifetime
             Database = databaseName,
         }.ConnectionString;
 
-        return new AcceptanceDatabase(databaseName, connectionString);
+        return new CliDatabase(databaseName, connectionString);
     }
 
-    public static async Task<T> ScalarAsync<T>(AcceptanceDatabase database, string sql)
+    public static async Task<T> ScalarAsync<T>(CliDatabase database, string sql)
     {
         await using var connection = new NpgsqlConnection(database.ConnectionString);
         await connection.OpenAsync();
@@ -53,22 +53,28 @@ public sealed class DatabaseLifecycleFixture : IAsyncLifetime
         return (T)(value ?? throw new InvalidOperationException("Query returned null."));
     }
 
-    public static Task<BootstrapProcessResult> RunProductionBootstrapAsync(
-        AcceptanceDatabase database,
+    public static Task<AdminProcessResult> RunProductionSetupAsync(
+        CliDatabase database,
         string? secret) =>
         RunAdminProcessAsync(
             database,
-            ["bootstrap"],
+            ["setup"],
             "INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET",
             secret,
-            "Production Bootstrap",
+            "Production setup",
             new Dictionary<string, string?>
             {
                 ["DOTNET_ENVIRONMENT"] = "Production",
                 ["ASPNETCORE_ENVIRONMENT"] = "Production",
+                ["Database__RuntimePrincipals__0__Name"] = "admin_runtime",
+                ["Database__RuntimePrincipals__0__Scope"] = "control-plane",
+                ["Database__RuntimePrincipals__0__Password"] = "admin_runtime_test",
+                ["Database__RuntimePrincipals__1__Name"] = "data_runtime",
+                ["Database__RuntimePrincipals__1__Scope"] = "data-plane",
+                ["Database__RuntimePrincipals__1__Password"] = "data_runtime_test",
             });
 
-    public static Task<BootstrapProcessResult> RunDatabaseMigrationAsync(AcceptanceDatabase database) =>
+    public static Task<AdminProcessResult> RunDatabaseMigrationAsync(CliDatabase database) =>
         RunAdminProcessAsync(
             database,
             ["database", "migrate"],
@@ -76,8 +82,8 @@ public sealed class DatabaseLifecycleFixture : IAsyncLifetime
             null,
             "Database migration");
 
-    public static Task<BootstrapProcessResult> RunOperatorKeyRotationAsync(
-        AcceptanceDatabase database,
+    public static Task<AdminProcessResult> RunOperatorKeyRotationAsync(
+        CliDatabase database,
         string? secret) =>
         RunAdminProcessAsync(
             database,
@@ -86,8 +92,8 @@ public sealed class DatabaseLifecycleFixture : IAsyncLifetime
             secret,
             "OperatorKey rotation");
 
-    private static async Task<BootstrapProcessResult> RunAdminProcessAsync(
-        AcceptanceDatabase database,
+    private static async Task<AdminProcessResult> RunAdminProcessAsync(
+        CliDatabase database,
         IReadOnlyList<string> arguments,
         string secretVariable,
         string? secret,
@@ -132,14 +138,14 @@ public sealed class DatabaseLifecycleFixture : IAsyncLifetime
             throw new TimeoutException($"{operation} did not exit within one minute.");
         }
 
-        return new BootstrapProcessResult(process.ExitCode, await stdoutTask, await stderrTask);
+        return new AdminProcessResult(process.ExitCode, await stdoutTask, await stderrTask);
     }
 
 }
 
-public sealed record AcceptanceDatabase(string Name, string ConnectionString);
+public sealed record CliDatabase(string Name, string ConnectionString);
 
-public sealed record BootstrapProcessResult(int ExitCode, string StandardOutput, string StandardError)
+public sealed record AdminProcessResult(int ExitCode, string StandardOutput, string StandardError)
 {
     public string Output => StandardOutput + StandardError;
 }

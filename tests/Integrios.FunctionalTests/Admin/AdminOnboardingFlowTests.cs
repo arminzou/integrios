@@ -36,6 +36,19 @@ public sealed class AdminOnboardingFlowTests : AdminApiTestBase, IClassFixture<A
     }
 
     [Fact]
+    public async Task CreateTenant_DuplicateSlug_Returns409()
+    {
+        const string slug = "acme-corp";
+        using var created = await client.SendAsync(AdminRequest(
+            HttpMethod.Post, "/admin/tenants", new { slug, name = "Acme Corp", environment = "production" }));
+        created.StatusCode.ShouldBe(HttpStatusCode.Created);
+
+        using var duplicate = await client.SendAsync(AdminRequest(
+            HttpMethod.Post, "/admin/tenants", new { slug, name = "Duplicate", environment = "production" }));
+        duplicate.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+    }
+
+    [Fact]
     public async Task GlobalAdmin_CanOnboardTenant_FromScratch()
     {
         var tenantResponse = await client.SendAsync(AdminRequest(

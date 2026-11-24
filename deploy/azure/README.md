@@ -4,15 +4,15 @@ This directory is a minimal copy-and-own reference for running one matched Integ
 Azure Container Apps. Copy it, review it, and adapt the Bicep to your networking, capacity,
 availability, security, and operational requirements.
 
-The reference deploys separate Admin, Ingestion, Worker, and Delivery API Container Apps; migration, Bootstrap,
-and secret-validation jobs; one selected managed database; a Key Vault for deployment settings and
+The reference deploys separate Admin, Ingestion, Worker, and Delivery API Container Apps; setup and
+secret-validation jobs; one selected managed database; a Key Vault for deployment settings and
 one Tenant-secret Key Vault per direction; Log Analytics;
 Application Insights; Azure Managed Prometheus; an Operator Workbook; and an Azure Files share for
 Admin's Data Protection key ring. It reuses an existing Azure Container Registry and never
 provisions Service Bus topology.
 
 Every app and job runs the one Integrios image and names its role as the first argument, such as
-`integrios ingestion`, or `integrios admin database migrate` for one of Admin's tools. This profile
+`integrios ingestion`, or `integrios admin setup` for one of Admin's tools. This profile
 has not been requalified on Azure since it moved to the one image, so verify your first deployment
 before you rely on it.
 
@@ -27,7 +27,7 @@ before you rely on it.
 | Network | Public Container Apps environment, Key Vault, telemetry endpoints, and database firewall rules; no VNet or private endpoints. The Data Protection share is reachable from public networks with its storage account key, because Container Apps mounts it with that key and only a VNet could restrict it; treat the key as a credential that can forge Operator sessions |
 | Azure SQL | General Purpose serverless, one vCore maximum, 0.5 minimum capacity, 60-minute auto-pause, local backup redundancy |
 | PostgreSQL | PostgreSQL 16 Burstable B1ms, 32 GiB storage, seven-day local backup, no HA or geo-redundant backup |
-| Deployment | Maintenance window: runtime at zero, migrate, Bootstrap, validate secrets, then start one replica |
+| Deployment | Maintenance window: runtime at zero, setup, validate secrets, then start one replica |
 | Image | Existing Operator-owned ACR; one published release imported into it and deployed pinned by digest |
 | Service Bus | Optional receiver role on an existing namespace; no namespace, queue, topic, or subscription creation |
 
@@ -58,6 +58,13 @@ deploys that digest. Upgrading is a change to `release` followed by the same com
 
 A tag the registry already holds is used as it is and never re-imported, so the first import of a
 release fixes the digest every later deployment of it resolves to.
+
+Releases before the single setup job ran separate `<prefix>-migrate`, `<prefix>-grant`, and
+`<prefix>-bootstrap` jobs, with Bootstrap under its own `id-<prefix>-bootstrap` identity. An
+incremental redeployment leaves those resources in place unused. The setup job needs an image
+from the same release as these files; run an older release with that release's copy of this directory. Delete the three jobs and that
+identity after the first successful deployment on the new layout. The identity's database principal
+keeps its control-plane grant until you drop it, because setup never drops a principal.
 
 To deploy an image you built or imported yourself, remove `release` and set `image` to a full
 `<registry>.azurecr.io/<repository>@sha256:<digest>` reference. The command accepts one form or the
@@ -97,11 +104,11 @@ Copy-Item ./main.example.bicepparam ./main.bicepparam
 3. Reads the stored initial OperatorKey secret, or generates it on the first deployment.
 4. Reconciles infrastructure with all runtime replicas at zero and deactivates revisions to prevent
    HTTP requests from waking them during setup.
-5. Runs migrations as the Migrate identity, the schema owner and database Entra administrator.
-6. Grants control-plane scope to Admin and Bootstrap, and data-plane scope to Ingestion, Worker,
-   Delivery API, and secret validation.
-7. Runs idempotent OperatorKey Bootstrap, then validates destination secrets.
-8. Starts one replica of each app, activates the latest revisions and waits for healthy revisions.
+5. Runs the idempotent setup job as the Migrate identity, the schema owner and database Entra
+   administrator. It applies migrations, grants control-plane scope to Admin and data-plane scope
+   to Ingestion, Worker, Delivery API, and secret validation, then runs OperatorKey Bootstrap.
+6. Validates destination secrets.
+7. Starts one replica of each app, activates the latest revisions and waits for healthy revisions.
 
 ### Operator accounts and redeployment
 
@@ -127,7 +134,7 @@ and session limits.
 
 Redeployment needs no Operator input and leaves every account unchanged.
 
-A failed migration, grant, Bootstrap, or validation job leaves runtime stopped. After a schema
+A failed setup or validation job leaves runtime stopped. After a schema
 migration, recover by rolling forward or restoring the database rather than starting an older
 image. Validation checks every Destination secret reference, so store a new Destination's secret
 before the next deployment.
@@ -262,7 +269,7 @@ Observability failures do not participate in liveness or readiness.
 ## Troubleshooting
 
 - Inspect `main` under the resource group's deployments for an ARM failure.
-- Inspect migration, grant, Bootstrap, and validation job executions before restarting runtime.
+- Inspect setup and validation job executions before restarting runtime.
 - Inspect the active Container App revision and its application and Collector logs when readiness
   does not become healthy.
 - Confirm the selected database accepts Azure-service traffic and the Migrate identity remains its

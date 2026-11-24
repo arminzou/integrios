@@ -14,13 +14,7 @@ services:
     volumes:
       - "${INTEGRIOS_OTEL_ARTIFACTS_DIR}:/var/lib/integrios-acceptance/otel:ro"
 
-  bootstrap:
-    image: ${INTEGRIOS_IMAGE}
-
-  migrate:
-    image: ${INTEGRIOS_IMAGE}
-
-  grant-runtime:
+  setup:
     image: ${INTEGRIOS_IMAGE}
 
   ingestion:
@@ -62,10 +56,3 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_RESOURCE_ATTRIBUTES: deployment.environment.name=acceptance
       OTEL_TRACES_SAMPLER: always_on
-  mocksink:
-    image: wiremock/wiremock:3.13.1
-    command: ["--global-response-templating"]
-    volumes:
-      - "${INTEGRIOS_WIREMOCK_MAPPINGS_DIR}:/home/wiremock/mappings:ro"
-    ports:
-      - "${INTEGRIOS_MOCKSINK_PORT}:8080"

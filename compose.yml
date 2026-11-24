@@ -22,7 +22,9 @@ services:
       timeout: 5s
       retries: 10
 
-  migrate:
+  setup:
+    # One idempotent job before the runtimes: migrations as the database owner, the two runtime
+    # principals, then the first OperatorKey. The disposable credential defaults make this stack dev-only.
     <<: *integrios-image
     entrypoint: ["/app/integrios", "admin"]
     depends_on:
@@ -30,43 +32,21 @@ services:
         condition: service_healthy
     environment:
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER:-integrios};Password=${POSTGRES_PASSWORD:-integrios_dev}
-    command: ["database", "migrate"]
-
-  grant-runtime:
-    <<: *integrios-image
-    entrypoint: ["/app/integrios", "admin"]
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
-    environment:
-      ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=${POSTGRES_USER:-integrios};Password=${POSTGRES_PASSWORD:-integrios_dev}
+      DOTNET_ENVIRONMENT: Development
       Database__RuntimePrincipals__0__Name: admin_runtime
       Database__RuntimePrincipals__0__Scope: control-plane
       Database__RuntimePrincipals__0__Password: ${INTEGRIOS_ADMIN_RUNTIME_PASSWORD:-admin_runtime_dev}
       Database__RuntimePrincipals__1__Name: data_runtime
       Database__RuntimePrincipals__1__Scope: data-plane
       Database__RuntimePrincipals__1__Password: ${INTEGRIOS_DATA_RUNTIME_PASSWORD:-data_runtime_dev}
-    command: ["database", "grant-runtime"]
-
-  bootstrap:
-    # Same command as production. The runtime grant job precedes Bootstrap; the bundled
-    # WireMock/Grafana and disposable credential defaults make this stack dev-only.
-    <<: *integrios-image
-    entrypoint: ["/app/integrios", "admin"]
-    depends_on:
-      grant-runtime:
-        condition: service_completed_successfully
-    environment:
-      ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=admin_runtime;Password=${INTEGRIOS_ADMIN_RUNTIME_PASSWORD:-admin_runtime_dev}
-      DOTNET_ENVIRONMENT: Development
       INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET: ${INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET:-operator_bootstrap_secret}
-    command: ["bootstrap"]
+    command: ["setup"]
 
   ingestion:
     <<: *integrios-image
     entrypoint: ["/app/integrios", "ingestion"]
     depends_on:
-      bootstrap:
+      setup:
         condition: service_completed_successfully
     environment:
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=data_runtime;Password=${INTEGRIOS_DATA_RUNTIME_PASSWORD:-data_runtime_dev}
@@ -83,7 +63,7 @@ services:
     <<: *integrios-image
     entrypoint: ["/app/integrios", "admin"]
     depends_on:
-      bootstrap:
+      setup:
         condition: service_completed_successfully
     environment:
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=admin_runtime;Password=${INTEGRIOS_ADMIN_RUNTIME_PASSWORD:-admin_runtime_dev}
@@ -107,7 +87,7 @@ services:
     <<: *integrios-image
     entrypoint: ["/app/integrios", "worker"]
     depends_on:
-      bootstrap:
+      setup:
         condition: service_completed_successfully
     environment:
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=data_runtime;Password=${INTEGRIOS_DATA_RUNTIME_PASSWORD:-data_runtime_dev}
@@ -125,7 +105,7 @@ services:
     <<: *integrios-image
     entrypoint: ["/app/integrios", "subscriber"]
     depends_on:
-      bootstrap:
+      setup:
         condition: service_completed_successfully
     environment:
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=integrios;Username=data_runtime;Password=${INTEGRIOS_DATA_RUNTIME_PASSWORD:-data_runtime_dev}
@@ -134,14 +114,6 @@ services:
     ports:
       - "${INTEGRIOS_SUBSCRIBER_BIND:-127.0.0.1}:${INTEGRIOS_SUBSCRIBER_PORT:-5241}:8080"
       - "${INTEGRIOS_SUBSCRIBER_OPERATIONAL_PORT:-5242}:5299"
-
-  mocksink:
-    image: wiremock/wiremock:3.13.1
-    command: ["--global-response-templating"]
-    volumes:
-      - ./tests/Integrios.AcceptanceTests/wiremock/mappings:/home/wiremock/mappings:ro
-    ports:
-      - "${INTEGRIOS_MOCKSINK_PORT:-5054}:8080"
 
   servicebus-sql:
     profiles: ["queue-demo"]

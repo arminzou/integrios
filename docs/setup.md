@@ -27,10 +27,10 @@ The checkout includes the `secrets/` mount directory used by the default file-ba
 provider. Secret files placed there are ignored by Git; the quickstart uses unauthenticated
 delivery, so no secret values need to be added to its tracked documentation files.
 
-`make up` runs `database migrate`, then `database grant-runtime`, then a `bootstrap` one-shot (the
-image's Admin role invoked with plain `bootstrap`) before the services start. Migration uses
-the database owner; Admin and Bootstrap use the control-plane principal; Ingestion and Worker use
-the data-plane principal. It creates only the first OperatorKey credential
+`make up` runs a `setup` one-shot (`integrios admin setup`) before the services start. As the
+database owner it applies migrations, grants the two runtime principals, and bootstraps the first
+OperatorKey. Admin uses the control-plane principal; Ingestion, Worker, and the Delivery API use the
+data-plane principal. Setup creates only the first OperatorKey credential
 used below (bootstrap output, not migration-seeded data) and is idempotent, so re-running `make up`
 against an existing EF-managed database is safe. A fresh deployment contains only the built-in
 `pull` Connector, which migrations provision, until the Operator applies a manifest. The dev
@@ -52,16 +52,18 @@ make up
 |----------|-------------------------|-------------------------------|
 | Ingestion  | `http://localhost:5231` | Webhook/event intake (data plane) |
 | Admin    | `http://localhost:5150` | Tenant and config management (control plane) |
-| WireMock | `http://localhost:5054` | Controllable delivery target for testing |
-
 The Worker runs in the background with no HTTP port.
 
 ## Quickstart: your first delivered event
 
 This drives the Admin API to onboard a Tenant and a Subscription, sends an Event to Ingestion, and
-watches the Worker deliver it to bundled WireMock.
+watches the Worker deliver it to a local WireMock sink. The sink is not part of the stack; this
+walkthrough layers it on from `scripts/sink/compose.yml`, and its admin API answers on
+`http://localhost:5054`.
 
 ```bash
+docker compose -f compose.yml -f scripts/sink/compose.yml up -d mocksink
+
 ADMIN=http://localhost:5150
 INGESTION=http://localhost:5231
 AUTH="Authorization: OperatorKey global_operator_key:operator_bootstrap_secret"
@@ -186,8 +188,7 @@ curl -s -X POST http://localhost:5054/__admin/requests/find \
 ```
 
 The final receipt proves that replay created a new successful attempt without discarding the three
-failed attempts in the Event's history. The `.http` request collections under each service in
-`src/` cover the same APIs interactively.
+failed attempts in the Event's history.
 
 ## Rotate the OperatorKey
 
@@ -214,9 +215,9 @@ defaults, and valid values across all three hosts, see the
 |-------------------------------------|--------------------------|-----------------------------|---------------------------------|
 | `POSTGRES_USER`                     | `integrios`              | compose, Makefile `db-*`    | Database username               |
 | `POSTGRES_PASSWORD`                 | `integrios_dev`          | compose, Makefile `db-*`    | Database password               |
-| `INTEGRIOS_ADMIN_RUNTIME_PASSWORD` | `admin_runtime_dev` | `grant-runtime`, Admin, Bootstrap | Local control-plane database password |
-| `INTEGRIOS_DATA_RUNTIME_PASSWORD` | `data_runtime_dev` | `grant-runtime`, Ingestion, Worker | Local data-plane database password |
-| `INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET`  | `operator_bootstrap_secret` | `bootstrap` service, Makefile bootstrap targets | Secret for the OperatorKey credential |
+| `INTEGRIOS_ADMIN_RUNTIME_PASSWORD` | `admin_runtime_dev` | `setup`, Admin | Local control-plane database password |
+| `INTEGRIOS_DATA_RUNTIME_PASSWORD` | `data_runtime_dev` | `setup`, Ingestion, Worker | Local data-plane database password |
+| `INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET`  | `operator_bootstrap_secret` | `setup` service, Makefile bootstrap targets | Secret for the OperatorKey credential |
 | `DOTNET_ENVIRONMENT`                | `Development`            | Makefile bootstrap targets  | Selects `appsettings.admin.Development.json` |
 | `INTEGRIOS_ADMIN_OIDC_AUTHORITY` | empty | Admin | OIDC issuer; setting it enables OIDC dashboard sign-in |
 | `INTEGRIOS_ADMIN_OIDC_DISPLAY_NAME` | `OpenID Connect` | Admin | Provider label shown on the sign-in gate |
@@ -340,7 +341,7 @@ make logs    # tail all service logs
 
 ## Migrations
 
-Migrations run automatically during `make up` via the `migrate` service. To run the same pinned
+Migrations run automatically during `make up` via the `setup` service. To run the same pinned
 EF Core migration command manually through the Compose network (starting its Postgres dependency if needed):
 
 ```bash

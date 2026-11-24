@@ -155,6 +155,27 @@ public sealed class SourcesAdminTests(AdminApiFixture fixture) : AdminApiTestBas
         queue.StatusCode.ShouldBe(HttpStatusCode.Created);
     }
 
+    [Fact]
+    public async Task CreateSource_WithDestinationOnlyConnector_Returns422()
+    {
+        Guid connectorId = await fixture.ApplyConnectorManifestAsync(
+            "destination_only", TestConnectorManifest.Create("destination_only", "Destination only", "destination"));
+        Guid topicId = await CreateTopicAsync();
+
+        using var response = await client.SendAsync(AdminRequest(
+            HttpMethod.Post, $"/admin/tenants/{fixture.TenantId}/sources", new
+            {
+                connector_id = connectorId,
+                topic_id = topicId,
+                name = "intake",
+                type = "event_api",
+                event_types = new[] { "payment.created" },
+                configuration = new { }
+            }));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+    }
+
     // Broker authentication the receiver cannot build a client for must fail the authoring call.
     // Left to Ingestion it surfaces at host startup instead, where a single unusable Source stops
     // the whole data plane from starting.

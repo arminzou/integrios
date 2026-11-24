@@ -401,14 +401,8 @@ if ($databaseProvider -eq 'postgres') {
         --output none
 }
 
-Write-Host "Applying $databaseProvider migrations..."
-Invoke-Job -JobName $outputs.jobNames.value.migrate
-
-Write-Host 'Granting scoped access to runtime identities...'
-Invoke-Job -JobName $outputs.jobNames.value.grantRuntime
-
-Write-Host 'Running idempotent Bootstrap...'
-Invoke-Job -JobName $outputs.jobNames.value.bootstrap
+Write-Host "Running idempotent $databaseProvider setup: migrations, runtime grants, then Bootstrap..."
+Invoke-Job -JobName $outputs.jobNames.value.setup
 
 Write-Host 'Validating configured destination secret references without printing values...'
 Invoke-Job -JobName $outputs.jobNames.value.validateSecrets

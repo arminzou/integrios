@@ -16,7 +16,7 @@ up-observability:
 	docker compose --profile observability up --build -d
 
 down:
-	docker compose down
+	docker compose -f compose.yml -f scripts/sink/compose.yml down
 
 logs:
 	docker compose logs -f
@@ -24,10 +24,10 @@ logs:
 # --- Database migrations through the Compose network ---
 
 db-migrate:
-	docker compose run --rm migrate
+	docker compose run --rm setup database migrate
 
 db-info:
-	docker compose run --rm migrate database info
+	docker compose run --rm setup database info
 
 # --- Admin bootstrap ---
 # DOTNET_ENVIRONMENT and INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET are exported above

@@ -33,7 +33,6 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
     private readonly int ingestionOperationalPort = GetAvailablePort();
     private readonly int adminPort = GetAvailablePort();
     private readonly int adminOperationalPort = GetAvailablePort();
-    private readonly int mockSinkPort = GetAvailablePort();
     private readonly int workerMetricsPort = GetAvailablePort();
     private readonly int deliveryApiPort = GetAvailablePort();
     private readonly int deliveryApiOperationalPort = GetAvailablePort();
@@ -59,8 +58,6 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
             ["INTEGRIOS_INGESTION_OPERATIONAL_PORT"] = ingestionOperationalPort.ToString(),
             ["INTEGRIOS_ADMIN_PORT"] = adminPort.ToString(),
             ["INTEGRIOS_ADMIN_OPERATIONAL_PORT"] = adminOperationalPort.ToString(),
-            ["INTEGRIOS_MOCKSINK_PORT"] = mockSinkPort.ToString(),
-            ["INTEGRIOS_WIREMOCK_MAPPINGS_DIR"] = Path.Combine(repoRoot, "tests", "Integrios.AcceptanceTests", "wiremock", "mappings"),
             ["INTEGRIOS_WORKER_METRICS_PORT"] = workerMetricsPort.ToString(),
             ["INTEGRIOS_SUBSCRIBER_PORT"] = deliveryApiPort.ToString(),
             ["INTEGRIOS_SUBSCRIBER_OPERATIONAL_PORT"] = deliveryApiOperationalPort.ToString(),
@@ -90,16 +87,12 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
     public HttpClient AdminOperationalClient { get; private set; } = null!;
     public HttpClient IngestionClient { get; private set; } = null!;
     public HttpClient IngestionOperationalClient { get; private set; } = null!;
-    private HttpClient wireMockClient = null!;
-    public WireMockSink WireMockSink { get; private set; } = null!;
     public HttpClient WorkerOperationalClient { get; private set; } = null!;
     public HttpClient SubscriberClient { get; private set; } = null!;
     public HttpClient SubscriberOperationalClient { get; private set; } = null!;
     public string AdminAuthorization { get; private set; } = "OperatorKey global_operator_key:acceptance-admin-secret";
     public Guid HttpConnectorId { get; private set; }
     public Guid ApiKeyConnectorId { get; private set; }
-    public Guid BearerConnectorId { get; private set; }
-    public Guid SourceOnlyConnectorId { get; private set; }
     public Guid VerifiedSourceConnectorId { get; private set; }
 
     public string ConnectionString => new NpgsqlConnectionStringBuilder
@@ -136,12 +129,6 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
             ApiKeyConnectorId = await ApplyConnectorManifestAsync(
                 "acceptance_api_key",
                 TestConnectorManifest.Create("acceptance_api_key", "Acceptance API key", "destination", ["api_key_header"]));
-            BearerConnectorId = await ApplyConnectorManifestAsync(
-                "acceptance_bearer",
-                TestConnectorManifest.Create("acceptance_bearer", "Acceptance bearer", "destination", ["bearer_token"]));
-            SourceOnlyConnectorId = await ApplyConnectorManifestAsync(
-                "acceptance_source",
-                TestConnectorManifest.Create("acceptance_source", "Acceptance source", "source"));
             VerifiedSourceConnectorId = await ApplyConnectorManifestAsync(
                 "acceptance_verified_source",
                 TestConnectorManifest.Create(
@@ -211,14 +198,6 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
 
         using JsonDocument document = JsonDocument.Parse(responseBody);
         return document.RootElement.GetProperty("connector").GetProperty("id").GetGuid();
-    }
-
-    public async Task<int> ExecuteAsync(string sql)
-    {
-        await using var connection = new NpgsqlConnection(ConnectionString);
-        await connection.OpenAsync();
-        await using var command = new NpgsqlCommand(sql, connection);
-        return await command.ExecuteNonQueryAsync();
     }
 
     // Key-per-file values load once at process start. A written value is visible to the running
@@ -313,11 +292,11 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
         return publicKey;
     }
 
-    public async Task RunBootstrapAgainAsync()
+    public async Task RunSetupAgainAsync()
     {
-        ComposeResult result = await RunComposeAsync(TimeSpan.FromMinutes(2), "run", "--rm", "bootstrap");
+        ComposeResult result = await RunComposeAsync(TimeSpan.FromMinutes(2), "run", "--rm", "setup");
         if (result.ExitCode != 0)
-            throw new InvalidOperationException($"Bootstrap rerun failed: {result.Output}");
+            throw new InvalidOperationException($"Setup rerun failed: {result.Output}");
     }
 
     public async Task RestartProductServicesAsync()
@@ -348,61 +327,6 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
         if (result.ExitCode != 0)
             throw new InvalidOperationException($"Admin restart failed: {result.Output}");
         await WaitUntilReadyAsync(expectCollector: true);
-    }
-
-    public async Task KillWorkerAsync()
-    {
-        ComposeResult result = await RunComposeAsync(TimeSpan.FromSeconds(30), "kill", "--signal", "SIGKILL", "worker");
-        if (result.ExitCode != 0)
-            throw new InvalidOperationException($"Could not kill Worker: {result.Output}");
-    }
-
-    public async Task StopWorkerAsync()
-    {
-        ComposeResult result = await RunComposeAsync(TimeSpan.FromMinutes(2), "stop", "worker");
-        if (result.ExitCode != 0)
-            throw new InvalidOperationException($"Could not stop Worker: {result.Output}");
-    }
-
-    public async Task StartWorkerAsync()
-    {
-        ComposeResult result = await RunComposeAsync(TimeSpan.FromMinutes(2), "start", "worker");
-        if (result.ExitCode != 0)
-            throw new InvalidOperationException($"Could not start Worker: {result.Output}");
-        await WaitForServiceAsync("worker");
-    }
-
-    public async Task<string> StartAdditionalWorkerAsync()
-    {
-        string containerName = $"{projectName}-worker-extra-{Guid.NewGuid():N}"[..50];
-        ComposeResult result = await RunComposeAsync(
-            TimeSpan.FromMinutes(2),
-            "run",
-            "--detach",
-            "--no-deps",
-            "--name",
-            containerName,
-            "worker");
-        if (result.ExitCode != 0)
-            throw new InvalidOperationException($"Could not start additional Worker: {result.Output}");
-        return containerName;
-    }
-
-    public async Task RemoveContainerAsync(string containerName)
-    {
-        ComposeResult result = await RunDockerAsync(
-            TimeSpan.FromSeconds(30),
-            ["rm", "--force", containerName]);
-        if (result.ExitCode != 0 && !result.Output.Contains("No such container", StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException($"Could not remove container '{containerName}': {result.Output}");
-    }
-
-    public async Task<string> GetContainerLogsAsync(string containerName)
-    {
-        ComposeResult result = await RunDockerAsync(TimeSpan.FromSeconds(30), ["logs", containerName]);
-        if (result.ExitCode != 0)
-            throw new InvalidOperationException($"Could not read container '{containerName}' logs: {result.Output}");
-        return result.Output;
     }
 
     // The packaged observability fact removes the collector to prove Delivery is indifferent to it.
@@ -479,14 +403,11 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
             "--detach",
             "--remove-orphans",
             "postgres",
-            "migrate",
-            "grant-runtime",
-            "bootstrap",
+            "setup",
             "ingestion",
             "admin",
             "worker",
             "subscriber",
-            "mocksink",
         ]);
         if (!buildImages)
             arguments.Add("otel-collector");
@@ -504,8 +425,6 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
         AdminOperationalClient = CreateClient(adminOperationalPort);
         IngestionClient = CreateClient(ingestionPort);
         IngestionOperationalClient = CreateClient(ingestionOperationalPort);
-        wireMockClient = CreateClient(mockSinkPort);
-        WireMockSink = new WireMockSink(wireMockClient);
         WorkerOperationalClient = CreateClient(workerMetricsPort);
         SubscriberClient = CreateClient(deliveryApiPort);
         SubscriberOperationalClient = CreateClient(deliveryApiOperationalPort);
@@ -521,7 +440,7 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
             "--no-deps",
             "-e",
             "Database__RuntimePrincipals__0__Password=",
-            "grant-runtime");
+            "setup");
         string output = result.StandardOutput + result.StandardError;
         result.ExitCode.ShouldNotBe(0);
         output.ShouldContain("Database:RuntimePrincipals:0:Password is present but empty.");
@@ -620,7 +539,6 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
                 await AssertHealthyAsync(WorkerOperationalClient, "Worker", "/ready");
                 await AssertHealthyAsync(SubscriberOperationalClient, "Delivery API");
                 await AssertHealthyAsync(SubscriberOperationalClient, "Delivery API", "/ready");
-                await AssertHealthyAsync(wireMockClient, "WireMock", "/__admin/health");
 
                 // The OTLP receiver must accept spans before a test emits any, or early spans are
                 // dropped and the trace-continuity assertions fail with no usable diagnostic.
@@ -644,7 +562,6 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
                     && services.Contains("admin", StringComparer.Ordinal)
                     && services.Contains("ingestion", StringComparer.Ordinal)
                     && services.Contains("worker", StringComparer.Ordinal)
-                    && services.Contains("mocksink", StringComparer.Ordinal)
                     && (!expectCollector || services.Contains("otel-collector", StringComparer.Ordinal)))
                 {
                     return;
@@ -772,8 +689,6 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
         AdminOperationalClient?.Dispose();
         IngestionClient?.Dispose();
         IngestionOperationalClient?.Dispose();
-        wireMockClient?.Dispose();
-        WireMockSink = null!;
         WorkerOperationalClient?.Dispose();
         SubscriberClient?.Dispose();
         SubscriberOperationalClient?.Dispose();

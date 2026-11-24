@@ -270,6 +270,34 @@ public sealed class DestinationsAdminTests(AdminApiFixture fixture) : Subscripti
         TransportOf("seeded-destination").ShouldBe("http");
     }
 
+    [Theory]
+    [InlineData("/relative", HttpStatusCode.UnprocessableEntity)]
+    [InlineData("ftp://example.test/file", HttpStatusCode.UnprocessableEntity)]
+    [InlineData("http://127.0.0.1:1/private", HttpStatusCode.Created)]
+    public async Task CreateDestination_ValidatesBaseUri(string baseUri, HttpStatusCode expectedStatus)
+    {
+        using var response = await client.SendAsync(AdminRequest(
+            HttpMethod.Post,
+            $"/admin/tenants/{Fixture.TenantId}/destinations",
+            new { connector_id = Fixture.HttpConnectorId, name = "uri-check", configuration = new { base_uri = baseUri } }));
+
+        response.StatusCode.ShouldBe(expectedStatus);
+    }
+
+    [Fact]
+    public async Task CreateDestination_WithSourceOnlyConnector_Returns422()
+    {
+        Guid connectorId = await Fixture.ApplyConnectorManifestAsync(
+            "source_only", TestConnectorManifest.Create("source_only", "Source only", "source"));
+
+        using var response = await client.SendAsync(AdminRequest(
+            HttpMethod.Post,
+            $"/admin/tenants/{Fixture.TenantId}/destinations",
+            new { connector_id = connectorId, name = "source-only-destination", configuration = new { base_uri = "https://example.test/sink" } }));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+    }
+
     private Task<HttpResponseMessage> CreateDestinationAsync(string name) => client.SendAsync(AdminRequest(
         HttpMethod.Post,
         $"/admin/tenants/{Fixture.TenantId}/destinations",

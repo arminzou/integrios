@@ -24,29 +24,47 @@ public static class BootstrapCli
             return 2;
         }
 
-        HostApplicationBuilder hostBuilder = Host.CreateApplicationBuilder();
+        using IHost host = BuildHost(out HostApplicationBuilder hostBuilder);
+        if (!TryReadOperatorKeySecret(hostBuilder, out string? operatorKeySecret))
+            return 1;
+
+        await BootstrapOperatorKeyAsync(host.Services, operatorKeySecret);
+        return 0;
+    }
+
+    internal static IHost BuildHost(out HostApplicationBuilder hostBuilder)
+    {
+        hostBuilder = Host.CreateApplicationBuilder();
         hostBuilder.AddRoleSettingsFiles(AdminHost.Name);
         hostBuilder.Services.AddAdminApplicationServices();
         hostBuilder.Services.AddAdminInfrastructureServices(hostBuilder.Configuration);
+        return hostBuilder.Build();
+    }
 
-        using IHost host = hostBuilder.Build();
-        await using AsyncServiceScope scope = host.Services.CreateAsyncScope();
-        IMediator mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
-
-        string? operatorKeySecret = hostBuilder.Configuration[OperatorKeySecretConfigKey];
+    internal static bool TryReadOperatorKeySecret(HostApplicationBuilder hostBuilder, out string? operatorKeySecret)
+    {
+        operatorKeySecret = hostBuilder.Configuration[OperatorKeySecretConfigKey];
 
         if (hostBuilder.Environment.IsProduction() && string.IsNullOrWhiteSpace(operatorKeySecret))
         {
             Console.Error.WriteLine(
                 $"operator-key: Production Bootstrap requires a non-empty {OperatorKeySecretConfigKey} value.");
-            return 1;
+            return false;
         }
 
         if (hostBuilder.Environment.IsProduction() && operatorKeySecret == WellKnownDevSecret)
         {
             Console.Error.WriteLine("operator-key: refusing to bootstrap Production with the well-known dev secret.");
-            return 1;
+            return false;
         }
+
+        return true;
+    }
+
+    internal static async Task BootstrapOperatorKeyAsync(IServiceProvider services, string? operatorKeySecret)
+    {
+        await using AsyncServiceScope scope = services.CreateAsyncScope();
+        IMediator mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
 
         BootstrapOperatorKeyResult result = await mediator.Send(
             new BootstrapOperatorKeyCommand(GlobalOperatorPublicKey, operatorKeySecret));
@@ -57,7 +75,5 @@ public static class BootstrapCli
             Console.WriteLine($"operator-key: created deployment-wide operator key. Secret (store securely, shown once): {result.GeneratedSecret}");
         else
             Console.WriteLine("operator-key: created deployment-wide operator key using the supplied secret.");
-
-        return 0;
     }
 }

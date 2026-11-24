@@ -1,11 +1,16 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Integrios.Application.Ingestion;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
+using Integrios.Domain.ValueObjects;
+using Integrios.Infrastructure.Data;
 using Integrios.Tests.Shared;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Integrios.FunctionalTests.Ingestion;
@@ -124,6 +129,23 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
     }
 
     [Fact]
+    public async Task GetEventsById_RevokedTenantApiKey_Returns401()
+    {
+        Guid eventId = Guid.NewGuid();
+        using var beforeRevocation = await GetEventAsync(eventId);
+        beforeRevocation.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        await using var db = new IntegriosDbContext(fixture.CreateOptions());
+        DateTimeOffset revokedAt = DateTimeOffset.UtcNow;
+        int revoked = await db.TenantApiKeys.Where(key => key.TenantId == fixture.TenantAId)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(key => key.RevokedAt, revokedAt));
+        revoked.ShouldBe(1);
+
+        using var afterRevocation = await GetEventAsync(eventId);
+        afterRevocation.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
     public async Task GetEventsById_OtherTenant_Returns404()
     {
         var postResponse = await PostEventAsync(defaultSourceId, BuildBody(sourceEventId: "evt-tenant-isolation"));
@@ -192,6 +214,17 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
     }
 
     [Fact]
+    public async Task PostEvents_WithInactiveSource_Returns404()
+    {
+        await fixture.ChangeSourceAsync(defaultSourceId, "inactive", """["payment.created"]""");
+
+        using var response = await PostEventAsync(defaultSourceId, BuildBody(sourceEventId: "evt-inactive-source"));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await fixture.GetEventCountAsync()).ShouldBe(0);
+    }
+
+    [Fact]
     public async Task PostEvents_WithDestinationOnlyConnector_Returns404()
     {
         var connectorId = await fixture.SeedSourceConnectorAsync(
@@ -253,6 +286,84 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
 
         (await PostEventAsync(defaultSourceId, BuildBody("evt-declared", "PAYMENT.CREATED"))).StatusCode
             .ShouldBe(HttpStatusCode.Accepted);
+    }
+
+    [Fact]
+    public async Task PostWebhook_SignedGitHubPush_PersistsEventTypeAndIdentityFromHeaders()
+    {
+        const string secretReference = "github-webhook-secret";
+        const string secret = "functional-github-secret";
+        const string deliveryId = "delivery-functional-123";
+        const string payload = """{"pusher":{"name":"octocat"},"repository":{"full_name":"acme/widgets"}}""";
+        Guid connectorId = await fixture.SeedConnectorAsync(
+            fixture.TenantAId, "github", await File.ReadAllTextAsync(GitHubManifestPath()));
+
+        Guid callbackId = Guid.NewGuid();
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        await using var db = new IntegriosDbContext(fixture.CreateOptions());
+        db.Sources.Add(new Source
+        {
+            Id = Guid.NewGuid(),
+            TenantId = fixture.TenantAId,
+            ConnectorId = connectorId,
+            TopicId = defaultTopicId,
+            Name = "github-intake",
+            Type = SourceType.Webhook,
+            EventTypes = ["github.push"],
+            Configuration = JsonSerializer.SerializeToElement(new { callback_id = callbackId }),
+            Verification = new SourceVerification
+            {
+                Scheme = "hmac_sha256",
+                Config = JsonSerializer.SerializeToElement(new { }),
+                SecretRefs = JsonSerializer.SerializeToElement(new { secret = secretReference })
+            },
+            Mapping = new SourceMapping
+            {
+                Engine = "jsonata",
+                Version = "1",
+                Expression = """{ "event_type": "github." & $context.headers."x-github-event", "payload": $ }"""
+            },
+            EventIdentityRule = new SourceEventIdentityRule { Kind = "header", Value = "X-GitHub-Delivery" },
+            Revision = Guid.NewGuid().ToString("N"),
+            Status = OperationalStatus.Active,
+            CreatedAt = now,
+            UpdatedAt = now
+        });
+        await db.SaveChangesAsync();
+
+        using var webhookHost = fixture.WebFactory.WithSetting($"SourceSecrets:test-tenant-a:{secretReference}", secret);
+        using var webhookClient = webhookHost.CreateClient();
+        string signature = "sha256=" + Convert.ToHexStringLower(
+            HMACSHA256.HashData(Encoding.UTF8.GetBytes(secret), Encoding.UTF8.GetBytes(payload)));
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"/webhooks/{callbackId}")
+        {
+            Content = new StringContent(payload, Encoding.UTF8, "application/json")
+        };
+        request.Headers.Add("X-Hub-Signature-256", signature);
+        request.Headers.Add("X-GitHub-Event", "push");
+        request.Headers.Add("X-GitHub-Delivery", deliveryId);
+
+        using var response = await webhookClient.SendAsync(request);
+        response.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        var result = await response.Content.ReadFromJsonAsync<IngestEventResult>(HostJson.Options);
+        result.ShouldNotBeNull();
+        result.AlreadyAccepted.ShouldBeFalse();
+
+        Event accepted = await db.Events.SingleAsync(candidate => candidate.Id == result.EventId);
+        accepted.EventType.ShouldBe("github.push");
+        accepted.SourceEventId.ShouldBe(deliveryId);
+    }
+
+    private static string GitHubManifestPath()
+    {
+        for (DirectoryInfo? directory = new(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
+        {
+            string path = Path.Combine(directory.FullName, "examples", "connectors", "github.json");
+            if (File.Exists(path))
+                return path;
+        }
+
+        throw new FileNotFoundException("Could not locate examples/connectors/github.json.");
     }
 
     // A webhook's Event type comes from the provider's request, so the declaration is the only thing

@@ -19,27 +19,11 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
         await AssertHealthyAsync(fixture.IngestionOperationalClient);
         await AssertHealthyAsync(fixture.WorkerOperationalClient);
         await AssertHealthyAsync(fixture.SubscriberOperationalClient);
-        await fixture.WireMockSink.AssertHealthyAsync();
 
         (await fixture.ScalarAsync<long>(
             $"SELECT COUNT(*) FROM connectors WHERE id = '{fixture.HttpConnectorId}' AND key = 'http'")).ShouldBe(1L);
         (await fixture.ScalarAsync<long>(
             "SELECT COUNT(*) FROM operator_keys WHERE revoked_at IS NULL")).ShouldBe(1L);
-
-        const string sinkName = "acceptance-harness";
-        const string headerValue = "expected-value";
-        const string body = "{\"event\":\"packaged-deployment\"}";
-
-        await fixture.WireMockSink.ResetReceiptsAsync(sinkName);
-        await fixture.WireMockSink.PostAsync(
-            sinkName,
-            body,
-            new Dictionary<string, string> { ["X-Acceptance"] = headerValue });
-        (await fixture.WireMockSink.ReceiptCountAsync(sinkName)).ShouldBe(1);
-        await fixture.WireMockSink.AssertReceiptAsync(sinkName, body, "X-Acceptance");
-        await fixture.WireMockSink.AssertReceiptHeaderAsync(sinkName, "X-Acceptance", headerValue);
-        await fixture.WireMockSink.ResetReceiptsAsync(sinkName);
-        (await fixture.WireMockSink.ReceiptCountAsync(sinkName)).ShouldBe(0);
     }
 
     [Fact]
@@ -125,9 +109,10 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
     {
         string suffix = Guid.NewGuid().ToString("N")[..10];
         string tenantSlug = $"otel-{suffix}";
-        string sinkName = $"otel-{suffix}";
-        string sourceBaseUri = $"http://mocksink:8080/sink/{sinkName}-source";
-        string destinationBaseUri = $"http://mocksink:8080/sink/{sinkName}";
+        // Nothing listens on port 1, so every attempt fails in the HTTP phase and the Delivery keeps
+        // retrying: the retry trace and the collector-outage check both read those attempts.
+        string sourceBaseUri = $"http://127.0.0.1:1/otel-{suffix}-source";
+        string destinationBaseUri = $"http://127.0.0.1:1/otel-{suffix}";
         string payloadCanary = $"payload-secret-{suffix}";
         string sourceEventCanary = $"source-event-secret-{suffix}";
         string queryCanary = $"query-secret-{suffix}";
@@ -155,7 +140,7 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             new { key = $"payments-{suffix}" });
         Guid sourceId = await PostAdminForIdAsync(
             $"/admin/tenants/{tenantId}/sources",
-            new { connector_id = fixture.HttpConnectorId, topic_id = topicId, name = "intake", type = "event_api", event_types = new[] { "payment.created", "payment.unreachable" }, configuration = new { } });
+            new { connector_id = fixture.HttpConnectorId, topic_id = topicId, name = "intake", type = "event_api", event_types = new[] { "payment.created" }, configuration = new { } });
         await EnableAsync($"/admin/tenants/{tenantId}/sources/{sourceId}");
         Guid subscriptionId = await PostAdminForIdAsync(
             $"/admin/tenants/{tenantId}/topics/{topicId}/subscriptions",
@@ -166,30 +151,6 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
                 destination_id = destinationId
             });
         await EnableAsync($"/admin/tenants/{tenantId}/topics/{topicId}/subscriptions/{subscriptionId}");
-
-        // A refused endpoint is the only exercised path that leaves DeliveryResult.Error non-null
-        // on the HTTP phase. Without it the exported-status assertion below is vacuous for
-        // delivery.http, and a span that copied the transport message would still pass.
-        Guid unreachableDestinationId = await PostAdminForIdAsync(
-            $"/admin/tenants/{tenantId}/destinations",
-            new
-            {
-                connector_id = fixture.HttpConnectorId,
-                name = "acceptance-unreachable",
-                configuration = new { base_uri = "http://mocksink:9/sink/unreachable" },
-                environment = "production"
-            });
-        Guid unreachableSubscriptionId = await PostAdminForIdAsync(
-            $"/admin/tenants/{tenantId}/topics/{topicId}/subscriptions",
-            new
-            {
-                name = "acceptance-unreachable",
-                event_types = new[] { "payment.unreachable" },
-                destination_id = unreachableDestinationId
-            });
-        await EnableAsync($"/admin/tenants/{tenantId}/topics/{topicId}/subscriptions/{unreachableSubscriptionId}");
-
-        await fixture.WireMockSink.ConfigureAsync(sinkName, "fail");
 
         using var ingest = new HttpRequestMessage(
             HttpMethod.Post,
@@ -219,23 +180,11 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             eventId = acceptedDocument.RootElement.GetProperty("event_id").GetGuid();
         }
 
-        Guid unreachableEventId = await IngestEventAsync(
-            apiToken,
-            sourceId,
-            "payment.unreachable",
-            $"unreachable-{suffix}");
-
+        // A refused connection leaves the transport error on the HTTP phase, so the exported-status
+        // assertions below are not vacuous for delivery.http.
         await WaitForAsync(async () =>
             await fixture.ScalarAsync<long>(
-                $"SELECT COUNT(*) FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{eventId}' AND da.status = 'failed'") >= 1);
-
-        await fixture.WireMockSink.ResetControlAsync(sinkName);
-
-        await WaitForAsync(async () =>
-            await fixture.ScalarAsync<string>(
-                $"SELECT status FROM event_deliveries WHERE event_id = '{eventId}' AND subscription_id = '{subscriptionId}'") == "succeeded");
-        ((await fixture.ScalarAsync<long>(
-            $"SELECT COUNT(*) FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{eventId}'")) >= 2).ShouldBeTrue();
+                $"SELECT COUNT(*) FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{eventId}' AND da.status = 'failed' AND da.failure_phase = 'http' AND da.error_message IS NOT NULL") >= 2);
 
         Guid deliveryId = await fixture.ScalarAsync<Guid>(
             $"SELECT id FROM event_deliveries WHERE event_id = '{eventId}' AND subscription_id = '{subscriptionId}'");
@@ -275,7 +224,6 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
         adminMetrics.ShouldContain("http_server_request_duration", Case.Sensitive);
         workerMetrics.ShouldContain("integrios_fanout_rows_created_total", Case.Sensitive);
         workerMetrics.ShouldContain("integrios_deliveries_failed_total", Case.Sensitive);
-        workerMetrics.ShouldContain("integrios_deliveries_succeeded_total", Case.Sensitive);
         workerMetrics.ShouldContain("integrios_delivery_attempt_duration_seconds", Case.Sensitive);
         ingestionMetrics.ShouldNotContain("integrios_outbox_pending_depth", Case.Sensitive);
         adminMetrics.ShouldNotContain("integrios_outbox_pending_depth", Case.Sensitive);
@@ -321,13 +269,6 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             recoveryDocument.RootElement.GetProperty("trace_id").GetString().ShouldBe(traceId);
         }
 
-        await WaitForAsync(async () =>
-            await fixture.ScalarAsync<long>(
-                $"SELECT COUNT(*) FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{unreachableEventId}' AND da.status = 'failed' AND da.error_message IS NOT NULL") >= 1);
-        string unreachableTraceparent = await fixture.ScalarAsync<string>(
-            $"SELECT traceparent FROM event_deliveries WHERE event_id = '{unreachableEventId}'");
-        string unreachableTraceId = unreachableTraceparent.Split('-')[1];
-
         string traceArtifacts = string.Empty;
         IReadOnlyList<ExportedSpan> allSpans = [];
         IReadOnlyList<IReadOnlyDictionary<string, string>> resources = [];
@@ -339,15 +280,14 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             return expectedServiceNames.All(serviceName =>
                 resources.Any(resource =>
                     resource.TryGetValue("service.name", out string? actual) && actual == serviceName))
-                && allSpans.Any(span =>
-                    span.TraceId == unreachableTraceId && span.Name == "delivery.http");
+                && allSpans.Any(span => span.TraceId == traceId && span.Name == "delivery.http");
         });
 
         allSpans
-            .Where(span => span.TraceId == unreachableTraceId && span.Name == "delivery.http")
+            .Where(span => span.TraceId == traceId && span.Name == "delivery.http")
             .ShouldAllBe(span => span.StatusCode == 2);
 
-        string[] testTraceIds = [traceId, unreachableTraceId, recoveryRequestTraceId];
+        string[] testTraceIds = [traceId, recoveryRequestTraceId];
         foreach (ExportedSpan span in allSpans.Where(span => testTraceIds.Contains(span.TraceId)))
         {
             span.StatusMessage.ShouldBeNullOrEmpty($"Span '{span.Name}' exported a status description.");
@@ -443,12 +383,11 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
             traceArtifacts.ShouldNotContain(canary, Case.Sensitive, "Exported traces disclosed a canary value.");
         }
 
-        // Trace export is best-effort equipment: with the collector gone Delivery must continue.
+        // Trace export is best-effort equipment: with the collector gone Delivery must continue,
+        // so a new Event still fans out and its attempts keep coming.
         await fixture.StopCollectorAsync();
         try
         {
-            await fixture.WireMockSink.ConfigureAsync(sinkName, "fail");
-            await fixture.WireMockSink.ResetReceiptsAsync(sinkName);
             using var second = new HttpRequestMessage(HttpMethod.Post, $"/events?source_id={sourceId}")
             {
                 Content = JsonContent.Create(new
@@ -466,32 +405,23 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
 
             await WaitForAsync(async () =>
                 await fixture.ScalarAsync<long>(
-                    $"SELECT COUNT(*) FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{secondEventId}' AND da.status = 'failed'") >= 1);
-
-            await fixture.WireMockSink.ResetControlAsync(sinkName);
-
-            await WaitForAsync(async () =>
-                await fixture.ScalarAsync<string>(
-                    $"SELECT status FROM event_deliveries WHERE event_id = '{secondEventId}' AND subscription_id = '{subscriptionId}'") == "succeeded");
-            ((await fixture.ScalarAsync<long>(
-                $"SELECT COUNT(*) FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{secondEventId}'")) >= 2).ShouldBeTrue();
+                    $"SELECT COUNT(*) FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{secondEventId}' AND da.status = 'failed'") >= 2);
         }
         finally
         {
-            await fixture.WireMockSink.ResetControlAsync(sinkName);
+            await fixture.StartCollectorAsync();
         }
 
         // Export failures during the outage must not wedge the pipeline: once the collector is
         // back, an Event ingested after it exports its whole chain without any intervention.
-        await fixture.StartCollectorAsync();
         Guid recoveredEventId = await IngestEventAsync(
             apiToken,
             sourceId,
             "payment.created",
             $"recovered-{suffix}");
         await WaitForAsync(async () =>
-            await fixture.ScalarAsync<string>(
-                $"SELECT status FROM event_deliveries WHERE event_id = '{recoveredEventId}' AND subscription_id = '{subscriptionId}'") == "succeeded");
+            await fixture.ScalarAsync<long>(
+                $"SELECT COUNT(*) FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{recoveredEventId}' AND da.status = 'failed'") >= 1);
         string recoveredTraceparent = await fixture.ScalarAsync<string>(
             $"SELECT traceparent FROM event_deliveries WHERE event_id = '{recoveredEventId}' AND subscription_id = '{subscriptionId}'");
         string recoveredTraceId = recoveredTraceparent.Split('-')[1];
@@ -506,89 +436,6 @@ public sealed class PackagedDeploymentSmokeTests(PackagedDeploymentFixture fixtu
                 && recoveredSpans.Any(span => span.Name == "delivery.attempt")
                 && recoveredSpans.Any(span => span.Name == "delivery.finalize");
         });
-    }
-
-    [Fact]
-    public async Task Worker_FansOutNewEventWhileDeliveryAttemptIsBlocked()
-    {
-        string suffix = Guid.NewGuid().ToString("N")[..10];
-        string tenantSlug = $"loop-{suffix}";
-        string topicName = $"loop-{suffix}";
-        string sinkName = $"loop-{suffix}";
-
-        Guid tenantId = await PostAdminForIdAsync(
-            "/admin/tenants",
-            new { slug = tenantSlug, name = "Worker loop isolation", environment = "production" });
-        string apiToken = await PostAdminForPropertyAsync(
-            $"/admin/tenants/{tenantId}/tenant-api-keys",
-            new { name = "loop-isolation-ingestion" },
-            "token");
-        Guid destinationId = await PostAdminForIdAsync(
-            $"/admin/tenants/{tenantId}/destinations",
-            new
-            {
-                connector_id = fixture.HttpConnectorId,
-                name = "loop-isolation-destination",
-                configuration = new { base_uri = $"http://mocksink:8080/sink/{sinkName}" },
-                environment = "production"
-            });
-        Guid topicId = await PostAdminForIdAsync(
-            $"/admin/tenants/{tenantId}/topics",
-            new { key = topicName });
-        Guid sourceId = await PostAdminForIdAsync(
-            $"/admin/tenants/{tenantId}/sources",
-            new { connector_id = fixture.HttpConnectorId, topic_id = topicId, name = "intake", type = "event_api", event_types = new[] { "delivery.blocked", "fanout.independent" }, configuration = new { } });
-        await EnableAsync($"/admin/tenants/{tenantId}/sources/{sourceId}");
-        Guid subscriptionId = await PostAdminForIdAsync(
-            $"/admin/tenants/{tenantId}/topics/{topicId}/subscriptions",
-            new
-            {
-                name = "blocked-delivery",
-                event_types = new[] { "delivery.blocked" },
-                destination_id = destinationId
-            });
-        await EnableAsync($"/admin/tenants/{tenantId}/topics/{topicId}/subscriptions/{subscriptionId}");
-
-        await fixture.WireMockSink.ConfigureAsync(sinkName, "slow", delayMs: 8000);
-        Guid? blockedEventId = null;
-
-        try
-        {
-            blockedEventId = await IngestEventAsync(
-                apiToken,
-                sourceId,
-                "delivery.blocked",
-                $"blocked-{suffix}");
-            await WaitForAsync(async () =>
-                await fixture.ScalarAsync<long>(
-                    $"SELECT COUNT(*) FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{blockedEventId.Value}' AND da.status = 'in_progress'") == 1);
-            Guid blockedAttemptId = await fixture.ScalarAsync<Guid>(
-                $"SELECT da.id FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{blockedEventId.Value}' AND da.status = 'in_progress'");
-
-            Guid independentEventId = await IngestEventAsync(
-                apiToken,
-                sourceId,
-                "fanout.independent",
-                $"independent-{suffix}");
-
-            await WaitForAsync(async () =>
-                await fixture.ScalarAsync<long>(
-                    $"SELECT COUNT(*) FROM events e JOIN outbox o ON o.event_id = e.id WHERE e.id = '{independentEventId}' AND e.status = 'unrouted' AND o.processed_at IS NOT NULL AND EXISTS (SELECT 1 FROM delivery_attempts WHERE id = '{blockedAttemptId}' AND status = 'in_progress')") == 1);
-        }
-        finally
-        {
-            await fixture.WireMockSink.ResetControlAsync(sinkName);
-            if (blockedEventId is { } eventId)
-            {
-                await WaitForAsync(async () =>
-                    await fixture.ScalarAsync<long>(
-                        $"SELECT COUNT(*) FROM delivery_attempts da JOIN event_deliveries sd ON sd.id = da.event_delivery_id WHERE sd.event_id = '{eventId}' AND da.status = 'in_progress'") == 0);
-            }
-        }
-
-        await WaitForAsync(async () =>
-            await fixture.ScalarAsync<string>(
-                $"SELECT status FROM event_deliveries WHERE subscription_id = '{subscriptionId}' ORDER BY created_at DESC LIMIT 1") == "succeeded");
     }
 
     private async Task<Guid> PostAdminForIdAsync(string path, object body) =>

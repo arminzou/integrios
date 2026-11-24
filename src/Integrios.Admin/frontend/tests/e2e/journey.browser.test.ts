@@ -174,7 +174,7 @@ describe.skipIf(!configured)("A golden authoring journey against a real deployme
     const { name, contract_version } = destinationConnector;
     await choose(destinationForm.getByLabel("Connector", { exact: true }), `${name} (v${contract_version})`);
     await destinationForm.getByLabel("Name", { exact: true }).fill(`${run}-sink`);
-    await destinationForm.getByLabel("Base URI", { exact: true }).fill("http://mocksink:8080");
+    await destinationForm.getByLabel("Base URI", { exact: true }).fill("http://sink.example.test");
     await view.click("text=Create Destination");
     const destinationId = await created(view, /\/destinations\/[0-9a-f-]{36}$/, "Destination");
     await closeView(view);
