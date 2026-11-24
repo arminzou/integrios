@@ -584,8 +584,8 @@ jobs:
         with:
           subject-path: ${{ steps.archive.outputs.archive }}
 
-      # release-assets attaches it together with checksums.txt, so a release never shows an
-      # archive its manifest does not describe (rebuilt archives are not byte-identical).
+      # release-assets attaches it, keeping any archive a previous run already published, and
+      # regenerates checksums.txt from what is attached.
       - name: Keep the archive for the release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: actions/upload-artifact@v7.0.1
@@ -646,17 +646,23 @@ jobs:
         shell: bash
         run: |
           mkdir -p release-assets
-          # A first run finds nothing attached; a rerun brings back every earlier asset.
-          if [[ -n "$(gh release view "$GITHUB_REF_NAME" --json assets -q '.assets[].name')" ]]; then
+          # Its own assignment, so a failed lookup stops the step instead of reading as no assets.
+          assets=$(gh release view "$GITHUB_REF_NAME" --json assets -q '.assets[].name')
+          if [[ -n "$assets" ]]; then
             gh release download "$GITHUB_REF_NAME" --dir release-assets
           fi
-          # The manifest is computed over the final set before anything is uploaded, so the
-          # rebuilt archive and the checksum that describes it go up in one upload.
-          cp windows-zip/* release-assets/
+          # A published archive is never replaced. Rebuilt archives are not byte-identical, and a
+          # replacement leaves the manifest describing bytes that are gone. Only a first run, or a
+          # rerun after the archive upload failed, attaches it.
+          archive=$(basename windows-zip/*)
+          if [[ ! -f "release-assets/$archive" ]]; then
+            cp "windows-zip/$archive" release-assets/
+            gh release upload "$GITHUB_REF_NAME" "release-assets/$archive"
+          fi
           cd release-assets
           shopt -s extglob
           sha256sum -- !(checksums.txt) > checksums.txt
-          gh release upload "$GITHUB_REF_NAME" ../windows-zip/* checksums.txt --clobber
+          gh release upload "$GITHUB_REF_NAME" checksums.txt --clobber
 
       - name: Update release notes
         shell: bash

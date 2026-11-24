@@ -126,8 +126,10 @@ digest.
 
 Each release also attaches `integrios-<version>-win-x64.zip`, a self-contained Windows build
 cross-published on the Linux runner, and `checksums.txt` with the SHA-256 of every attached file.
-Both are attached together, only after the image is published. The evidence records the archive's
-SHA-256 and its build provenance attestation under `windows-archive/`.
+Both are attached only after the image is published. A rerun keeps an archive that is already
+attached and regenerates `checksums.txt` from it, because a rebuilt archive is not byte-identical.
+The evidence records the SHA-256 and build provenance attestation of the archive that run built,
+under `windows-archive/`, so a rerun's evidence can describe a build that was not attached.
 
 The release notes open with an Install section: the image pinned by digest, a `docker pull`
 command, and links to `deploy/compose.yml` and `deploy/azure/` at the release tag. Rerunning the
