@@ -94,6 +94,8 @@ services:
     image: ghcr.io/arminzou/integrios:${INTEGRIOS_VERSION:-0.13.0} # x-release-please-version
     entrypoint: ["/app/integrios", "worker"]
     restart: unless-stopped
+    # Above Integrios:Delivery:ShutdownGracePeriod (60s by default), so in-flight attempts finish on stop.
+    stop_grace_period: 75s
     depends_on:
       setup:
         condition: service_completed_successfully

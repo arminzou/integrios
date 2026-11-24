@@ -86,6 +86,8 @@ services:
   worker:
     <<: *integrios-image
     entrypoint: ["/app/integrios", "worker"]
+    # Above Integrios:Delivery:ShutdownGracePeriod (60s by default), so in-flight attempts finish on stop.
+    stop_grace_period: 75s
     depends_on:
       setup:
         condition: service_completed_successfully
