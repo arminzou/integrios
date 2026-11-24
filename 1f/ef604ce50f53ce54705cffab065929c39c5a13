@@ -1,0 +1,23 @@
+docs/architecture.md
+  s_078b68cf5414fc::t_2dbe4ffd412d2f 237-239
+docs/ci-cd.md
+  s_078b68cf5414fc::t_4b9958518d865c 99-101
+  s_078b68cf5414fc::t_3b48b0b05d08c6 81-90
+  s_078b68cf5414fc::t_2cbf6383824142 128-134
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "1fef604ce50f53ce54705cffab065929c39c5a13",
+  "prompts": {},
+  "sessions": {
+    "s_078b68cf5414fc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c74907d1-dae6-49f6-b97c-ae8e88e72918",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Armin Zou <arminzou@outlook.com>"
+    }
+  }
+}
