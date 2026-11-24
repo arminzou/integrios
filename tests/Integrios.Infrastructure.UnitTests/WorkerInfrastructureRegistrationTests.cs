@@ -156,16 +156,19 @@ public sealed class WorkerInfrastructureRegistrationTests
         requests[1].ShouldNotContain("Cookie:", Case.Insensitive);
     }
 
-    [Fact]
-    public async Task WorkerInfrastructureRegistration_DeliveryClientReadsOnlyTheCappedBody()
+    [Theory]
+    [InlineData(64 * 1024)]
+    [InlineData(8 * 1024)]
+    public async Task WorkerInfrastructureRegistration_DeliveryClientReadsOnlyTheCappedBody(int sentBytes)
     {
-        // The response declares 10 MB, sends 64 KB, then stalls. A client that buffers the whole
-        // body waits for bytes that never arrive; a capped read finishes from what was sent.
+        // The response declares 10 MB, sends at least the 8 KiB cap, then stalls. A client that
+        // buffers the whole body, or reads past the cap to learn that more remains, waits for bytes
+        // that never arrive; a capped read finishes from what was sent.
         using var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
         string destination = $"http://127.0.0.1:{((IPEndPoint)listener.LocalEndpoint).Port}/hook";
         using var stopServer = new CancellationTokenSource();
-        Task serverTask = StallAfterAsync(listener, declaredLength: 10_000_000, sentBytes: 64 * 1024, stopServer.Token);
+        Task serverTask = StallAfterAsync(listener, declaredLength: 10_000_000, sentBytes, stopServer.Token);
         await using ServiceProvider provider = BuildWorkerProvider(BuildConfiguration(ShortTimings()));
 
         DeliveryResult result = await provider.GetRequiredService<IDeliveryClient>().DeliverAsync(
