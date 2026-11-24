@@ -661,8 +661,11 @@ jobs:
           fi
           cd release-assets
           shopt -s extglob
-          sha256sum -- !(checksums.txt) > checksums.txt
-          gh release upload "$GITHUB_REF_NAME" checksums.txt --clobber
+          sha256sum -- !(checksums.txt) > ../checksums.txt
+          # A clobbering upload deletes the published manifest first, so an unchanged one stays.
+          if ! cmp -s ../checksums.txt checksums.txt; then
+            gh release upload "$GITHUB_REF_NAME" ../checksums.txt --clobber
+          fi
 
       - name: Update release notes
         shell: bash
