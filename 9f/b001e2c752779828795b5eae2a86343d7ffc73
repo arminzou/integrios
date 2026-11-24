@@ -1,0 +1,19 @@
+.github/workflows/ci.yml
+  s_078b68cf5414fc::t_3b7e57e115a6df 597
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "9fb001e2c752779828795b5eae2a86343d7ffc73",
+  "prompts": {},
+  "sessions": {
+    "s_078b68cf5414fc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c74907d1-dae6-49f6-b97c-ae8e88e72918",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Armin Zou <arminzou@outlook.com>"
+    }
+  }
+}
