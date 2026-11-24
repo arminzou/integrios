@@ -5,7 +5,7 @@ copy this directory into your own infrastructure repo and adapt it to your envir
 Azure Container Apps reference instead, see [deploy/azure](azure/README.md).
 
 The root `compose.yml` at the repository root is the local development stack. It builds images
-from source and bundles a test sink and dashboards; it is not for deployment. See the
+from source and bundles optional dashboards; it is not for deployment. See the
 [configuration reference](../docs/configuration.md) for runtime keys, defaults, and valid values.
 
 ## Quick start
@@ -45,7 +45,7 @@ non-empty Operator-supplied value and never prints the secret. The OperatorKey c
 global_operator_key:<secret>
 ```
 
-Admin and Bootstrap use the `control-plane` database scope, which includes Operator-authentication
+`setup` runs as the database owner. Admin uses the `control-plane` database scope, which includes Operator-authentication
 tables. Ingestion, Worker, and Delivery API use the `data-plane` scope, which excludes those tables. Both scopes
 allow ordinary row access to the other application tables; this is a database boundary, not a
 per-table Worker read-only grant.
@@ -204,12 +204,14 @@ docker compose up -d
 
 Releases before the single setup job ran separate `migrate`, `grant-runtime`, and `bootstrap`
 services. If you copied an older `compose.yml`, take the new one, then remove the stopped one-shot
-containers with `docker compose up -d --remove-orphans`.
+containers with `docker compose up -d --remove-orphans`. The `setup` command ships in the same
+release as this file, so never run it against an older image: an older Admin role does not know
+`setup` and starts its web host instead of exiting.
 
 ## Using a managed Postgres
 
-Remove the `postgres` service from `compose.yml`, then point `ConnectionStrings__Postgres` in
-`setup`, `ingestion`, `admin`, `worker`, and `subscriber` at your database. Keep the `setup`
+Remove the `postgres` service and every `depends_on` entry that names it from `compose.yml`, then
+point `ConnectionStrings__Postgres` in `setup`, `ingestion`, `admin`, `worker`, and `subscriber` at your database. Keep the `setup`
 connection on the schema owner. Configure both `Database__RuntimePrincipals` entries on `setup`
 with unique Password values or existing-principal grant-only mode; never put
 secret values in command-line configuration.

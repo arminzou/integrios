@@ -342,7 +342,7 @@ make logs    # tail all service logs
 
 ## Migrations
 
-Migrations run automatically during `make up` via the `migrate` service. To run the same pinned
+Migrations run automatically during `make up` via the `setup` service. To run the same pinned
 EF Core migration command manually through the Compose network (starting its Postgres dependency if needed):
 
 ```bash

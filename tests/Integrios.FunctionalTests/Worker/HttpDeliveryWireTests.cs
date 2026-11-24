@@ -131,7 +131,9 @@ public sealed class HttpDeliveryWireTests(HttpSinkFixture fixture) : IClassFixtu
         DateTimeOffset completedAt = (await fixture.GetDeliveryAttemptsAsync(delivery.Id))
             .ShouldHaveSingleItem().CompletedAt.ShouldNotBeNull();
         // The default backoff would put the retry about 30 seconds out; 10 seconds separates the two.
-        delivery.DeliverAfter.ShouldNotBeNull().ShouldBeLessThanOrEqualTo(completedAt.AddSeconds(10));
+        DateTimeOffset deliverAfter = delivery.DeliverAfter.ShouldNotBeNull();
+        deliverAfter.ShouldBeGreaterThanOrEqualTo(completedAt.AddSeconds(1));
+        deliverAfter.ShouldBeLessThanOrEqualTo(completedAt.AddSeconds(10));
     }
 
     [Fact]

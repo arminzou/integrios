@@ -57,10 +57,13 @@ fi
 # --- 1. Wipe tenant-scoped data --------------------------------------------------------------
 # Connectors and OperatorKeys are deployment-level and survive: they are what bootstrap and the
 # manifest apply own, not demo data.
+say "starting the local sink"
+docker compose -f compose.yml -f scripts/sink/compose.yml up -d mocksink
+curl -fsS --retry 20 --retry-connrefused --retry-delay 1 "$MOCKSINK/__admin/health" > /dev/null
+
 say "clearing existing tenant data"
 psql_q "truncate table delivery_attempts, event_deliveries, outbox, events, subscriptions, sources, topics, destinations, tenant_api_keys, tenants cascade;"
-docker compose -f compose.yml -f scripts/sink/compose.yml up -d mocksink
-curl -fsS --retry 20 --retry-connrefused --retry-delay 1 -X DELETE "$MOCKSINK/__admin/requests" > /dev/null
+curl -fsS -X DELETE "$MOCKSINK/__admin/requests" > /dev/null
 curl -fsS -X POST "$MOCKSINK/__admin/mappings/reset" > /dev/null
 
 # --- 2. Connector -----------------------------------------------------------------------------

@@ -213,8 +213,7 @@ if ($includeQueueDemo) {
 # --- 1. Wipe tenant-scoped data --------------------------------------------------------------
 # Connectors and OperatorKeys are deployment-level and survive: they are what bootstrap and the
 # manifest apply own, not demo data.
-Say 'clearing existing tenant data'
-Get-SqlScalar 'truncate table delivery_attempts, event_deliveries, outbox, events, subscriptions, sources, topics, destinations, tenant_api_keys, tenants cascade;' | Out-Null
+Say 'starting the local sink'
 docker compose -f compose.yml -f scripts/sink/compose.yml up -d mocksink
 if ($LASTEXITCODE -ne 0) { throw 'Could not start the local sink.' }
 # WireMock takes a moment to accept connections after its container starts.
@@ -222,6 +221,9 @@ foreach ($attempt in 1..20) {
     try { Invoke-RestMethod -Uri "$MockSink/__admin/health" | Out-Null; break }
     catch { if ($attempt -eq 20) { throw }; Start-Sleep -Seconds 1 }
 }
+
+Say 'clearing existing tenant data'
+Get-SqlScalar 'truncate table delivery_attempts, event_deliveries, outbox, events, subscriptions, sources, topics, destinations, tenant_api_keys, tenants cascade;' | Out-Null
 Invoke-RestMethod -Method Delete -Uri "$MockSink/__admin/requests" | Out-Null
 Invoke-RestMethod -Method Post -Uri "$MockSink/__admin/mappings/reset" | Out-Null
 

@@ -10,8 +10,9 @@
 # The Tenant API key is shared by the Tenant, but only Event API intake uses it.
 #
 # Use a clean database: rerunning Shared setup returns 409 for the existing Tenant slug.
-# SINK_BASE is an HTTP endpoint you control that the Worker can reach. Check each delivery in the
-# dashboard's Event history after the Worker runs.
+# SINK_BASE must be reachable by the Worker. Start the local sink with
+# `docker compose -f compose.yml -f scripts/sink/compose.yml up -d mocksink`; a Compose Worker
+# reaches it at http://mocksink:8080. Check each delivery in the dashboard's Event history.
 
 ###
 # Shared setup — apply one bidirectional Connector for all three journeys

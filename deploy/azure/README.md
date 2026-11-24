@@ -61,7 +61,8 @@ release fixes the digest every later deployment of it resolves to.
 
 Releases before the single setup job ran separate `<prefix>-migrate`, `<prefix>-grant`, and
 `<prefix>-bootstrap` jobs, with Bootstrap under its own `id-<prefix>-bootstrap` identity. An
-incremental redeployment leaves those resources in place unused. Delete the three jobs and that
+incremental redeployment leaves those resources in place unused. The setup job needs an image
+from the same release as these files; run an older release with that release's copy of this directory. Delete the three jobs and that
 identity after the first successful deployment on the new layout. The identity's database principal
 keeps its control-plane grant until you drop it, because setup never drops a principal.
 

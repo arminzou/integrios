@@ -16,7 +16,7 @@ up-observability:
 	docker compose --profile observability up --build -d
 
 down:
-	docker compose down
+	docker compose -f compose.yml -f scripts/sink/compose.yml down
 
 logs:
 	docker compose logs -f
