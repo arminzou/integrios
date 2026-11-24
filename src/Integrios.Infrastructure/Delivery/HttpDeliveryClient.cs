@@ -53,9 +53,16 @@ internal sealed class HttpDeliveryClient(HttpClient httpClient) : IDeliveryClien
                 FailurePhase: DeliveryFailurePhase.RequestConstruction);
         }
 
+        // Headers-read keeps SendAsync from buffering the whole body, so the timeout has to cover
+        // the capped read that follows as well, as it did when SendAsync read the body itself.
+        using var requestTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        requestTimeout.CancelAfter(httpClient.Timeout);
+        CancellationToken requestToken = requestTimeout.Token;
+
         try
         {
-            using var response = await httpClient.SendAsync(request, cancellationToken);
+            using var response = await httpClient.SendAsync(
+                request, HttpCompletionOption.ResponseHeadersRead, requestToken);
             int statusCode = (int)response.StatusCode;
             TimeSpan? retryAfter = statusCode is 429 or 503
                 ? RetryAfterParser.Parse(response, DateTimeOffset.UtcNow)
@@ -70,7 +77,7 @@ internal sealed class HttpDeliveryClient(HttpClient httpClient) : IDeliveryClien
                 : 0;
 
             (byte[] body, bool moreRemained) = await ReadCappedAsync(
-                response, Math.Max(CaptureMaxBytes, ruleMaxBytes), cancellationToken);
+                response, Math.Max(CaptureMaxBytes, ruleMaxBytes), requestToken);
 
             bool truncated = moreRemained || body.Length > CaptureMaxBytes;
             string? captured = Capture(body);
@@ -101,17 +108,18 @@ internal sealed class HttpDeliveryClient(HttpClient httpClient) : IDeliveryClien
                     false, statusCode, diagnostic, FailurePhase: DeliveryFailurePhase.Http,
                     ResponseBody: captured, ResponseBodyTruncated: truncated);
         }
-        catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             return new DeliveryResult(false, 0, "Request timed out", IsTimeout: true, FailurePhase: DeliveryFailurePhase.Http);
         }
-        catch (TaskCanceledException)
+        catch (OperationCanceledException)
         {
             return new DeliveryResult(false, 0, "Request was canceled.", FailurePhase: DeliveryFailurePhase.Http);
         }
         // The stock HttpClientHandler supplies transport diagnostics such as DNS, connection,
-        // and TLS failures through HttpRequestException without including request headers.
-        catch (HttpRequestException ex)
+        // and TLS failures through HttpRequestException, and body-read failures through
+        // IOException, without including request headers.
+        catch (Exception ex) when (ex is HttpRequestException or IOException)
         {
             return new DeliveryResult(false, 0, ex.Message, FailurePhase: DeliveryFailurePhase.Http);
         }

@@ -193,7 +193,9 @@ public static class DependencyInjection
             client.Timeout = deliveryOptions.HttpTimeout;
         }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
         {
-            AllowAutoRedirect = false
+            AllowAutoRedirect = false,
+            // Pooled handlers serve every Tenant, so a stored cookie would cross Tenants.
+            UseCookies = false
         });
 
         return services;
@@ -333,6 +335,7 @@ public static class DependencyInjection
                 .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
                 {
                     AllowAutoRedirect = false,
+                    UseCookies = false,
                     MeterFactory = SuppressedHttpMetricsFactory.Instance
                 })
                 .RemoveAllLoggers();
