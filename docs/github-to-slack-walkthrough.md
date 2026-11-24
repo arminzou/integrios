@@ -5,9 +5,9 @@ entirely through the Admin and Ingestion APIs. This exercises the platform's gen
 verified-webhook Source capability, Operator-authored Connectors, and HTTP success-rule
 evaluation on one concrete path — it is not a GitHub-specific or Slack-specific runtime feature.
 
-This walkthrough is API-driven. There is no Operator UI yet; every step below is a `curl` command
-against Admin, plus two manual steps in GitHub's and Slack's own consoles that Integrios does not
-and will not automate (see [Non-goals](#non-goals)).
+This walkthrough uses the Admin API: every step below is a `curl` command against Admin, plus
+two manual steps in GitHub's and Slack's own consoles that Integrios does not and will not
+automate (see [Non-goals](#non-goals)).
 
 ## Prerequisites
 
@@ -38,8 +38,8 @@ authentication. The concrete Source mapping and Slack success rule are authored 
 resources below. Apply is idempotent — a missing version is created, and
 re-applying the identical manifest is a no-op.
 
-Apply returns the created Connector, including its deployment-wide `id`, which Sources and
-Destinations reference below.
+Apply returns the Connector under `connector`, including its deployment-wide `id`, which Sources
+and Destinations reference below.
 
 ```bash
 ADMIN=http://localhost:5150
@@ -49,10 +49,10 @@ INGESTION=http://localhost:5231
 AUTH="Authorization: OperatorKey global_operator_key:operator_bootstrap_secret"
 
 GITHUB_CONNECTOR=$(curl -s -X PUT "$ADMIN/admin/connectors/github/versions/1" -H "$AUTH" \
-  -H 'Content-Type: application/json' --data-binary @examples/connectors/github.json | jq -r .id)
+  -H 'Content-Type: application/json' --data-binary @examples/connectors/github.json | jq -er .connector.id)
 
 SLACK_CONNECTOR=$(curl -s -X PUT "$ADMIN/admin/connectors/slack/versions/1" -H "$AUTH" \
-  -H 'Content-Type: application/json' --data-binary @examples/connectors/slack.json | jq -r .id)
+  -H 'Content-Type: application/json' --data-binary @examples/connectors/slack.json | jq -er .connector.id)
 ```
 
 Bootstrap installs no Connectors. These are ordinary Operator-authored Connectors, validated by
