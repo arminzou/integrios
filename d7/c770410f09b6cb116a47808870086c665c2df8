@@ -1,0 +1,21 @@
+tests/Integrios.Infrastructure.UnitTests/WorkerInfrastructureRegistrationTests.cs
+  s_b19acd4aae4d50::t_16ecd4687afde0 145-146
+  s_b19acd4aae4d50::t_ee30814eee1870 239
+  s_b19acd4aae4d50::t_8f18455d370c2e 133-144,147-238,240-249
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "d7c770410f09b6cb116a47808870086c665c2df8",
+  "prompts": {},
+  "sessions": {
+    "s_b19acd4aae4d50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "01ddce99-a00c-49f1-9f76-21f5af0490d8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Armin Zou <arminzou@outlook.com>"
+    }
+  }
+}
