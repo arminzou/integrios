@@ -158,6 +158,27 @@ public sealed class ProjectArchitectureTests
             + $"banned as the suffix that means nothing. Found: {string.Join(", ", offenders)}");
     }
 
+    [Theory]
+    [InlineData("Integrios.Admin", Integrios.Admin.AdminHost.Name)]
+    [InlineData("Integrios.Ingestion", Integrios.Ingestion.IngestionHost.Name)]
+    [InlineData("Integrios.Worker", Integrios.Worker.WorkerHost.Name)]
+    [InlineData("Integrios.Subscriber", Integrios.Subscriber.SubscriberHost.Name)]
+    public void HostSettingsFiles_AreNamedForTheirRole(string project, string role)
+    {
+        // A role loads only appsettings.{role}.json and appsettings.{role}.{environment}.json,
+        // so a file named for any other role is silently ignored.
+        string projectDirectory = Path.Combine(FindRepositoryRoot(), "src", project);
+
+        string[] misnamed = Directory
+            .EnumerateFiles(projectDirectory, "appsettings.*.json", SearchOption.TopDirectoryOnly)
+            .Select(Path.GetFileName)
+            .Where(name => !name!.StartsWith($"appsettings.{role}.", StringComparison.Ordinal))
+            .Order(StringComparer.Ordinal)
+            .ToArray()!;
+
+        misnamed.ShouldBeEmpty($"Settings files in {project} must be named for the '{role}' role.");
+    }
+
     [Fact]
     public void SourceTree_DeclaresNoJsonPropertyNameAttributes()
     {
