@@ -7,7 +7,7 @@
     <IsPackable>true</IsPackable>
     <PackageId>Integrios.Client</PackageId>
     <!-- The SDK versions apart from the server; release-please updates the marked line. -->
-    <Version>0.2.0</Version> <!-- x-release-please-version -->
+    <Version>0.2.1</Version> <!-- x-release-please-version -->
     <Description>Consume an Integrios pull Destination from a .NET generic host.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <Authors>Integrios</Authors>
