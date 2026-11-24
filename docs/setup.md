@@ -188,8 +188,7 @@ curl -s -X POST http://localhost:5054/__admin/requests/find \
 ```
 
 The final receipt proves that replay created a new successful attempt without discarding the three
-failed attempts in the Event's history. The `.http` request collections under each service in
-`src/` cover the same APIs interactively.
+failed attempts in the Event's history.
 
 ## Rotate the OperatorKey
 

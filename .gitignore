@@ -14,7 +14,6 @@ Thumbs.db
 
 *.local.md
 .env
-.env.http
 secrets/*
 !secrets/README.md
 !secrets/sources/
