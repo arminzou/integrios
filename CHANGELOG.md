@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.13.0](https://github.com/arminzou/integrios/compare/v0.12.0...v0.13.0) (2026-11-24)
+
+
+### ⚠ BREAKING CHANGES
+
+* **api:** address pull deliveries by lease token and rename nack to release ([#104](https://github.com/arminzou/integrios/issues/104))
+
+### Features
+
+* **admin:** author pull Destinations and Subscriptions ([#90](https://github.com/arminzou/integrios/issues/90)) ([740d6a5](https://github.com/arminzou/integrios/commit/740d6a5faf5a4352689b86a0600983ba2fdab787))
+* **admin:** run deployment setup as one job and test delivery in-process ([#107](https://github.com/arminzou/integrios/issues/107)) ([310bc0c](https://github.com/arminzou/integrios/commit/310bc0c6c1f09e4ea1eaa3794330fff4c0da9351))
+* **api:** add the delivery-api role for pull claims ([#92](https://github.com/arminzou/integrios/issues/92)) ([1b4667d](https://github.com/arminzou/integrios/commit/1b4667d07716a65cbcd7800adf9a06ac72bcf141))
+* **api:** add the generic-host Subscriber SDK preview ([#98](https://github.com/arminzou/integrios/issues/98)) ([45112de](https://github.com/arminzou/integrios/commit/45112deb968e59e871c5cce55a5b68cd7dda510a))
+* **api:** authenticate Subscribers with keys scoped to one pull Destination ([#93](https://github.com/arminzou/integrios/issues/93)) ([da163d2](https://github.com/arminzou/integrios/commit/da163d2b270f1029e8f7894013683bbd2012f6e4))
+* **api:** serve the pull delivery protocol to Subscribers ([#94](https://github.com/arminzou/integrios/issues/94)) ([96e9f3f](https://github.com/arminzou/integrios/commit/96e9f3f428e5efa6cdacbd743c1fbb461bc7ab06))
+* **worker:** add the pull delivery core for Subscribers ([#89](https://github.com/arminzou/integrios/issues/89)) ([c50c92a](https://github.com/arminzou/integrios/commit/c50c92aee46b9a6dcdcbbfb1b4699f89e7d9952c))
+
+
+### Bug Fixes
+
+* **ci:** fetch a pull request's event base when the shallow checkout lacks it ([#99](https://github.com/arminzou/integrios/issues/99)) ([8fd070d](https://github.com/arminzou/integrios/commit/8fd070d42f7fa912c51f0e1c8bdd61fae01af482))
+
+
+### Code Refactoring
+
+* **api:** address pull deliveries by lease token and rename nack to release ([#104](https://github.com/arminzou/integrios/issues/104)) ([d6f41a5](https://github.com/arminzou/integrios/commit/d6f41a5b2d4086b638d911d3e0fcf26e1d1e5b0a))
+
 ## [0.12.0](https://github.com/arminzou/integrios/compare/v0.11.0...v0.12.0) (2026-11-16)
 
 
