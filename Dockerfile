@@ -4,7 +4,6 @@
 FROM node:22.23.5-bookworm-slim AS node
 FROM mcr.microsoft.com/dotnet/sdk:10.0.404 AS build
 WORKDIR /src
-COPY Integrios.slnx .
 COPY global.json Directory.Build.props VERSION ./
 COPY src/ src/
 RUN dotnet restore src/Integrios/Integrios.csproj --locked-mode

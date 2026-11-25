@@ -6,15 +6,22 @@
 .vs/
 .vscode/
 
-# Source-of-truth and docs are not needed to build runtime images.
-dev/
+# Only src/ and the root build files are copied in; nothing else is needed to build runtime images.
+.agents/
+.claude/
+.codex/
+deploy/
 docs/
+examples/
+infra/
+scripts/
 tests/
 
 # Local environment and secrets.
 .env
 .env.*
 **/*.user
+secrets/
 
 # The dashboard is installed and built inside the image, from the committed lockfile. A host build
 # tree would otherwise be copied in and could silently replace what the image build produces.
