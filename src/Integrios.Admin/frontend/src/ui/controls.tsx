@@ -1,3 +1,4 @@
+import { useIsMutating } from "@tanstack/react-query";
 import { cn } from "cn";
 import { LoaderCircle } from "lucide-react";
 import { Dialog as DialogPrimitive } from "radix-ui";
@@ -148,9 +149,11 @@ function FormSheet({
   const screenOwned = open !== undefined;
   const isOpen = screenOwned ? open : ownOpen;
   const setOpen = screenOwned ? (onOpenChange ?? (() => {})) : setOwnOpen;
+  // A write in flight answers into this form; closing it now would drop the answer, such as a new key.
+  const writing = useIsMutating() > 0;
 
   return (
-    <Sheet open={isOpen} onOpenChange={setOpen}>
+    <Sheet open={isOpen} onOpenChange={(next) => (next || !writing) && setOpen(next)}>
       {screenOwned ? null : (
         <SheetTrigger asChild>
           <Button type="button" variant={variant}>
