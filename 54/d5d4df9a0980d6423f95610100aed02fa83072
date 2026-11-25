@@ -1,0 +1,21 @@
+deploy/.env.example
+  s_b19acd4aae4d50::t_71fd990996f9a9 57-60
+deploy/README.md
+  s_b19acd4aae4d50::t_f4c0a578ef2cdf 194-195
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "54d5d4df9a0980d6423f95610100aed02fa83072",
+  "prompts": {},
+  "sessions": {
+    "s_b19acd4aae4d50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "01ddce99-a00c-49f1-9f76-21f5af0490d8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Armin Zou <arminzou@outlook.com>"
+    }
+  }
+}
