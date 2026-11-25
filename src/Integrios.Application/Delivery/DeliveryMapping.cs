@@ -26,7 +26,17 @@ internal static class DeliveryMapping
                 return (null, "Transform config is missing required string fields (engine, version, expression).");
             }
 
-            var transform = new TransformSpec(engineEl.GetString()!, versionEl.GetString()!, expressionEl.GetString()!);
+            TransformSpec transform;
+            try
+            {
+                transform = new TransformSpec(engineEl.GetString()!, versionEl.GetString()!, expressionEl.GetString()!);
+            }
+            // A lone UTF-16 surrogate escape is valid JSON but cannot be decoded into a string.
+            catch (InvalidOperationException)
+            {
+                return (null, "Transform config holds a string that cannot be decoded.");
+            }
+
             return (transformEvaluator.Evaluate(transform, payloadJson, context), null);
         }
         catch (TransformEvaluationException ex)
