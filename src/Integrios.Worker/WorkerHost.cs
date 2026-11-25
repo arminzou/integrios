@@ -13,7 +13,7 @@ public static class WorkerHost
 
     public static async Task<int> RunAsync(string[] args)
     {
-        bool secretCommand = SecretValidationCli.IsCommand(args);
+        bool secretCommand = DestinationSecretValidationCli.IsCommand(args);
 
         try
         {
@@ -22,7 +22,7 @@ public static class WorkerHost
 
             if (secretCommand)
             {
-                int exitCode = await SecretValidationCli.RunAsync(args, app.Services, Console.Out, Console.Error);
+                int exitCode = await DestinationSecretValidationCli.RunAsync(args, app.Services, Console.Out, Console.Error);
                 await app.DisposeAsync();
                 return exitCode;
             }
@@ -45,7 +45,7 @@ public static class WorkerHost
     {
         var builder = ServiceHosting.CreateBuilder(args, Name, typeof(WorkerHost).Assembly.GetName().Name!);
         builder.Logging.AddOperationalConsoleLogging(builder.Environment.IsDevelopment());
-        bool secretCommand = SecretValidationCli.IsCommand(args);
+        bool secretCommand = DestinationSecretValidationCli.IsCommand(args);
 
         builder.Configuration.AddSecretConfigurationSources();
         int operationalPort = builder.AddOperationalEndpoints(DefaultOperationalPort, operationalOnly: true);

@@ -808,7 +808,7 @@ describe("Event inspector", () => {
   });
 
   it("reads a Subscriber's reported failure without inventing an HTTP exchange", async () => {
-    const nacked = {
+    const subscriberFailure = {
       attempt_id: "88888888-0000-0000-0000-000000000002",
       event_delivery_id: deliveryId,
       subscription_id: subscriptionId,
@@ -821,7 +821,7 @@ describe("Event inspector", () => {
       started_at: "2026-09-01T10:00:00Z",
       completed_at: "2026-09-01T10:00:05Z",
     };
-    stubHttp(respondFor(page([]), { ...detail("pending"), delivery_attempts: [nacked] }));
+    stubHttp(respondFor(page([]), { ...detail("pending"), delivery_attempts: [subscriberFailure] }));
 
     renderScreen(<EventsScreen tenantId={tenantId} selectedEventId={eventId} />);
     const timeline = await screen.findByRole("list", { name: "Every delivery attempt for this Event" });

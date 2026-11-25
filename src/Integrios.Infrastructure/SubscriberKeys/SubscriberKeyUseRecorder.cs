@@ -1,5 +1,5 @@
 using Dapper;
-using Integrios.Application.Subscriber;
+using Integrios.Application.PullDelivery;
 using Integrios.Infrastructure.Data;
 
 namespace Integrios.Infrastructure.SubscriberKeys;

@@ -13,7 +13,7 @@ public sealed class TenantEventBacklogTests(AdminApiFixture fixture) : AdminApiT
     public async Task InitializeAsync()
     {
         await fixture.ResetAsync();
-        client = fixture.WebFactory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        client = fixture.Host.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
     }
 
     public Task DisposeAsync()

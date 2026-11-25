@@ -24,7 +24,7 @@ public sealed class PostgresApiFixture : IAsyncLifetime
     private readonly FunctionalDatabase database = new();
     private Respawner respawner = null!;
 
-    public TestHostBuilder WebFactory { get; private set; } = null!;
+    public TestHostBuilder Host { get; private set; } = null!;
     public string ConnectionString => database.ConnectionString;
     internal DbConnection CreateConnection() => database.CreateConnection();
     internal DbContextOptions<IntegriosDbContext> CreateOptions() => database.CreateOptions();
@@ -35,12 +35,12 @@ public sealed class PostgresApiFixture : IAsyncLifetime
     {
         await database.StartAsync();
         respawner = await database.CreateRespawnerAsync();
-        WebFactory = BuildWebFactory();
+        Host = BuildHost();
     }
 
     public async Task DisposeAsync()
     {
-        WebFactory.Dispose();
+        Host.Dispose();
         await database.DisposeAsync();
     }
 
@@ -274,7 +274,7 @@ public sealed class PostgresApiFixture : IAsyncLifetime
         return (await connection.ExecuteScalarAsync<T>(sql, parameters))!;
     }
 
-    private TestHostBuilder BuildWebFactory() =>
+    private TestHostBuilder BuildHost() =>
         new TestHostBuilder(IngestionHost.CreateBuilder, IngestionHost.ConfigurePipeline)
             .WithSetting("Database:Provider", database.Provider)
             .WithSetting($"ConnectionStrings:{database.ConnectionName}", database.ConnectionString)

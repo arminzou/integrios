@@ -34,8 +34,8 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
     private readonly int adminPort = GetAvailablePort();
     private readonly int adminOperationalPort = GetAvailablePort();
     private readonly int workerMetricsPort = GetAvailablePort();
-    private readonly int deliveryApiPort = GetAvailablePort();
-    private readonly int deliveryApiOperationalPort = GetAvailablePort();
+    private readonly int subscriberPort = GetAvailablePort();
+    private readonly int subscriberOperationalPort = GetAvailablePort();
 
     public PackagedDeploymentFixture()
     {
@@ -59,8 +59,8 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
             ["INTEGRIOS_ADMIN_PORT"] = adminPort.ToString(),
             ["INTEGRIOS_ADMIN_OPERATIONAL_PORT"] = adminOperationalPort.ToString(),
             ["INTEGRIOS_WORKER_METRICS_PORT"] = workerMetricsPort.ToString(),
-            ["INTEGRIOS_SUBSCRIBER_PORT"] = deliveryApiPort.ToString(),
-            ["INTEGRIOS_SUBSCRIBER_OPERATIONAL_PORT"] = deliveryApiOperationalPort.ToString(),
+            ["INTEGRIOS_SUBSCRIBER_PORT"] = subscriberPort.ToString(),
+            ["INTEGRIOS_SUBSCRIBER_OPERATIONAL_PORT"] = subscriberOperationalPort.ToString(),
             ["INTEGRIOS_OTEL_CONFIG"] = Path.Combine(repoRoot, "tests", "Integrios.AcceptanceTests", "otel-collector.acceptance.yaml"),
             ["INTEGRIOS_OTEL_ARTIFACTS_DIR"] = otelArtifactsDirectory,
             ["INTEGRIOS_SOURCE_SECRETS_DIR"] = sourceSecretsDirectory,
@@ -426,8 +426,8 @@ public sealed class PackagedDeploymentFixture : IAsyncLifetime
         IngestionClient = CreateClient(ingestionPort);
         IngestionOperationalClient = CreateClient(ingestionOperationalPort);
         WorkerOperationalClient = CreateClient(workerMetricsPort);
-        SubscriberClient = CreateClient(deliveryApiPort);
-        SubscriberOperationalClient = CreateClient(deliveryApiOperationalPort);
+        SubscriberClient = CreateClient(subscriberPort);
+        SubscriberOperationalClient = CreateClient(subscriberOperationalPort);
         await WaitUntilReadyAsync(expectCollector: !buildImages);
     }
 

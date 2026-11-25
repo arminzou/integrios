@@ -28,7 +28,7 @@ public sealed class AdminApiFixture : IAsyncLifetime
         "integrios-admin-keys-" + Guid.NewGuid().ToString("N"));
     private Respawner respawner = null!;
 
-    public TestHostBuilder WebFactory { get; private set; } = null!;
+    public TestHostBuilder Host { get; private set; } = null!;
     public string ConnectionString => database.ConnectionString;
     internal DbConnection CreateConnection() => database.CreateConnection();
     internal string Json(string parameter) => database.Json(parameter);
@@ -46,12 +46,12 @@ public sealed class AdminApiFixture : IAsyncLifetime
         Directory.CreateDirectory(keyRingPath);
         await database.StartAsync();
         respawner = await database.CreateRespawnerAsync();
-        WebFactory = BuildWebFactory();
+        Host = BuildHost();
     }
 
     public async Task DisposeAsync()
     {
-        WebFactory.Dispose();
+        Host.Dispose();
         await database.DisposeAsync();
         Directory.Delete(keyRingPath, recursive: true);
     }
@@ -151,7 +151,7 @@ public sealed class AdminApiFixture : IAsyncLifetime
 
     public async Task<Guid> ApplyConnectorManifestAsync(string key, string manifestJson)
     {
-        using HttpClient client = WebFactory.CreateClient();
+        using HttpClient client = Host.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Put, $"/admin/connectors/{key}/versions/1")
         {
             Content = new StringContent(manifestJson, Encoding.UTF8, "application/json")
@@ -220,7 +220,7 @@ public sealed class AdminApiFixture : IAsyncLifetime
 
     }
 
-    private TestHostBuilder BuildWebFactory() =>
+    private TestHostBuilder BuildHost() =>
         new TestHostBuilder(AdminHost.CreateBuilder, AdminHost.ConfigurePipeline)
             .WithSetting("Database:Provider", database.Provider)
             .WithSetting($"ConnectionStrings:{database.ConnectionName}", database.ConnectionString)

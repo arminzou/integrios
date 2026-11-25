@@ -32,7 +32,7 @@ public static class DependencyInjection
         => AddApplicationServices(services, OwnedBy(Worker, "Delivery"));
 
     public static IServiceCollection AddSubscriberApplicationServices(this IServiceCollection services)
-        => AddApplicationServices(services, OwnedBy(Subscriber, "Subscriber"));
+        => AddApplicationServices(services, OwnedBy(Subscriber, "PullDelivery"));
 
     private static IServiceCollection AddApplicationServices(
         IServiceCollection services,

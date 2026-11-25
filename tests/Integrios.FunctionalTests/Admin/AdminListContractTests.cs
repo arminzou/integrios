@@ -17,7 +17,7 @@ public sealed class AdminListContractTests(AdminApiFixture fixture) : AdminApiTe
     public async Task InitializeAsync()
     {
         await fixture.ResetAsync();
-        client = fixture.WebFactory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        client = fixture.Host.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
     }
 
     public Task DisposeAsync()
@@ -50,7 +50,7 @@ public sealed class AdminListContractTests(AdminApiFixture fixture) : AdminApiTe
         // A wrong scope is rejected the same way an expired stamp is, so minting a cursor under
         // this literal only tests expiry for as long as the literal still is the unfiltered scope.
         // The accepted one alongside it is what fails when that stops being true.
-        IDataProtectionProvider dataProtection = fixture.WebFactory.Services.GetRequiredService<IDataProtectionProvider>();
+        IDataProtectionProvider dataProtection = fixture.Host.Services.GetRequiredService<IDataProtectionProvider>();
         const string unfilteredScope = "tenants:{\"status\":null,\"environment\":null,\"name\":null}";
         string freshCursor = PageCursor.Encode(dataProtection, unfilteredScope, now, newerId, DateTimeOffset.UtcNow);
         (await client.SendAsync(AdminRequest(HttpMethod.Get, $"/admin/tenants?after={Uri.EscapeDataString(freshCursor)}"))).StatusCode.ShouldBe(HttpStatusCode.OK);

@@ -13,8 +13,8 @@ using Integrios.Application.Delivery;
 using Integrios.Application.EventMonitoring;
 using Integrios.Application.Identity;
 using Integrios.Application.Ingestion;
+using Integrios.Application.PullDelivery;
 using Integrios.Application.Secrets;
-using Integrios.Application.Subscriber;
 using Integrios.Application.Transforms;
 using Integrios.Infrastructure;
 using Microsoft.AspNetCore.Builder;
@@ -135,20 +135,20 @@ public sealed class HostCompositionArchitectureTests
         using ServiceProvider worker = BuildProvider(
             services => services.AddWorkerApplicationServices(),
             services => services.AddWorkerInfrastructureServices(BuildConfiguration()));
-        using ServiceProvider deliveryApi = BuildProvider(
+        using ServiceProvider subscriber = BuildProvider(
             services => services.AddSubscriberApplicationServices(),
             services => services.AddSubscriberInfrastructureServices(BuildConfiguration()));
         using IServiceScope adminScope = admin.CreateScope();
         using IServiceScope ingestionScope = ingestion.CreateScope();
         using IServiceScope workerScope = worker.CreateScope();
-        using IServiceScope deliveryApiScope = deliveryApi.CreateScope();
+        using IServiceScope subscriberScope = subscriber.CreateScope();
 
         (string Name, IServiceProvider Provider)[] hosts =
         [
             ("Admin", adminScope.ServiceProvider),
             ("Ingestion", ingestionScope.ServiceProvider),
             ("Worker", workerScope.ServiceProvider),
-            ("Subscriber", deliveryApiScope.ServiceProvider)
+            ("Subscriber", subscriberScope.ServiceProvider)
         ];
 
         ApplicationArchitectureTests.HandlerRegistration[] handlers =
@@ -181,7 +181,7 @@ public sealed class HostCompositionArchitectureTests
         ["Integrios.Application.EventMonitoring"] = Host.Admin,
         ["Integrios.Application.Ingestion"] = Host.Ingestion,
         ["Integrios.Application.Delivery"] = Host.Worker,
-        ["Integrios.Application.Subscriber"] = Host.Subscriber
+        ["Integrios.Application.PullDelivery"] = Host.Subscriber
     };
 
     // Mirrors CrossGroupOwners in Application's DependencyInjection. Both lists exist so that a
@@ -205,20 +205,20 @@ public sealed class HostCompositionArchitectureTests
         using ServiceProvider worker = BuildProvider(
             services => services.AddWorkerApplicationServices(),
             services => services.AddWorkerInfrastructureServices(BuildConfiguration()));
-        using ServiceProvider deliveryApi = BuildProvider(
+        using ServiceProvider subscriber = BuildProvider(
             services => services.AddSubscriberApplicationServices(),
             services => services.AddSubscriberInfrastructureServices(BuildConfiguration()));
         using IServiceScope adminScope = admin.CreateScope();
         using IServiceScope ingestionScope = ingestion.CreateScope();
         using IServiceScope workerScope = worker.CreateScope();
-        using IServiceScope deliveryApiScope = deliveryApi.CreateScope();
+        using IServiceScope subscriberScope = subscriber.CreateScope();
 
         (Host Host, IServiceProvider Provider)[] hosts =
         [
             (Host.Admin, adminScope.ServiceProvider),
             (Host.Ingestion, ingestionScope.ServiceProvider),
             (Host.Worker, workerScope.ServiceProvider),
-            (Host.Subscriber, deliveryApiScope.ServiceProvider)
+            (Host.Subscriber, subscriberScope.ServiceProvider)
         ];
 
         ApplicationArchitectureTests.HandlerRegistration[] handlers =
@@ -287,20 +287,20 @@ public sealed class HostCompositionArchitectureTests
         using ServiceProvider worker = BuildProvider(
             services => services.AddWorkerApplicationServices(),
             services => services.AddWorkerInfrastructureServices(BuildConfiguration()));
-        using ServiceProvider deliveryApi = BuildProvider(
+        using ServiceProvider subscriber = BuildProvider(
             services => services.AddSubscriberApplicationServices(),
             services => services.AddSubscriberInfrastructureServices(BuildConfiguration()));
         using IServiceScope adminScope = admin.CreateScope();
         using IServiceScope ingestionScope = ingestion.CreateScope();
         using IServiceScope workerScope = worker.CreateScope();
-        using IServiceScope deliveryApiScope = deliveryApi.CreateScope();
+        using IServiceScope subscriberScope = subscriber.CreateScope();
 
         (Host Host, IServiceProvider Provider)[] providers =
         [
             (Host.Admin, adminScope.ServiceProvider),
             (Host.Ingestion, ingestionScope.ServiceProvider),
             (Host.Worker, workerScope.ServiceProvider),
-            (Host.Subscriber, deliveryApiScope.ServiceProvider)
+            (Host.Subscriber, subscriberScope.ServiceProvider)
         ];
 
         foreach ((Type port, Host[] expectedOwners) in PortOwners)

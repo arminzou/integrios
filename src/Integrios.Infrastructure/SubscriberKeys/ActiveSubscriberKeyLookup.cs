@@ -1,5 +1,5 @@
 using Dapper;
-using Integrios.Application.Subscriber;
+using Integrios.Application.PullDelivery;
 using Integrios.Infrastructure.Connectors;
 using Integrios.Infrastructure.Data;
 
