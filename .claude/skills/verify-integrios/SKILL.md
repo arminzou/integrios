@@ -44,7 +44,8 @@ launch and drive commands below so one healthy stack can serve several related c
 after changing code that the running binaries use.
 
 This is an API smoke proof, not a complete regression pass. It does not verify dashboard behavior,
-retry/dead-letter/replay, SQL Server, broker Sources, or packaged deployment. Read the matching
+retry/dead-letter/replay, broker Sources, or packaged deployment, and it runs on PostgreSQL unless
+`VERIFY_DB=sqlserver` is set. Read the matching
 feature recipes and run relevant tests for those changes. For UI work, use `browser.mjs` to exercise
 the UI and capture the result; an API pass is not a UI pass.
 
@@ -74,6 +75,15 @@ with `--dashboard` on a cold `npm ci`. It:
 6. Starts `admin`, `ingestion`, `worker`, and `subscriber` as background `dotnet integrios.dll <role>`
    processes, each under its runtime database principal, and waits until every `/ready` endpoint answers
    `200`. Ready means the role reached the database, not only that the port listens.
+
+Two variables change the stack's shape. Set them for every `control.sh` call of the run:
+
+- `VERIFY_DB=sqlserver` runs on SQL Server from `scripts/sqlserver/compose.yml` (the image the
+  functional tests pin) instead of PostgreSQL. As a DBA would, `up` creates the database and a
+  login and user per runtime principal, then runs `setup` with `grant-runtime` in grant-only mode.
+  It adds about 20 seconds while SQL Server starts.
+- `VERIFY_WORKERS=2` starts a second Worker, `worker-2`, on operational port 5298 plus the offset,
+  as a two-Worker Windows Server install runs.
 
 The loaded env exports `ADMIN`, `INGESTION`, `MOCKSINK`, `ADMIN_OPS`, `INGESTION_OPS`,
 `WORKER_OPS`, `DELIVERY_API`, `DELIVERY_API_OPS`, `AUTH` (an `Authorization: OperatorKey ...` header), `OPERATOR_EMAIL`,
@@ -165,6 +175,29 @@ means you changed commits since `up`: run `down` and `up` again.
 - **CLI:** `$V/control.sh integrios <role> <args...>` runs the built binary against this run's
   database, as the owner by default. Prefix `ConnectionStrings__Postgres=...` to run as a runtime
   principal.
+
+## Measure the Delivery API under load
+
+```bash
+bash $V/measure.sh [runs-per-side]
+```
+
+It measures the two load checks of the pull delivery design on SQL Server with two Workers, each
+run on a fresh stack, and writes `samples.jsonl` and `summary.json` per run under
+`artifacts/verify/measure/<stamp>/`. It takes about an hour at the default 5 runs per side.
+
+- **Fault injection.** `measure.mjs fault <push|pull>` posts one Event a second to each of two
+  Connectors, X and Y: 30 seconds healthy, then 60 seconds with X's handler stalled for 60 seconds
+  (a WireMock delay for push, a sleeping claim loop for pull). Y's latency is the Event's
+  `accepted_at` to its succeeded attempt's `completed_at`, both from the database clock. Runs
+  alternate push and pull.
+- **Intake under Subscriber load.** With both Workers stopped, `measure.mjs intake` posts 20
+  Events a second to Ingestion and alternates 30-second phases: no Subscribers, then 200 idle
+  long-polls plus 4 claim loops with no wait. Latency is the Source's view, request to `202`.
+
+`MEASURE_*` variables (named at the top of `measure.mjs`) change the durations and rates.
+`summary.json` counts intake errors, unsettled deliveries, and opened claims, so a run that did no
+work shows it.
 
 ## Evidence
 

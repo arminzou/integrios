@@ -1,0 +1,18 @@
+# A local SQL Server for tooling that runs Integrios on its second provider, layered over the
+# repository compose.yml:
+#   docker compose -f compose.yml -f scripts/sqlserver/compose.yml up -d --wait sqlserver
+# The image matches the one the functional tests pin. It is not part of the product.
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-CU20-ubuntu-22.04
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${INTEGRIOS_SQLSERVER_SA_PASSWORD:-Integrios_verify1!}
+    ports:
+      - "127.0.0.1:${INTEGRIOS_SQLSERVER_PORT:-1433}:1433"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q 'SELECT 1' -b -o /dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
