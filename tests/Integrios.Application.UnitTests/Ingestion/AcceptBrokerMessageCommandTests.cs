@@ -79,6 +79,19 @@ public sealed class AcceptBrokerMessageCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task Handle_MessageIdLongerThan450Characters_IsRejectedEvenWhenMissingIsAllowed()
+    {
+        JsonElement input = JsonSerializer.SerializeToElement(new { event_type = "order.created", payload = new { } });
+        var identityRule = new SourceEventIdentityRule { Kind = "message_id", Value = "ignored", AllowMissing = true };
+
+        await Should.ThrowAsync<EventAcceptanceException>(() => mediator.Send(
+            new AcceptBrokerMessageCommand(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), null, null, input,
+                identityRule, new string('a', 451))));
+
+        eventAcceptance.LastSubmission.ShouldBeNull();
+    }
+
+    [Fact]
     public async Task Handle_SchemaInvalidInput_ThrowsEventAcceptanceException()
     {
         JsonElement schema = JsonDocument.Parse(
@@ -116,9 +129,9 @@ public sealed class AcceptBrokerMessageCommandTests : IDisposable
         public bool AlreadyAccepted { get; set; }
         public EventSubmission? LastSubmission { get; private set; }
 
-        public Task<EventAcceptance?> FindBySourceEventIdAsync(
-            Guid sourceId,
-            string sourceEventId,
+        public Task<EventAcceptance?> FindByIdempotencyKeyAsync(
+            Guid tenantId,
+            string idempotencyKey,
             CancellationToken cancellationToken) => Task.FromResult<EventAcceptance?>(null);
 
         public Task<EventAcceptance> AcceptAsync(EventSubmission submission, string? traceparent, CancellationToken cancellationToken)

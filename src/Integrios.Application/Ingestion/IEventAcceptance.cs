@@ -6,9 +6,9 @@ namespace Integrios.Application.Ingestion;
 
 public interface IEventAcceptance
 {
-    Task<EventAcceptance?> FindBySourceEventIdAsync(
-        Guid sourceId,
-        string sourceEventId,
+    Task<EventAcceptance?> FindByIdempotencyKeyAsync(
+        Guid tenantId,
+        string idempotencyKey,
         CancellationToken cancellationToken);
 
     Task<EventAcceptance> AcceptAsync(

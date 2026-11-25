@@ -186,6 +186,7 @@ the Source only when it belongs to the authenticated Tenant, is Active, and may 
 Topic. There is no separate idempotency key field: when a `source_event_id` is supplied, the
 idempotency key combines the Source id with a hash of `source_event_id`, and repeated submissions
 with the same identity resolve to the same accepted Event.
+Ingestion limits every Source event ID to 450 UTF-16 code units, including IDs extracted from webhooks or broker messages and IDs produced by Source mappings.
 
 Provider credentials and webhook secrets are not Integrios TenantApiKeys. Sources and Destinations
 store logical secret references; the Operator supplies their values through standard .NET

@@ -4,11 +4,14 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Integrios.Application.Ingestion;
+using Integrios.Application.Transforms;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
 using Integrios.Domain.ValueObjects;
 using Integrios.Infrastructure.Data;
 using Integrios.Tests.Shared;
+using MediatR;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -159,9 +162,9 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
     }
 
     [Fact]
-    public async Task PostEvents_DuplicateSourceEventId_IsSuppressed()
+    public async Task PostEvents_Duplicate450CharacterSourceEventId_IsSuppressed()
     {
-        var body = BuildBody(sourceEventId: "evt-dup");
+        var body = BuildBody(sourceEventId: new string('a', 450));
 
         var firstResponse = await PostEventAsync(defaultSourceId, body);
         firstResponse.StatusCode.ShouldBe(HttpStatusCode.Accepted);
@@ -178,6 +181,36 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
 
         (await fixture.GetEventCountAsync()).ShouldBe(1);
         (await fixture.GetOutboxCountAsync()).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task PostEvents_SourceEventIdLongerThan450Characters_IsRejected()
+    {
+        using var response = await PostEventAsync(defaultSourceId, BuildBody(new string('a', 451)));
+
+        await AssertSourceEventIdProblemAsync(response);
+        (await fixture.GetEventCountAsync()).ShouldBe(0);
+        (await fixture.GetOutboxCountAsync()).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task PostEvents_SourceEventIdsDifferingByTrailingSpace_AreDistinct()
+    {
+        using var firstResponse = await PostEventAsync(defaultSourceId, BuildBody("abc"));
+        using var secondResponse = await PostEventAsync(defaultSourceId, BuildBody("abc "));
+
+        firstResponse.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        secondResponse.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        var first = await firstResponse.Content.ReadFromJsonAsync<IngestEventResult>(HostJson.Options);
+        var second = await secondResponse.Content.ReadFromJsonAsync<IngestEventResult>(HostJson.Options);
+        first.ShouldNotBeNull();
+        second.ShouldNotBeNull();
+        first.AlreadyAccepted.ShouldBeFalse();
+        second.AlreadyAccepted.ShouldBeFalse();
+        second.EventId.ShouldNotBe(first.EventId);
+
+        (await fixture.GetEventCountAsync()).ShouldBe(2);
+        (await fixture.GetOutboxCountAsync()).ShouldBe(2);
     }
 
     [Fact]
@@ -288,12 +321,17 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
             .ShouldBe(HttpStatusCode.Accepted);
     }
 
-    [Fact]
-    public async Task PostWebhook_SignedGitHubPush_PersistsEventTypeAndIdentityFromHeaders()
+    [Theory]
+    [InlineData(450, true, true)]
+    [InlineData(451, true, false)]
+    [InlineData(450, false, true)]
+    [InlineData(451, false, false)]
+    public async Task PostWebhook_SignedGitHubPush_ValidatesAndPersistsIdentityFromHeaders(
+        int length, bool useIdentityRule, bool accept)
     {
         const string secretReference = "github-webhook-secret";
         const string secret = "functional-github-secret";
-        const string deliveryId = "delivery-functional-123";
+        string deliveryId = new('a', length);
         const string payload = """{"pusher":{"name":"octocat"},"repository":{"full_name":"acme/widgets"}}""";
         Guid connectorId = await fixture.SeedConnectorAsync(
             fixture.TenantAId, "github", await File.ReadAllTextAsync(GitHubManifestPath()));
@@ -321,9 +359,11 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
             {
                 Engine = "jsonata",
                 Version = "1",
-                Expression = """{ "event_type": "github." & $context.headers."x-github-event", "payload": $ }"""
+                Expression = useIdentityRule
+                    ? """{ "event_type": "github." & $context.headers."x-github-event", "payload": $ }"""
+                    : """{ "event_type": "github." & $context.headers."x-github-event", "payload": $, "source_event_id": $context.headers."x-github-delivery" }"""
             },
-            EventIdentityRule = new SourceEventIdentityRule { Kind = "header", Value = "X-GitHub-Delivery" },
+            EventIdentityRule = useIdentityRule ? new SourceEventIdentityRule { Kind = "header", Value = "X-GitHub-Delivery" } : null,
             Revision = Guid.NewGuid().ToString("N"),
             Status = OperationalStatus.Active,
             CreatedAt = now,
@@ -344,6 +384,14 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         request.Headers.Add("X-GitHub-Delivery", deliveryId);
 
         using var response = await webhookClient.SendAsync(request);
+        if (!accept)
+        {
+            await AssertSourceEventIdProblemAsync(response);
+            (await fixture.GetEventCountAsync()).ShouldBe(0);
+            (await fixture.GetOutboxCountAsync()).ShouldBe(0);
+            return;
+        }
+
         response.StatusCode.ShouldBe(HttpStatusCode.Accepted);
         var result = await response.Content.ReadFromJsonAsync<IngestEventResult>(HostJson.Options);
         result.ShouldNotBeNull();
@@ -352,6 +400,50 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         Event accepted = await db.Events.SingleAsync(candidate => candidate.Id == result.EventId);
         accepted.EventType.ShouldBe("github.push");
         accepted.SourceEventId.ShouldBe(deliveryId);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task AcceptBrokerMessage_ValidatesExtractedOrMappedSourceEventId(bool useIdentityRule)
+    {
+        Guid connectorId = await fixture.SeedSourceConnectorAsync(fixture.TenantAId, "broker-source");
+        Guid sourceId = await fixture.CreateBrokerSourceAsync(fixture.TenantAId, connectorId, defaultTopicId);
+        using var scope = fixture.Host.Services.CreateScope();
+        var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
+        var identityRule = useIdentityRule
+            ? new SourceEventIdentityRule { Kind = "json_pointer", Value = "/operation_id" }
+            : null;
+        var mapping = new TransformSpec("jsonata", "1", useIdentityRule
+            ? """{ "event_type": "payment.created", "payload": {} }"""
+            : """{ "event_type": "payment.created", "source_event_id": operation_id, "payload": {} }""");
+        AcceptBrokerMessageCommand Message(string id) => new(
+            fixture.TenantAId, defaultTopicId, sourceId, null, mapping,
+            JsonSerializer.SerializeToElement(new { operation_id = id }), identityRule, null);
+
+        string sourceEventId = new('a', 450);
+        var accepted = await mediator.Send(Message(sourceEventId));
+        accepted.AlreadyAccepted.ShouldBeFalse();
+
+        var refused = await Should.ThrowAsync<EventAcceptanceException>(() => mediator.Send(Message(sourceEventId + " ")));
+        refused.Message.ShouldContain("450");
+
+        await using var db = new IntegriosDbContext(fixture.CreateOptions());
+        var persisted = await db.Events.SingleAsync();
+        persisted.Id.ShouldBe(accepted.EventId);
+        persisted.SourceEventId.ShouldBe(sourceEventId);
+        (await fixture.GetOutboxCountAsync()).ShouldBe(1);
+    }
+
+    private static async Task AssertSourceEventIdProblemAsync(HttpResponseMessage response)
+    {
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+        problem.ShouldNotBeNull();
+        problem.Status.ShouldBe(422);
+        problem.Detail.ShouldNotBeNull();
+        problem.Detail.ShouldContain("450");
     }
 
     private static string GitHubManifestPath()

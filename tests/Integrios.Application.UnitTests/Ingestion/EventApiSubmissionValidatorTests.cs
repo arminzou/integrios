@@ -75,6 +75,19 @@ public sealed class EventApiSubmissionValidatorTests
         EventApiSubmissionValidator.Validate(Submission(eventType)).EventType.ShouldBe(eventType);
     }
 
+    [Fact]
+    public void SourceEventIdLongerThan450Characters_IsRejected()
+    {
+        var input = JsonSerializer.SerializeToElement(new
+        {
+            event_type = "payment.created",
+            source_event_id = new string('a', 451),
+            payload = new { }
+        });
+
+        Should.Throw<EventAcceptanceException>(() => EventApiSubmissionValidator.Validate(input));
+    }
+
     private static JsonElement Submission(string eventType) =>
         JsonSerializer.SerializeToElement(new Dictionary<string, object> { ["event_type"] = eventType, ["payload"] = new { } });
 }
