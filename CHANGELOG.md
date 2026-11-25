@@ -1,5 +1,42 @@
 # Changelog
 
+## [0.14.0](https://github.com/arminzou/integrios/compare/v0.13.0...v0.14.0) (2026-11-25)
+
+
+### ⚠ BREAKING CHANGES
+
+* containers now run as uid 1654. Before upgrading a Compose deployment, hand the Admin key-ring volume to that user once, and make the mounted Tenant secret directories readable by it; deploy/README.md has the commands. Without the chown, Admin exits at startup with an unwritable key ring.
+* Admin and Ingestion no longer default to `localhost:5000`. Without `ASPNETCORE_URLS`, Admin listens on `localhost:5150` and Ingestion on `localhost:5231`. A Windows service or systemd install behind a proxy on 5000 loses Admin or intake on upgrade: point the proxy at the new port, or pin the old one with `ASPNETCORE_URLS`; deploy/README.md has the details.
+
+### Bug Fixes
+
+* **admin:** hold a lapsed session while a key create is in flight ([ace08c2](https://github.com/arminzou/integrios/commit/ace08c2fab08b14dd77ca6e4075fbadc7076c979))
+* **admin:** hold a sheet open only for writes whose answer arrives once ([ec1e46f](https://github.com/arminzou/integrios/commit/ec1e46fbb989967350d114dc661bdeb4c36f6ea4))
+* **admin:** hold sign-out while a new key is on screen ([5fb0746](https://github.com/arminzou/integrios/commit/5fb07461b3d4ca42aba0be2a8fd355d2c65d1ed7))
+* **admin:** keep a cancelled session read from replacing the sign-in token ([7cfdb3b](https://github.com/arminzou/integrios/commit/7cfdb3bc067afac2b8d85049b3bbfd31ed47a16e))
+* **admin:** keep a new key's reveal open until the Operator closes it ([7ba0e73](https://github.com/arminzou/integrios/commit/7ba0e7374cc3f4041126227a764d2604ba5aba70))
+* **admin:** keep a sheet open while its write is in flight ([634b3d2](https://github.com/arminzou/integrios/commit/634b3d228d68d91d6805b51e095d55cfb9727929))
+* **admin:** re-read the session when an Admin call answers 401 ([51ffb95](https://github.com/arminzou/integrios/commit/51ffb95a2942ab3aed7ef8c8c6c30253c6e32fc8))
+* **deploy:** give the Worker time to finish in-flight deliveries on stop ([1b097f2](https://github.com/arminzou/integrios/commit/1b097f26bcb07b9f73664ecda7b97869bb447bd0))
+* **deploy:** mount Admin's Azure key ring as the app user ([65cad5e](https://github.com/arminzou/integrios/commit/65cad5ede68b1c9681422bdb3d8344196c5c3ce9))
+* **deps:** Bump postgres in /deploy in the deploy-images group ([#125](https://github.com/arminzou/integrios/issues/125)) ([bbedc70](https://github.com/arminzou/integrios/commit/bbedc7060aeb67a2cc5dbe592093ed8050db17cf))
+* **dev:** fail the seed scripts when the Delivery never dead-letters ([f932647](https://github.com/arminzou/integrios/commit/f93264710942a8e3cf8fc42858865f5b6cbc2612))
+* **dev:** poll once more after the seed scripts' last dead-letter wait ([c81b3ef](https://github.com/arminzou/integrios/commit/c81b3efcc23290ed8324e6973fbcf52cadb03c83))
+* **dev:** use the supported SQL Server image and keep Grafana local ([4411521](https://github.com/arminzou/integrios/commit/4411521c65479f5b66fc1fd27900c23f393bed17))
+* give Admin and Ingestion their own default product listeners ([9ddfadc](https://github.com/arminzou/integrios/commit/9ddfadcda0e7b474cab3a99c40f4fe47bbfbfb42))
+* **ingestion:** cap source event ids at 450 characters and match duplicates exactly ([6f8b98e](https://github.com/arminzou/integrios/commit/6f8b98e7bd28c10af7db43f94a4ae6b82e13ac16))
+* **ingestion:** treat a blank identity as missing before checking its length ([460bcf1](https://github.com/arminzou/integrios/commit/460bcf1eac6069bfdf06de329101af6bfc15c6f8))
+* keep the original error when an Event acceptance fails ([87c856e](https://github.com/arminzou/integrios/commit/87c856eb3429916807a082c119afab8feea765cf))
+* recycle pooled connections in the Subscriber SDK and OAuth token clients ([5957bf6](https://github.com/arminzou/integrios/commit/5957bf66ef645563678efa6cd947e1e58c6056c4))
+* report a mapping snapshot with a wrong field type as a transform failure ([97961fe](https://github.com/arminzou/integrios/commit/97961fede26a2c0683dc99a63a5be5ff8ced510a))
+* report an undecodable mapping snapshot string as a transform failure ([409acfc](https://github.com/arminzou/integrios/commit/409acfc80db6126dde7037b006e0bf959e70cbec))
+* report only transform failures as delivery mapping errors ([0934b29](https://github.com/arminzou/integrios/commit/0934b29387b74f691e8d802e89f3483a6d1f17ce))
+* run every role as the image's non-root app user ([ad0c2b7](https://github.com/arminzou/integrios/commit/ad0c2b71611094056e022e4bb1ae25ad602e3ea1))
+* **subscriber:** count pull settlements in the delivery outcome metrics ([a08c654](https://github.com/arminzou/integrios/commit/a08c6540c9a9f3b9c2b6aa53d5048f2db6c3e0d3))
+* **subscriber:** load the role's development settings ([e968528](https://github.com/arminzou/integrios/commit/e968528de9753cb8ff88cd9c709a1893cb9b8162))
+* **worker:** keep outbound clients from sharing cookies or buffering whole responses ([9d3d71f](https://github.com/arminzou/integrios/commit/9d3d71fe4950b549024d0c07e11b33eca1ae6cab))
+* **worker:** stop the capped read at the cap when the length is declared ([93f2d28](https://github.com/arminzou/integrios/commit/93f2d284dc7fe90407ced97f6a1dd6780f1d27f6))
+
 ## [0.13.0](https://github.com/arminzou/integrios/compare/v0.12.0...v0.13.0) (2026-11-24)
 
 
