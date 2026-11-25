@@ -1,0 +1,26 @@
+src/Integrios.Admin/frontend/src/App.test.tsx
+  s_b19acd4aae4d50::t_9c5d03c6aa3cd9 159-194
+  s_b19acd4aae4d50::t_366311def44c40 195-205
+src/Integrios.Admin/frontend/src/App.tsx
+  s_b19acd4aae4d50::t_1e90b0516c6502 44
+src/Integrios.Admin/frontend/src/api/client.ts
+  s_b19acd4aae4d50::t_52daa616022f4f 40-42,44-48
+src/Integrios.Admin/frontend/src/api/query.ts
+  s_b19acd4aae4d50::t_f216f58c38d7e4 40-41
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "1ba580131dc3440082599e3d3fa754eedf51709a",
+  "prompts": {},
+  "sessions": {
+    "s_b19acd4aae4d50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "01ddce99-a00c-49f1-9f76-21f5af0490d8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Armin Zou <arminzou@outlook.com>"
+    }
+  }
+}
