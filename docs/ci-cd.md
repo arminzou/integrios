@@ -8,7 +8,7 @@ still making complete verification mandatory before publishing a release:
    Selected application jobs retain locked restore, dependency audits, and complete test projects.
    No secrets are required, so this runs for fork pull requests too.
 2. **Main**: runs all checks and both database providers, then the complete Acceptance project before
-   publishing commit, `main`, and `latest` images.
+   publishing commit and `main` images.
 3. **Nightly**: runs all checks, both database providers, and complete Acceptance on schedule.
 4. **Release**: runs all checks, both database providers, and the complete Acceptance project before
    publishing images. A `v*` tag, or an explicit manual run from `main`, triggers it. See
@@ -100,17 +100,18 @@ Main images are tagged with the commit SHA and `main`. Release images are tagged
 SHA, the version and its `<major>.<minor>`, and `latest`, so `latest` always means the newest
 stable release. Each image includes an SBOM and build provenance attestation.
 
-The image holds all three roles. Its entrypoint is `/app/integrios`, and each container names its
-role as the first argument: `ingestion`, `admin`, or `worker`. Each role still composes only its
+The image holds all four roles. Its entrypoint is `/app/integrios`, and each container names its
+role as the first argument: `ingestion`, `admin`, `worker`, or `subscriber`. The one-shot setup job
+runs `admin setup` from the same image. Each role still composes only its
 own capabilities — Worker resolves delivery secrets and Admin never does. The image is built from
 a single repo-root `Dockerfile`, so the base image pins and the Npgsql GSSAPI workaround exist in
 exactly one place.
 
-**The roles are a matched set.** A given version tag assumes all three roles run that same
+**The roles are a matched set.** A given version tag assumes all four roles run that same
 version against a database migrated to the schema they expect. Nothing at runtime
 prevents mixing versions, and a release that changes the schema will misbehave if only some
-services are rolled forward. Deploy Ingestion, Admin, and Worker together, from the same tag or
-digest, and run migrations before starting them. The deployment reference in
+services are rolled forward. Deploy setup, Ingestion, Admin, Worker, and Subscriber together, from
+the same tag or digest, and let setup finish its migrations before starting the roles. The deployment reference in
 `deploy/compose.yml` enforces this by running every role from one image at a single
 `INTEGRIOS_VERSION`; keep that property if you adapt it.
 
@@ -157,7 +158,7 @@ The workflow lives in one file you own in your fork. To publish elsewhere, edit 
 
   ```yaml
   - name: Log in
-    uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+    uses: docker/login-action@v4.6.0
     with:
       registry: registry.example.com
       username: ${{ secrets.REGISTRY_USERNAME }}
@@ -165,7 +166,7 @@ The workflow lives in one file you own in your fork. To publish elsewhere, edit 
 
   - name: Derive image metadata
     id: meta
-    uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
+    uses: docker/metadata-action@v6.2.0
     with:
       images: registry.example.com/my-team/integrios
   ```
