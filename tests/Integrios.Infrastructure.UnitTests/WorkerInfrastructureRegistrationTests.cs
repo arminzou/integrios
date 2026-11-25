@@ -130,6 +130,17 @@ public sealed class WorkerInfrastructureRegistrationTests
         observation.FirstRequest.ShouldContain("X-Api-Key: must-not-follow", Case.Insensitive);
     }
 
+    [Fact]
+    public void WorkerInfrastructureRegistration_OAuthTokenClientRecyclesConnections()
+    {
+        using ServiceProvider provider = BuildWorkerProvider(BuildConfiguration([]));
+        HttpMessageHandler handler = provider.GetRequiredService<IHttpMessageHandlerFactory>().CreateHandler("oauth2-token");
+        while (handler is DelegatingHandler delegatingHandler)
+            handler = delegatingHandler.InnerHandler!;
+
+        handler.ShouldBeOfType<SocketsHttpHandler>().PooledConnectionLifetime.ShouldBe(TimeSpan.FromMinutes(2));
+    }
+
     [Theory]
     [InlineData(nameof(IDeliveryClient))]
     [InlineData("oauth2-token")]
