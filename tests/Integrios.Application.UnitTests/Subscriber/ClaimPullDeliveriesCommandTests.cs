@@ -38,7 +38,7 @@ public sealed class ClaimPullDeliveriesCommandTests
         queue.ClaimNextAsync(DestinationId, Arg.Any<CancellationToken>())
             .Returns(Task.FromResult<EventDeliveryClaimResult?>(new ClaimedPullDelivery(first)), Task.FromResult<EventDeliveryClaimResult?>(new ClaimedPullDelivery(broken)));
         queue.SettleAsync(Arg.Any<PullAttemptOwner>(), Arg.Any<PullSettlement>(), Arg.Any<CancellationToken>())
-            .Returns(Task.FromException<PullSettlementStatus>(new TimeoutException("database timeout")));
+            .Returns(Task.FromException<PullSettlementResult>(new TimeoutException("database timeout")));
 
         IReadOnlyList<PullDelivery> claimed = await Send(queue, max: 5, FailingTransforms());
 
