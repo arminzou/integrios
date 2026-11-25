@@ -10,6 +10,7 @@ using Integrios.Infrastructure.Connectors;
 using Integrios.Infrastructure.Data;
 using Integrios.Infrastructure.Events;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Respawn;
 
@@ -88,6 +89,20 @@ public sealed class DatabaseProviderContractTests(DatabaseProviderFixture fixtur
     }
 
     [Fact]
+    public async Task RejectedAcceptance_KeepsItsCauseWhenRollbackFails()
+    {
+        await using DbConnection connection = await fixture.OpenAsync();
+        ProviderContractSeed seed = await fixture.SeedAsync(connection);
+        await connection.ExecuteAsync(
+            $"UPDATE sources SET status = 'inactive' " +
+            "WHERE tenant_id=@TenantId AND id=@SourceId",
+            new { seed.TenantId, seed.SourceId });
+
+        await Should.ThrowAsync<EventAcceptanceException>(() => fixture.Acceptance(new FailingRollbackInterceptor())
+            .AcceptAsync(DatabaseProviderFixture.Submission(seed, "rollback-fails"), null, CancellationToken.None));
+    }
+
+    [Fact]
     public async Task ConnectorPresentation_ReconcilesThroughTheManifestStore()
     {
         await using DbConnection connection = await fixture.OpenAsync();
@@ -135,9 +150,10 @@ public sealed class DatabaseProviderFixture : IAsyncLifetime
 
     internal IntegriosDbContext CreateContext() => new(Database.CreateOptions());
 
-    internal IEventAcceptance Acceptance()
+    internal IEventAcceptance Acceptance(params IInterceptor[] interceptors)
     {
-        var factory = new PooledDbContextFactory<IntegriosDbContext>(Database.CreateOptions());
+        var factory = new PooledDbContextFactory<IntegriosDbContext>(
+            new DbContextOptionsBuilder<IntegriosDbContext>(Database.CreateOptions()).AddInterceptors(interceptors).Options);
         return Database.Provider == "sqlserver"
             ? new SqlServerEventAcceptance(factory)
             : new PostgresEventAcceptance(factory);
@@ -297,3 +313,13 @@ internal sealed record ProviderContractSeed(
     Guid TopicId,
     Guid SubscriptionId,
     Guid SourceId);
+
+internal sealed class FailingRollbackInterceptor : DbTransactionInterceptor
+{
+    public override ValueTask<InterceptionResult> TransactionRollingBackAsync(
+        DbTransaction transaction,
+        TransactionEventData eventData,
+        InterceptionResult result,
+        CancellationToken cancellationToken = default) =>
+        throw new InvalidOperationException("Rollback failed.");
+}

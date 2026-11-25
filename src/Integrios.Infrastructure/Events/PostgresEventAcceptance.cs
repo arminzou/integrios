@@ -136,11 +136,6 @@ internal sealed class PostgresEventAcceptance(IDbContextFactory<IntegriosDbConte
 
             return ToAlreadyAccepted(existing);
         }
-        catch
-        {
-            await transaction.RollbackAsync(cancellationToken);
-            throw;
-        }
     }
 
     private static bool IsIdempotencyConflict(PostgresException ex, string? idempotencyKey)
