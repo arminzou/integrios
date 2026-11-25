@@ -44,13 +44,11 @@ internal static class SourceEventIdentityExtractor
     // mapping, so the caller can then use an identity produced by the mapping, if any.
     private static string? Extracted(SourceEventIdentityRule rule, string? value)
     {
-        if (value?.Length > SourceMappingOutputValidator.MaxSourceEventIdLength)
+        if (string.IsNullOrWhiteSpace(value))
+            return rule.AllowMissing ? null : throw new EventAcceptanceException(MissingIdentity(rule));
+        if (value.Length > SourceMappingOutputValidator.MaxSourceEventIdLength)
             throw new EventAcceptanceException($"The Source Event identity must be at most {SourceMappingOutputValidator.MaxSourceEventIdLength} characters.");
-        if (!string.IsNullOrWhiteSpace(value))
-            return value;
-        if (rule.AllowMissing)
-            return null;
-        throw new EventAcceptanceException(MissingIdentity(rule));
+        return value;
     }
 
     // Names what was looked for. The sender already holds the header or field it did not send, so
