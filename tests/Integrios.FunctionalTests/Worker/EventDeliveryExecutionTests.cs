@@ -22,9 +22,8 @@ public sealed class EventDeliveryExecutionTests : IClassFixture<WorkerRoutingFix
     {
         Guid deliveryId = await fixture.FanoutSingleDeliveryAsync();
 
-        EventDeliveryWorkItem? claimed = await fixture.DeliveryQueue.ClaimNextAsync(CancellationToken.None);
-
-        claimed.ShouldNotBeNull();
+        EventDeliveryWorkItem claimed = (await fixture.DeliveryQueue.ClaimNextWithRecoveryAsync(CancellationToken.None))
+            .ShouldBeOfType<ClaimedEventDelivery>().WorkItem;
         claimed.Id.ShouldBe(deliveryId);
         claimed.AttemptNumber.ShouldBe(1);
 
@@ -62,11 +61,12 @@ public sealed class EventDeliveryExecutionTests : IClassFixture<WorkerRoutingFix
     {
         Guid deliveryId = await fixture.FanoutSingleDeliveryAsync();
 
-        EventDeliveryWorkItem?[] claims = await Task.WhenAll(
-            fixture.DeliveryQueue.ClaimNextAsync(CancellationToken.None),
-            fixture.DeliveryQueue.ClaimNextAsync(CancellationToken.None));
+        EventDeliveryClaimResult?[] claims = await Task.WhenAll(
+            fixture.DeliveryQueue.ClaimNextWithRecoveryAsync(CancellationToken.None),
+            fixture.DeliveryQueue.ClaimNextWithRecoveryAsync(CancellationToken.None));
 
-        EventDeliveryWorkItem claimed = claims.Where(claim => claim is not null).ShouldHaveSingleItem()!;
+        EventDeliveryWorkItem claimed = claims.Where(claim => claim is not null).ShouldHaveSingleItem()
+            .ShouldBeOfType<ClaimedEventDelivery>().WorkItem;
         claimed.Id.ShouldBe(deliveryId);
         (await fixture.GetDeliveryAttemptsAsync(deliveryId)).ShouldHaveSingleItem();
 
@@ -80,7 +80,7 @@ public sealed class EventDeliveryExecutionTests : IClassFixture<WorkerRoutingFix
     {
         Guid deliveryId = await fixture.FanoutSingleDeliveryAsync();
         await fixture.WithDeliveryClaimFailureAsync(async () =>
-            await Should.ThrowAsync<DbException>(() => fixture.DeliveryQueue.ClaimNextAsync(CancellationToken.None)));
+            await Should.ThrowAsync<DbException>(() => fixture.DeliveryQueue.ClaimNextWithRecoveryAsync(CancellationToken.None)));
 
         await ConsistencyContractAssertions.ClaimFailureRollsBackAsync(
             deliveryId,
@@ -92,8 +92,8 @@ public sealed class EventDeliveryExecutionTests : IClassFixture<WorkerRoutingFix
     public async Task Finalize_WhenDeliveryAdvanceFails_RollsBackAttemptAndDelivery()
     {
         Guid deliveryId = await fixture.FanoutSingleDeliveryAsync();
-        EventDeliveryWorkItem claimed = (await fixture.DeliveryQueue.ClaimNextAsync(CancellationToken.None))
-            .ShouldBeOfType<EventDeliveryWorkItem>();
+        EventDeliveryWorkItem claimed = (await fixture.DeliveryQueue.ClaimNextWithRecoveryAsync(CancellationToken.None))
+            .ShouldBeOfType<ClaimedEventDelivery>().WorkItem;
         await fixture.WithDeliveryFinalizationFailureAsync(async () =>
             await Should.ThrowAsync<DbException>(() =>
                 fixture.DeliveryQueue.FinalizeAsync(SuccessfulCompletion(claimed), CancellationToken.None)));
@@ -109,14 +109,12 @@ public sealed class EventDeliveryExecutionTests : IClassFixture<WorkerRoutingFix
     public async Task ExpiredLease_ReclaimsWithNewFenceAndRejectsStaleFinalization()
     {
         Guid deliveryId = await fixture.FanoutSingleDeliveryAsync();
-        EventDeliveryWorkItem? firstClaim = await fixture.DeliveryQueue.ClaimNextAsync(CancellationToken.None);
-        firstClaim.ShouldNotBeNull();
-        EventDeliveryWorkItem first = firstClaim;
+        EventDeliveryWorkItem first = (await fixture.DeliveryQueue.ClaimNextWithRecoveryAsync(CancellationToken.None))
+            .ShouldBeOfType<ClaimedEventDelivery>().WorkItem;
         await fixture.ForceLeaseExpiredAsync(deliveryId);
 
-        EventDeliveryWorkItem? secondClaim = await fixture.DeliveryQueue.ClaimNextAsync(CancellationToken.None);
-        secondClaim.ShouldNotBeNull();
-        EventDeliveryWorkItem second = secondClaim;
+        EventDeliveryWorkItem second = (await fixture.DeliveryQueue.ClaimNextWithRecoveryAsync(CancellationToken.None))
+            .ShouldBeOfType<ClaimedEventDelivery>().WorkItem;
 
         second.AttemptId.ShouldNotBe(first.AttemptId);
         second.AttemptNumber.ShouldBe(2);
@@ -159,9 +157,8 @@ public sealed class EventDeliveryExecutionTests : IClassFixture<WorkerRoutingFix
 
         for (int expectedAttempt = 1; expectedAttempt <= RetryPolicy.DefaultMaxAttempts; expectedAttempt++)
         {
-            EventDeliveryWorkItem? claim = await fixture.DeliveryQueue.ClaimNextAsync(CancellationToken.None);
-            claim.ShouldNotBeNull();
-            EventDeliveryWorkItem claimed = claim;
+            EventDeliveryWorkItem claimed = (await fixture.DeliveryQueue.ClaimNextWithRecoveryAsync(CancellationToken.None))
+                .ShouldBeOfType<ClaimedEventDelivery>().WorkItem;
             claimed.AttemptNumber.ShouldBe(expectedAttempt);
             await fixture.ForceLeaseExpiredAsync(deliveryId);
         }
@@ -171,7 +168,7 @@ public sealed class EventDeliveryExecutionTests : IClassFixture<WorkerRoutingFix
         recovery.DeliveryId.ShouldBe(deliveryId);
         recovery.AttemptNumber.ShouldBe(RetryPolicy.DefaultMaxAttempts);
         recovery.AttemptId.ShouldNotBe(Guid.Empty);
-        (await fixture.DeliveryQueue.ClaimNextAsync(CancellationToken.None)).ShouldBeNull();
+        (await fixture.DeliveryQueue.ClaimNextWithRecoveryAsync(CancellationToken.None)).ShouldBeNull();
 
         EventDeliveryState delivery = await fixture.GetEventDeliveryAsync(deliveryId);
         delivery.Status.ShouldBe("dead_lettered");
@@ -194,16 +191,18 @@ public sealed class EventDeliveryExecutionTests : IClassFixture<WorkerRoutingFix
 
         for (int attemptNumber = 1; attemptNumber <= RetryPolicy.DefaultMaxAttempts; attemptNumber++)
         {
-            EventDeliveryWorkItem claimed = (await fixture.DeliveryQueue.ClaimNextAsync(CancellationToken.None))
-                .ShouldBeOfType<EventDeliveryWorkItem>();
+            EventDeliveryWorkItem claimed = (await fixture.DeliveryQueue.ClaimNextWithRecoveryAsync(CancellationToken.None))
+                .ShouldBeOfType<ClaimedEventDelivery>().WorkItem;
             claimed.Id.ShouldBe(exhaustedDeliveryId);
             await fixture.ForceLeaseExpiredAsync(exhaustedDeliveryId);
         }
 
         Guid pendingDeliveryId = await fixture.FanoutSingleDeliveryAsync();
 
-        EventDeliveryWorkItem next = (await fixture.DeliveryQueue.ClaimNextAsync(CancellationToken.None))
-            .ShouldBeOfType<EventDeliveryWorkItem>();
+        (await fixture.DeliveryQueue.ClaimNextWithRecoveryAsync(CancellationToken.None))
+            .ShouldBeOfType<RecoveredEventDeliveryDeadLetter>().DeliveryId.ShouldBe(exhaustedDeliveryId);
+        EventDeliveryWorkItem next = (await fixture.DeliveryQueue.ClaimNextWithRecoveryAsync(CancellationToken.None))
+            .ShouldBeOfType<ClaimedEventDelivery>().WorkItem;
 
         next.Id.ShouldBe(pendingDeliveryId);
         (await fixture.GetEventDeliveryAsync(exhaustedDeliveryId)).Status.ShouldBe("dead_lettered");
@@ -232,9 +231,8 @@ public sealed class EventDeliveryExecutionTests : IClassFixture<WorkerRoutingFix
 
         for (int expectedAttempt = 1; expectedAttempt <= RetryPolicy.DefaultMaxAttempts; expectedAttempt++)
         {
-            EventDeliveryWorkItem? claim = await fixture.DeliveryQueue.ClaimNextAsync(CancellationToken.None);
-            claim.ShouldNotBeNull();
-            EventDeliveryWorkItem claimed = claim;
+            EventDeliveryWorkItem claimed = (await fixture.DeliveryQueue.ClaimNextWithRecoveryAsync(CancellationToken.None))
+                .ShouldBeOfType<ClaimedEventDelivery>().WorkItem;
             claimed.AttemptNumber.ShouldBe(expectedAttempt);
             DeliveryFinalizationResult result = await fixture.DeliveryQueue.FinalizeAsync(FailedHttpCompletion(claimed), CancellationToken.None);
             result.Status.ShouldBe(DeliveryFinalizationStatus.Applied);
@@ -248,9 +246,8 @@ public sealed class EventDeliveryExecutionTests : IClassFixture<WorkerRoutingFix
         replayed.LifetimeAttemptCount.ShouldBe(RetryPolicy.DefaultMaxAttempts);
         replayed.RetryCycleAttemptCount.ShouldBe(0);
 
-        EventDeliveryWorkItem? replayedClaim = await fixture.DeliveryQueue.ClaimNextAsync(CancellationToken.None);
-        replayedClaim.ShouldNotBeNull();
-        EventDeliveryWorkItem replayClaim = replayedClaim;
+        EventDeliveryWorkItem replayClaim = (await fixture.DeliveryQueue.ClaimNextWithRecoveryAsync(CancellationToken.None))
+            .ShouldBeOfType<ClaimedEventDelivery>().WorkItem;
         replayClaim.AttemptNumber.ShouldBe(4);
 
         IReadOnlyList<DeliveryAttemptState> attempts = await fixture.GetDeliveryAttemptsAsync(initial.Id);
@@ -297,8 +294,8 @@ public sealed class EventDeliveryExecutionTests : IClassFixture<WorkerRoutingFix
     public async Task Finalize_TerminalHttpFailure_DeadLettersImmediatelyOnFirstAttempt()
     {
         Guid deliveryId = await fixture.FanoutSingleDeliveryAsync();
-        EventDeliveryWorkItem? claimed = await fixture.DeliveryQueue.ClaimNextAsync(CancellationToken.None);
-        claimed.ShouldNotBeNull();
+        EventDeliveryWorkItem claimed = (await fixture.DeliveryQueue.ClaimNextWithRecoveryAsync(CancellationToken.None))
+            .ShouldBeOfType<ClaimedEventDelivery>().WorkItem;
 
         DeliveryFinalizationResult result = await fixture.DeliveryQueue.FinalizeAsync(
             TerminalHttpCompletion(claimed), CancellationToken.None);
