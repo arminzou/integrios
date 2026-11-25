@@ -116,7 +116,7 @@ public sealed class PullDeliveryTests : IClassFixture<WorkerRoutingFixture>, IAs
 
         (await fixture.PullQueue.RenewAsync(asA, CancellationToken.None)).Status
             .ShouldBe(PullLeaseRenewalStatus.OwnershipLost);
-        (await fixture.PullQueue.SettleAsync(asA, PullSettlement.Ack(), CancellationToken.None))
+        (await fixture.PullQueue.SettleAsync(asA, PullSettlement.Ack(), CancellationToken.None)).Status
             .ShouldBe(PullSettlementStatus.OwnershipLost);
         (await fixture.GetEventDeliveryAsync(claimed.DeliveryId)).Status.ShouldBe("in_flight");
     }
@@ -158,11 +158,11 @@ public sealed class PullDeliveryTests : IClassFixture<WorkerRoutingFixture>, IAs
         await fixture.FanoutPullDeliveryAsync("order.placed");
         PullDelivery claimed = (await ClaimAsync(A)).ShouldHaveSingleItem();
 
-        (await fixture.PullQueue.SettleAsync(Owner(A, claimed), PullSettlement.Ack(), CancellationToken.None))
+        (await fixture.PullQueue.SettleAsync(Owner(A, claimed), PullSettlement.Ack(), CancellationToken.None)).Status
             .ShouldBe(PullSettlementStatus.Applied);
-        (await fixture.PullQueue.SettleAsync(Owner(A, claimed), PullSettlement.Ack(), CancellationToken.None))
+        (await fixture.PullQueue.SettleAsync(Owner(A, claimed), PullSettlement.Ack(), CancellationToken.None)).Status
             .ShouldBe(PullSettlementStatus.AlreadyApplied);
-        (await fixture.PullQueue.SettleAsync(Owner(A, claimed), PullSettlement.Release(null, null), CancellationToken.None))
+        (await fixture.PullQueue.SettleAsync(Owner(A, claimed), PullSettlement.Release(null, null), CancellationToken.None)).Status
             .ShouldBe(PullSettlementStatus.OwnershipLost);
 
         (await fixture.GetEventDeliveryAsync(claimed.DeliveryId)).Status.ShouldBe("succeeded");
@@ -180,7 +180,7 @@ public sealed class PullDeliveryTests : IClassFixture<WorkerRoutingFixture>, IAs
         (await fixture.PullQueue.SettleAsync(
                 Owner(A, claimed),
                 PullSettlement.Release("provider unavailable", TimeSpan.FromMinutes(5)),
-                CancellationToken.None))
+                CancellationToken.None)).Status
             .ShouldBe(PullSettlementStatus.Applied);
 
         EventDeliveryState delivery = await fixture.GetEventDeliveryAsync(claimed.DeliveryId);
@@ -200,7 +200,7 @@ public sealed class PullDeliveryTests : IClassFixture<WorkerRoutingFixture>, IAs
         await fixture.FanoutPullDeliveryAsync("order.placed");
         PullDelivery claimed = (await ClaimAsync(A)).ShouldHaveSingleItem();
 
-        (await fixture.PullQueue.SettleAsync(Owner(A, claimed), PullSettlement.Reject("order rejected"), CancellationToken.None))
+        (await fixture.PullQueue.SettleAsync(Owner(A, claimed), PullSettlement.Reject("order rejected"), CancellationToken.None)).Status
             .ShouldBe(PullSettlementStatus.Applied);
 
         (await fixture.GetEventDeliveryAsync(claimed.DeliveryId)).Status.ShouldBe("dead_lettered");
@@ -230,13 +230,16 @@ public sealed class PullDeliveryTests : IClassFixture<WorkerRoutingFixture>, IAs
         PullSettlement original = terminal ? PullSettlement.Reject("rejected") : PullSettlement.Release("retry", null);
         PullSettlement different = terminal ? PullSettlement.Release(null, null) : PullSettlement.Reject("rejected");
 
-        (await fixture.PullQueue.SettleAsync(owner, original, CancellationToken.None))
-            .ShouldBe(PullSettlementStatus.Applied);
-        (await fixture.PullQueue.SettleAsync(owner, original, CancellationToken.None))
+        PullSettlementResult applied = await fixture.PullQueue.SettleAsync(owner, original, CancellationToken.None);
+        applied.Status.ShouldBe(PullSettlementStatus.Applied);
+        applied.Disposition.ShouldBe(terminal || exhaustRetries
+            ? EventDeliveryDisposition.DeadLettered
+            : EventDeliveryDisposition.RetryScheduled);
+        (await fixture.PullQueue.SettleAsync(owner, original, CancellationToken.None)).Status
             .ShouldBe(PullSettlementStatus.AlreadyApplied);
-        (await fixture.PullQueue.SettleAsync(owner, different, CancellationToken.None))
+        (await fixture.PullQueue.SettleAsync(owner, different, CancellationToken.None)).Status
             .ShouldBe(PullSettlementStatus.OwnershipLost);
-        (await fixture.PullQueue.SettleAsync(owner, PullSettlement.Ack(), CancellationToken.None))
+        (await fixture.PullQueue.SettleAsync(owner, PullSettlement.Ack(), CancellationToken.None)).Status
             .ShouldBe(PullSettlementStatus.OwnershipLost);
 
         (await fixture.GetEventDeliveryAsync(claimed.DeliveryId)).Status
@@ -246,9 +249,9 @@ public sealed class PullDeliveryTests : IClassFixture<WorkerRoutingFixture>, IAs
         {
             await fixture.ReplayAsync(claimed.EventId, claimed.DeliveryId);
             (await ClaimAsync(A)).ShouldHaveSingleItem();
-            (await fixture.PullQueue.SettleAsync(owner, original, CancellationToken.None))
+            (await fixture.PullQueue.SettleAsync(owner, original, CancellationToken.None)).Status
                 .ShouldBe(PullSettlementStatus.AlreadyApplied);
-            (await fixture.PullQueue.SettleAsync(owner, different, CancellationToken.None))
+            (await fixture.PullQueue.SettleAsync(owner, different, CancellationToken.None)).Status
                 .ShouldBe(PullSettlementStatus.OwnershipLost);
             (await fixture.GetEventDeliveryAsync(claimed.DeliveryId)).Status.ShouldBe("in_flight");
         }
@@ -261,7 +264,7 @@ public sealed class PullDeliveryTests : IClassFixture<WorkerRoutingFixture>, IAs
         PullDelivery claimed = (await ClaimAsync(A)).ShouldHaveSingleItem();
         await fixture.ForceLeaseExpiredAsync(claimed.DeliveryId);
 
-        (await fixture.PullQueue.SettleAsync(Owner(A, claimed), PullSettlement.Ack(), CancellationToken.None))
+        (await fixture.PullQueue.SettleAsync(Owner(A, claimed), PullSettlement.Ack(), CancellationToken.None)).Status
             .ShouldBe(PullSettlementStatus.Applied);
         (await fixture.GetEventDeliveryAsync(claimed.DeliveryId)).Status.ShouldBe("succeeded");
     }
@@ -283,9 +286,9 @@ public sealed class PullDeliveryTests : IClassFixture<WorkerRoutingFixture>, IAs
 
         (await fixture.PullQueue.RenewAsync(Owner(A, first), CancellationToken.None)).Status
             .ShouldBe(PullLeaseRenewalStatus.OwnershipLost);
-        (await fixture.PullQueue.SettleAsync(Owner(A, first), PullSettlement.Ack(), CancellationToken.None))
+        (await fixture.PullQueue.SettleAsync(Owner(A, first), PullSettlement.Ack(), CancellationToken.None)).Status
             .ShouldBe(PullSettlementStatus.OwnershipLost);
-        (await fixture.PullQueue.SettleAsync(Owner(A, second), PullSettlement.Ack(), CancellationToken.None))
+        (await fixture.PullQueue.SettleAsync(Owner(A, second), PullSettlement.Ack(), CancellationToken.None)).Status
             .ShouldBe(PullSettlementStatus.Applied);
     }
 

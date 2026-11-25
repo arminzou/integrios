@@ -508,7 +508,7 @@ internal sealed class EventDeliveryQueue(
         return new(PullLeaseRenewalStatus.Renewed, leaseExpiresAt);
     }
 
-    public async Task<PullSettlementStatus> SettleAsync(
+    public async Task<PullSettlementResult> SettleAsync(
         PullAttemptOwner owner,
         PullSettlement settlement,
         CancellationToken cancellationToken)
@@ -530,15 +530,15 @@ internal sealed class EventDeliveryQueue(
                     settlement.RetryAfter),
                 cancellationToken);
             if (result.Status == DeliveryFinalizationStatus.Applied)
-                return PullSettlementStatus.Applied;
+                return new(PullSettlementStatus.Applied, result.Disposition);
 
             attempt = await ReadPullAttemptAsync(owner, cancellationToken);
         }
 
         return attempt?.Status == (settlement.Succeeded ? "succeeded" : "failed")
             && (settlement.Succeeded || attempt.TerminalFailure == settlement.IsTerminal)
-            ? PullSettlementStatus.AlreadyApplied
-            : PullSettlementStatus.OwnershipLost;
+            ? new(PullSettlementStatus.AlreadyApplied)
+            : new(PullSettlementStatus.OwnershipLost);
     }
 
     private async Task<PullAttemptState?> ReadPullAttemptAsync(PullAttemptOwner owner, CancellationToken cancellationToken)

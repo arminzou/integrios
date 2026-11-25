@@ -31,7 +31,7 @@ instruments, Integrios emits the following application instruments.
 | integrios_fanout_rows_created_total | counter | — | EventDelivery rows created by fanout. |
 | integrios_deliveries_succeeded_total | counter | connector_key | Successful deliveries by destination Connector class. |
 | integrios_deliveries_failed_total | counter | connector_key, http_status_class | Retryable delivery failures. |
-| integrios_deliveries_dead_lettered_total | counter | connector_key | Deliveries that exhausted their retry budget. |
+| integrios_deliveries_dead_lettered_total | counter | connector_key | Deliveries dead-lettered after a terminal failure or after exhausting their retry budget. |
 | integrios_delivery_secret_resolution_failures_total | counter | connector_key | Delivery attempts unable to resolve a required secret reference. |
 | integrios_delivery_request_construction_failures_total | counter | connector_key | Delivery attempts unable to construct an outbound request. |
 | integrios_delivery_stale_finalizations_total | counter | — | Finalization results discarded after delivery ownership was lost. |
@@ -43,6 +43,9 @@ instruments, Integrios emits the following application instruments.
 | integrios_backlog_snapshot_age_seconds | gauge | — | Time since the Worker last sampled backlog state successfully. |
 
 http_status_class is one of 2xx, 4xx, 5xx, timeout, or error. All labels are platform-owned and bounded: transport, connector_key, http_status_class, and result. Tenant, Event, Source, Destination, Subscription, and Delivery identifiers never appear in metric labels.
+
+The Subscriber host records newly applied pull settlements in the same delivery outcome counters
+as the Worker, with `connector_key="pull"`. Releases that schedule a retry use `http_status_class="error"`.
 
 ### Backlog gauges
 

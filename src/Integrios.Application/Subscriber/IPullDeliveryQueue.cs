@@ -11,7 +11,7 @@ public interface IPullDeliveryQueue
 
     Task<PullLeaseRenewalResult> RenewAsync(PullAttemptOwner owner, CancellationToken cancellationToken);
 
-    Task<PullSettlementStatus> SettleAsync(
+    Task<PullSettlementResult> SettleAsync(
         PullAttemptOwner owner,
         PullSettlement settlement,
         CancellationToken cancellationToken);
@@ -53,6 +53,8 @@ public sealed record PullSettlement(
     public static PullSettlement MappingFailed(string errorMessage) =>
         new(false, false, DeliveryFailurePhase.Transform, errorMessage, null);
 }
+
+public sealed record PullSettlementResult(PullSettlementStatus Status, EventDeliveryDisposition? Disposition = null);
 
 public enum PullSettlementStatus
 {
