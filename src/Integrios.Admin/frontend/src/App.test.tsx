@@ -139,6 +139,23 @@ describe("Application session", () => {
     expect(fetch).toHaveBeenCalledTimes(3);
   });
 
+  it("moves a signed-in Operator to sign-in when the next API call finds the session expired", async () => {
+    let expired = false;
+    const calls = stubHttp(({ url }) => {
+      if (url.pathname === "/auth/session") return expired ? { status: 401 } : { status: 200, body: session };
+      if (url.pathname === "/auth/options") return { status: 200, body: authOptions };
+      // The session lapses on the server between the bootstrap and the screen's first read.
+      expired = true;
+      return { status: 401 };
+    });
+
+    renderApp("/connectors");
+
+    expect(await screen.findByRole("heading", { name: "Sign in to Integrios" })).toBeTruthy();
+    expect(screen.queryByRole("navigation", { name: "Deployment" })).toBeNull();
+    expect(calls.some(({ url }) => url.pathname.startsWith("/admin/"))).toBe(true);
+  });
+
   it("renders the signed-in shell, unknown route, and server-named logout token", async () => {
     vi.stubGlobal(
       "fetch",
