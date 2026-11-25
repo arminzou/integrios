@@ -35,9 +35,9 @@ internal static class DeliveryMapping
         {
             return (null, ex.Message);
         }
-        catch (Exception ex)
+        catch (JsonException ex)
         {
-            return (null, $"Unexpected transform error: {ex.Message}");
+            return (null, $"Transform config is not valid JSON: {ex.Message}");
         }
     }
 }
