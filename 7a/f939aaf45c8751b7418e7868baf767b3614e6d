@@ -1,0 +1,27 @@
+src/Integrios.Client/IDeliveryHandler.cs
+  s_b19acd4aae4d50::t_7e98e9e51278d4 3,9,12,16,23,26,29,31,34,37,39,50-52
+src/Integrios.Client/Integrios.Client.csproj
+  s_b19acd4aae4d50::t_0b7a2afeda1bcb 7,9,29-30
+src/Integrios.Client/SubscriberOptions.cs
+  s_b19acd4aae4d50::t_41de20b041a2d0 3,6,9,12
+src/Integrios.Client/SubscriberServiceCollectionExtensions.cs
+  s_b19acd4aae4d50::t_d4b20915836e67 9,12,14-16
+src/Integrios.Client/packages.lock.json
+  s_b19acd4aae4d50::t_b421cf6e295c47 7-9,11-15,20-22,24-29,34-35,37-38,43-44,46,51-52,54-55,60-61,63,68-69,73-74,76-78,83-84,86-87,92-93,95,100-101,103-105,110-111,113,118-119,121-122,127-128,130-134,139-140
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "7af939aaf45c8751b7418e7868baf767b3614e6d",
+  "prompts": {},
+  "sessions": {
+    "s_b19acd4aae4d50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "01ddce99-a00c-49f1-9f76-21f5af0490d8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Armin Zou <arminzou@outlook.com>"
+    }
+  }
+}
