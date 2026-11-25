@@ -2,7 +2,7 @@ services:
   # Swap point for a managed/external Postgres: remove this service and point
   # ConnectionStrings__Postgres at your database instead.
   postgres:
-    image: postgres:16.14-alpine3.24
+    image: postgres:16.15-alpine3.24
     restart: unless-stopped
     environment:
       POSTGRES_DB: integrios
