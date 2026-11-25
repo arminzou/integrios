@@ -5,7 +5,7 @@
 # against the repository root, the Compose project directory.
 services:
   mocksink:
-    image: wiremock/wiremock:3.13.1
+    image: wiremock/wiremock:3.13.2-3
     command: ["--global-response-templating"]
     volumes:
       - ./scripts/sink/mappings:/home/wiremock/mappings:ro
