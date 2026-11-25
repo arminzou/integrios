@@ -6,6 +6,7 @@
 ### ⚠ BREAKING CHANGES
 
 * containers now run as uid 1654. Before upgrading a Compose deployment, hand the Admin key-ring volume to that user once, and make the mounted Tenant secret directories readable by it; deploy/README.md has the commands. Without the chown, Admin exits at startup with an unwritable key ring.
+* Admin and Ingestion no longer default to `localhost:5000`. Without `ASPNETCORE_URLS`, Admin listens on `localhost:5150` and Ingestion on `localhost:5231`. A Windows service or systemd install behind a proxy on 5000 loses Admin or intake on upgrade: point the proxy at the new port, or pin the old one with `ASPNETCORE_URLS`; deploy/README.md has the details.
 
 ### Bug Fixes
 
