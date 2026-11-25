@@ -251,7 +251,7 @@ svg[data-theme="dark"] { --bg: #020617; --grid: #1e293b; --text: #ffffff; --text
 rect.c-bg-rect { fill: var(--bg); }
 </style><rect width="100%" height="100%" class="c-bg-rect"/>
         <title id="archify-diagram-title">Integrios System Shape</title>
-        <desc id="archify-diagram-description">Event acceptance, fanout, and delivery</desc>
+        <desc id="archify-diagram-description">Event acceptance, fanout, and push and pull delivery</desc>
         <!-- Definitions -->
         <defs>
           <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
@@ -288,6 +288,8 @@ rect.c-bg-rect { fill: var(--bg); }
         <path data-edge-from="db" data-edge-to="worker" data-edge-label="fanout work" data-edge-key="6" data-edge-id="db-worker" data-composition-points="820,175;890,175;890,250;960,250" d="M 820 175 L 882 175 Q 890 175 890 183 L 890 242 Q 890 250 898 250 L 960 250" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
         <path data-edge-from="worker" data-edge-to="destinations" data-edge-label="HTTP delivery" data-edge-key="7" data-edge-id="worker-destinations" data-composition-points="1020,280;1140,280" d="M 1020 280 L 1140 280" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
         <path data-edge-from="worker" data-edge-to="db" data-edge-label="attempt state, retry/DLQ" data-edge-key="8" data-edge-id="worker-db" data-composition-points="900,280;815,280;815,205;730,205" d="M 900 280 L 823 280 Q 815 280 815 272 L 815 213 Q 815 205 807 205 L 730 205" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="db" data-edge-to="subscriber" data-edge-label="claims, outcomes" data-edge-key="9" data-edge-id="db-subscriber" data-composition-points="700,205;700,450;900,450" d="M 700 205 L 700 442 Q 700 450 708 450 L 900 450" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="pullclients" data-edge-to="subscriber" data-edge-label="HTTP pull, ack" data-edge-key="10" data-edge-id="pullclients-subscriber" data-composition-points="1140,450;1020,450" d="M 1140 450 L 1020 450" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
 
         <!-- Components -->
         <g id="node-operator" data-node-id="operator" data-node-label="Operator" tabindex="0" role="button" aria-label="Focus Operator, control-plane config, Architecture component" aria-pressed="false" data-node-kind="external" data-node-sublabel="control-plane config" data-node-context="Architecture component">
@@ -395,6 +397,29 @@ rect.c-bg-rect { fill: var(--bg); }
         <text x="1200" y="294" class="t-muted" font-size="9" text-anchor="middle">Tenant-owned systems</text>
         </g>
 
+        <g id="node-subscriber" data-node-id="subscriber" data-node-label="Subscriber" tabindex="0" role="button" aria-label="Focus Subscriber, Delivery API :5241, Architecture component" aria-pressed="false" data-node-kind="backend" data-node-sublabel="Delivery API :5241" data-node-context="Architecture component">
+          <title>Subscriber · Delivery API :5241 · Architecture component</title>
+          <rect x="900" y="420" width="120" height="60" rx="6" class="c-mask"/>
+          <rect x="900" y="420" width="120" height="60" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(906 426) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text x="960" y="448" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Subscriber</text>
+        <text x="960" y="464" class="t-muted" font-size="9" text-anchor="middle">Delivery API :5241</text>
+        </g>
+
+        <g id="node-pullclients" data-node-id="pullclients" data-node-label="Pull Subscribers" tabindex="0" role="button" aria-label="Focus Pull Subscribers, Tenant-owned services, Architecture component" aria-pressed="false" data-node-kind="external" data-node-sublabel="Tenant-owned services" data-node-context="Architecture component">
+          <title>Pull Subscribers · Tenant-owned services · Architecture component</title>
+          <rect x="1140" y="420" width="120" height="60" rx="6" class="c-mask"/>
+          <rect x="1140" y="420" width="120" height="60" rx="6" class="c-external" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(1146 426) scale(0.6875)">
+            <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
+            <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
+          </g>
+          <text x="1200" y="448" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Pull Subscribers</text>
+        <text x="1200" y="464" class="t-muted" font-size="9" text-anchor="middle">Tenant-owned services</text>
+        </g>
+
         <!-- Connection labels -->
         <g data-edge-from="operator" data-edge-to="admin" data-edge-label="configures" data-edge-key="0" data-edge-id="operator-admin">
           <rect x="221" y="50" width="58" height="14" rx="3" class="c-mask"/>
@@ -424,6 +449,14 @@ rect.c-bg-rect { fill: var(--bg); }
           <text x="815" y="232.5" class="t-muted" font-size="8" text-anchor="middle">attempt state, retry/DLQ</text>
         </g>
 
+        <g data-edge-from="db" data-edge-to="subscriber" data-edge-label="claims, outcomes" data-edge-key="9" data-edge-id="db-subscriber">
+          <rect x="656.6" y="320" width="86.8" height="14" rx="3" class="c-mask"/>
+          <text x="700" y="330" class="t-backend" font-size="8" text-anchor="middle">claims, outcomes</text>
+        </g>
+        <g data-edge-from="pullclients" data-edge-to="subscriber" data-edge-label="HTTP pull, ack" data-edge-key="10" data-edge-id="pullclients-subscriber">
+          <rect x="1041.4" y="430" width="77.2" height="14" rx="3" class="c-mask"/>
+          <text x="1080" y="440" class="t-backend" font-size="8" text-anchor="middle">HTTP pull, ack</text>
+        </g>
         <!-- Legend -->
         <g>
           <text x="40" y="549" class="t-primary" font-size="9" font-weight="600">Legend</text>

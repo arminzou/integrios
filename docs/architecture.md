@@ -13,7 +13,7 @@ platform, API gateway, or multi-protocol runtime.
 
 ## System shape
 
-![Integrios system shape: Operator configures Admin; an external Event producer, a provider webhook, or Azure Service Bus feed Ingestion; Admin and Ingestion share one PostgreSQL or SQL Server database; Worker reads fanout work from it, delivers over HTTP, and writes attempt state back](assets/architecture-system-shape.svg)
+![Integrios system shape: Operator configures Admin; an external Event producer, a provider webhook, or Azure Service Bus feed Ingestion; Admin and Ingestion share one PostgreSQL or SQL Server database; Worker reads fanout work from it, delivers over HTTP, and writes attempt state back; Subscriber services pull their deliveries from the Subscriber role's Delivery API, which claims work from and records outcomes in the same database](assets/architecture-system-shape.svg)
 
 An Operator configures Admin, the control plane. Three intake paths feed Ingestion, the data plane:
 an external Event producer posts through an `event_api` Source with a TenantApiKey, a provider's
@@ -21,7 +21,10 @@ HTTP request arrives through a `webhook` Source, or a message is received throug
 backed by Azure Service Bus. Admin and Ingestion share one PostgreSQL or SQL Server 2022+ database:
 Admin writes configuration to it, and Ingestion writes each accepted Event and its outbox row to it
 in one transaction. Worker reads fanout work from that same database, delivers over generic HTTP to
-Tenant-owned destinations, and writes attempt state, retries, and dead-letters back to it.
+Tenant-owned destinations, and writes attempt state, retries, and dead-letters back to it. For a
+pull Destination the Worker sends nothing: a Subscriber service claims those deliveries over HTTP
+from the Delivery API, served by the `subscriber` role, which records each outcome in the same
+database. See [Pull delivery](#pull-delivery-preview).
 
 A **Source** (`event_api`, `webhook`, or `broker`) is the Operator-authored resource that binds one
 Connector version to one Topic and owns its intake contract. Generic Event intake through the
