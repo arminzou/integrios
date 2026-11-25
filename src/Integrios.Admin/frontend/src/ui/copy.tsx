@@ -1,9 +1,11 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "cn";
 import { Check, Copy, X } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { showSecret } from "../api/query";
 import { CodeBlock, type CodeLanguage } from "./codeHighlight";
 import { monoInput } from "./mono";
 
@@ -235,5 +237,20 @@ export function BodyPanel({
         {announcement}
       </span>
     </section>
+  );
+}
+
+/// A key the server stores only as a hash, shown in the one response that carries it.
+export function SecretReveal({ value }: { value: string }) {
+  const queryClient = useQueryClient();
+  useEffect(() => showSecret(queryClient), [queryClient]);
+
+  return (
+    <>
+      <p className="m-0 rounded-md bg-warning-surface p-3 text-sm text-warning-ink">
+        This is the only time the key is shown. Store it in your secret manager before you close this.
+      </p>
+      <BodyPanel label="Key" value={value} language="text" unbounded />
+    </>
   );
 }

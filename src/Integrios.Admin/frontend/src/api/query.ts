@@ -29,12 +29,25 @@ export const asProblem = (error: unknown): Problem | null => (error as Problem |
 /// its own pages, never the previous scope's rows relabelled.
 export const nextCursor = <Item>(page: CursorPage<Item>) => page.next_cursor ?? undefined;
 
+let secretsShown = 0;
+
+/// A one-time secret exists only on screen, and signing out would unmount it. While one is shown a
+/// lapsed session waits; closing the last one re-reads the session, so the Operator reaches sign-in then.
+export function showSecret(client: QueryClient) {
+  secretsShown += 1;
+  return () => {
+    secretsShown -= 1;
+    if (secretsShown === 0) void client.invalidateQueries({ queryKey: ["session"] });
+  };
+}
+
 /// One client per running dashboard, and one per test, so nothing cached by one leaks into another.
 export const createQueryClient = () => {
   /// A 401 from any Admin call means the session lapsed under a signed-in shell. Re-reading the
   /// session lets its own 401 handling sign the Operator out, instead of every screen failing in place.
   const onError = (error: unknown) => {
-    if ((error as Problem).status === 401) void client.invalidateQueries({ queryKey: ["session"] });
+    if ((error as Problem).status === 401 && secretsShown === 0)
+      void client.invalidateQueries({ queryKey: ["session"] });
   };
   const client = new QueryClient({
     // The session read reports its own 401 as a signed-out answer; re-reading it on its own failure would loop.

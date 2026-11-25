@@ -25,7 +25,7 @@ import {
   SheetButton,
   WriteStatus,
 } from "../ui/controls";
-import { BodyPanel } from "../ui/copy";
+import { SecretReveal } from "../ui/copy";
 import { Filter, Form, TextField } from "../ui/fields";
 import { useListFilters } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
@@ -435,10 +435,7 @@ function CreateTenantApiKey({ tenantId, onCreated }: { tenantId: string; onCreat
         <h3 role="status" className="m-0">
           {created.tenant_api_key.name} is active
         </h3>
-        <p className="m-0 rounded-md bg-warning-surface p-3 text-sm text-warning-ink">
-          This is the only time the key is shown. Store it in your secret manager before you close this.
-        </p>
-        <BodyPanel label="Key" value={created.token} language="text" unbounded />
+        <SecretReveal value={created.token} />
         <section className="flex flex-col gap-2">
           <h4 className="m-0 text-sm font-semibold">Use it</h4>
           <CodeBlock
