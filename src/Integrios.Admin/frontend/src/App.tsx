@@ -41,7 +41,7 @@ import { ReadError } from "./ui/controls";
 /// without the bookkeeping. A signed-out deployment answers 401, which `loadSession` reports as a
 /// null session rather than as a failure — being signed out is an answer, not an error.
 export function App() {
-  const session = useQuery({ queryKey: ["session"], queryFn: loadSession });
+  const session = useQuery({ queryKey: ["session"], queryFn: ({ signal }) => loadSession(signal) });
 
   if (session.isPending) return <SessionGate title="Integrios Operator" copy="Checking your session…" />;
   if (session.isError)
