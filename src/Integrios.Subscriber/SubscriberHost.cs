@@ -37,8 +37,11 @@ public static class SubscriberHost
                 ? badRequest.StatusCode
                 : StatusCodes.Status500InternalServerError,
             // An unreadable body is the caller's error, answered with 400; logging it as an unhandled
-            // exception would let any key holder fill the error log.
+            // exception would let any key holder fill the error log. A Subscriber that disconnects
+            // mid long-poll cancels the request; SqlClient reports that as a SqlException rather
+            // than a cancellation, and nobody is left to answer.
             SuppressDiagnosticsCallback = context => context.Exception is BadHttpRequestException
+                || context.HttpContext.RequestAborted.IsCancellationRequested
         });
         app.UseStatusCodePages();
 
