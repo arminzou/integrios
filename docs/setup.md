@@ -52,7 +52,12 @@ make up
 |----------|-------------------------|-------------------------------|
 | Ingestion  | `http://localhost:5231` | Webhook/event intake (data plane) |
 | Admin    | `http://localhost:5150` | Tenant and config management (control plane) |
-The Worker runs in the background with no HTTP port.
+| Subscriber (Delivery API) | `http://localhost:5241` | Pull delivery for Subscribers (data plane) |
+
+The Worker has no product HTTP port. Its operational listener (`/health`, `/ready`, `/metrics`)
+answers on `http://localhost:5299`. Ingestion, Admin, and Subscriber publish theirs on 5232, 5151,
+and 5242.
+See [Observability](observability.md#metrics).
 
 ## Quickstart: your first delivered event
 
@@ -208,7 +213,7 @@ the new public identifier but never generates or outputs the replacement secret.
 
 The dev stack needs no `.env` file: `compose.yml` and the `Makefile` default every variable to
 a working local value. Create a `.env` at the repo root only to override. For runtime keys,
-defaults, and valid values across all three hosts, see the
+defaults, and valid values across all four roles, see the
 [configuration reference](configuration.md).
 
 | Variable                            | Default                  | Used by                     | Purpose                         |
@@ -216,7 +221,7 @@ defaults, and valid values across all three hosts, see the
 | `POSTGRES_USER`                     | `integrios`              | compose, Makefile `db-*`    | Database username               |
 | `POSTGRES_PASSWORD`                 | `integrios_dev`          | compose, Makefile `db-*`    | Database password               |
 | `INTEGRIOS_ADMIN_RUNTIME_PASSWORD` | `admin_runtime_dev` | `setup`, Admin | Local control-plane database password |
-| `INTEGRIOS_DATA_RUNTIME_PASSWORD` | `data_runtime_dev` | `setup`, Ingestion, Worker | Local data-plane database password |
+| `INTEGRIOS_DATA_RUNTIME_PASSWORD` | `data_runtime_dev` | `setup`, Ingestion, Worker, Subscriber | Local data-plane database password |
 | `INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET`  | `operator_bootstrap_secret` | `setup` service, Makefile bootstrap targets | Secret for the OperatorKey credential |
 | `DOTNET_ENVIRONMENT`                | `Development`            | Makefile bootstrap targets  | Selects `appsettings.admin.Development.json` |
 | `INTEGRIOS_ADMIN_OIDC_AUTHORITY` | empty | Admin | OIDC issuer; setting it enables OIDC dashboard sign-in |
