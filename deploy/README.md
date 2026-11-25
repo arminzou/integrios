@@ -284,6 +284,12 @@ port listens on every interface, as a container needs; on a server, allow it thr
 only for the local monitoring agent, because it serves `/health`, `/ready`, and metrics without
 authentication.
 
+Upgrading a service install from a release where Admin and Ingestion defaulted to
+`http://localhost:5000`: a local reverse proxy that points at that port stops reaching them. Before
+upgrading, point the proxy at the new port, or pin the old listener with
+`ASPNETCORE_URLS=http://localhost:5000` on the role behind it. Containers are unaffected, because
+`ASPNETCORE_HTTP_PORTS` sets their listener.
+
 - **Windows Service.** Register each host with `sc.exe create`, pointing `binPath` at the one
   `integrios.exe` followed by the role, such as `C:\integrios\integrios.exe worker`. A host started
   as a Windows service reads its settings files from the folder that holds `integrios.exe`, and
