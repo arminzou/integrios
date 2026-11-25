@@ -42,11 +42,13 @@ including both sides of a rename and deleted paths. A failed diff blocks the fin
 | Host entry point, project/dependency files, runtime settings, deployment, CI, build tooling, or unknown paths | All PR jobs |
 
 Frontend dependency files stay in the frontend job. Other project/dependency files and runtime
-settings select all jobs. Helper checks always test the selector and final gate; when the
-verification skill is present, they also run its control-helper regression checks.
+settings select all jobs. Helper checks always test the selector and final gate, run the Azure
+deployment helper tests, and compile the Azure Bicep template. When the verification skill is
+present, they also run its control-helper regression checks.
 
-The application jobs start independently after selection. The functional matrix contains PostgreSQL
-and adds SQL Server for provider-sensitive changes. Tests within each project are not filtered.
+The application jobs start independently after selection. The verify job discovers architecture and
+unit test projects from `Integrios.slnx`. The functional matrix contains PostgreSQL and adds SQL
+Server for provider-sensitive changes. Tests within each project are not filtered.
 Release-please's same-repository PR selects docs and helpers only when every changed file is a
 known release-metadata output. Additional files follow normal selection. Main and tag runs still
 perform comprehensive verification.

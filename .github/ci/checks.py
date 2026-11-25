@@ -1,9 +1,11 @@
-"""Select whole CI jobs and validate their results, using only the standard library."""
+"""Select CI jobs and test projects and validate job results using the standard library."""
 
 import json
 import os
+from pathlib import PurePosixPath
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 
 
 CHECKS = ("verify", "frontend", "postgres", "sqlserver", "docs", "helpers")
@@ -95,8 +97,15 @@ def main():
         if errors:
             raise SystemExit("\n".join(errors))
         print("All selected checks passed; only unselected jobs were skipped.")
+    elif sys.argv[1:] == ["test-projects"]:
+        excluded = {"Integrios.FunctionalTests", "Integrios.AcceptanceTests", "Integrios.Tests.Shared"}
+        solution = ET.parse("Integrios.slnx")
+        paths = (project.attrib["Path"].replace("\\", "/") for project in solution.iter("Project"))
+        for path in sorted(paths):
+            if path.startswith("tests/") and PurePosixPath(path).stem not in excluded:
+                print(path)
     else:
-        raise SystemExit("usage: checks.py <select|gate>")
+        raise SystemExit("usage: checks.py <select|gate|test-projects>")
 
 
 if __name__ == "__main__":
