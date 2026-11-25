@@ -18,17 +18,15 @@ internal static class DeliveryMapping
         {
             using var doc = JsonDocument.Parse(mappingConfigSnapshot);
             JsonElement root = doc.RootElement;
-            if (!root.TryGetProperty("engine", out JsonElement engineEl)
-                || !root.TryGetProperty("version", out JsonElement versionEl)
-                || !root.TryGetProperty("expression", out JsonElement expressionEl))
+            if (root.ValueKind != JsonValueKind.Object
+                || !root.TryGetProperty("engine", out JsonElement engineEl) || engineEl.ValueKind != JsonValueKind.String
+                || !root.TryGetProperty("version", out JsonElement versionEl) || versionEl.ValueKind != JsonValueKind.String
+                || !root.TryGetProperty("expression", out JsonElement expressionEl) || expressionEl.ValueKind != JsonValueKind.String)
             {
-                return (null, "Transform config is missing required fields (engine, version, expression).");
+                return (null, "Transform config is missing required string fields (engine, version, expression).");
             }
 
-            var transform = new TransformSpec(
-                engineEl.GetString() ?? string.Empty,
-                versionEl.GetString() ?? string.Empty,
-                expressionEl.GetString() ?? string.Empty);
+            var transform = new TransformSpec(engineEl.GetString()!, versionEl.GetString()!, expressionEl.GetString()!);
             return (transformEvaluator.Evaluate(transform, payloadJson, context), null);
         }
         catch (TransformEvaluationException ex)
