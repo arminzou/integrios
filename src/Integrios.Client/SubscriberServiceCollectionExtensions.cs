@@ -6,10 +6,14 @@ using Microsoft.Extensions.Options;
 
 namespace Microsoft.Extensions.DependencyInjection;
 
+/// <summary>Extensions for registering Integrios subscribers.</summary>
 public static class SubscriberServiceCollectionExtensions
 {
+    /// <summary>
     /// Consumes one pull Destination with <typeparamref name="THandler"/>, resolved in a new scope
-    /// for each delivery. Returns the HTTP client's builder, to add handlers or resilience.
+    /// for each delivery.
+    /// </summary>
+    /// <returns>The HTTP client's builder, to add handlers or resilience.</returns>
     public static IHttpClientBuilder AddIntegriosSubscriber<THandler>(
         this IServiceCollection services, Action<SubscriberOptions> configure)
         where THandler : class, IDeliveryHandler
