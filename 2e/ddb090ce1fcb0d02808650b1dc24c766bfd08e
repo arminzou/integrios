@@ -1,0 +1,26 @@
+tests/Integrios.FunctionalTests/Worker/EventDeliveryExecutionTests.cs
+  s_b19acd4aae4d50::t_4cc86781c2d371 25-26,64-66,68-69,83,95-96,112
+  s_b19acd4aae4d50::t_f315606381ec60 113,116-117,160-161,171,194-195,202-205,234-235,249-250,297-298
+tests/Integrios.FunctionalTests/Worker/BacklogSnapshotReaderTests.cs
+  s_b19acd4aae4d50::t_756a6585eb98c0 54-55
+tests/Integrios.FunctionalTests/Worker/OutboxFanoutTransactionTests.cs
+  s_b19acd4aae4d50::t_6b7c59d832e13b 120
+tests/Integrios.FunctionalTests/Worker/WorkerRoutingFixture.cs
+  s_b19acd4aae4d50::t_082d34f559ea41 748-749,752,768,773,796,803,814,852,881,888,897
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "2eddb090ce1fcb0d02808650b1dc24c766bfd08e",
+  "prompts": {},
+  "sessions": {
+    "s_b19acd4aae4d50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "01ddce99-a00c-49f1-9f76-21f5af0490d8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Armin Zou <arminzou@outlook.com>"
+    }
+  }
+}
