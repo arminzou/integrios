@@ -1,0 +1,20 @@
+examples/connectors/README.md
+  s_b19acd4aae4d50::t_f424e05ce013da 18-19
+  s_b19acd4aae4d50::t_c610acf87948a1 17,20-21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "f2cbbcffe2d2e7d3787a694bbd56c3168a779c16",
+  "prompts": {},
+  "sessions": {
+    "s_b19acd4aae4d50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "01ddce99-a00c-49f1-9f76-21f5af0490d8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": null
+    }
+  }
+}
