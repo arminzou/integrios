@@ -1,0 +1,23 @@
+.github/ci/checks.py
+  s_b19acd4aae4d50::t_579a91966b4cbd 1,5,8,100-106,108
+.github/workflows/ci.yml
+  s_b19acd4aae4d50::t_f84de540c8a218 55-58,111-114,331-336
+docs/ci-cd.md
+  s_b19acd4aae4d50::t_2ef905bea6efd9 45-47,49-51
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "1e16d396b72ab764f88fc5dfa26768cd5c91bb5d",
+  "prompts": {},
+  "sessions": {
+    "s_b19acd4aae4d50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "01ddce99-a00c-49f1-9f76-21f5af0490d8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Armin Zou <arminzou@outlook.com>"
+    }
+  }
+}
