@@ -1,10 +1,13 @@
-import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { page, quietBacklog, stubHttp } from "../test/http";
 import { renderApp, renderScreen } from "../test/router";
 import { TenantApiKeysScreen } from "./TenantApiKeys";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 const tenantId = "11111111-1111-1111-1111-111111111111";
 const keyId = "44444444-4444-4444-4444-444444444444";
@@ -58,7 +61,7 @@ describe("Tenant API keys", () => {
   });
 
   it("shows a new key once and stops showing it once it is dismissed", async () => {
-    stubHttp(({ method }) =>
+    const calls = stubHttp(({ method }) =>
       method === "POST"
         ? { status: 201, body: { tenant_api_key: { ...listItem, status: "active" }, token } }
         : { status: 200, body: page([listItem]) },
@@ -70,28 +73,34 @@ describe("Tenant API keys", () => {
     fireEvent.click(screen.getByRole("button", { name: "Create API key" }));
 
     expect(await screen.findByText(token)).toBeTruthy();
+    const listReads = () =>
+      calls.filter(({ method, url }) => method === "GET" && url.pathname.endsWith("/tenant-api-keys")).length;
+    const readsWhileShown = listReads();
 
     fireEvent.click(screen.getByRole("button", { name: "Done" }));
 
     // The key exists in that one response and nowhere else: the reloaded list carries only a prefix.
     expect(screen.queryByText(token)).toBeNull();
+    await waitFor(() => expect(listReads()).toBeGreaterThan(readsWhileShown));
     expect(await screen.findByText("itk_live_ab")).toBeTruthy();
   });
 
-  it("keeps a new key on screen when the session lapses right after it is created", async () => {
+  it("keeps a new key on screen while a backlog poll finds the session expired, then signs out on Done", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
     let expired = false;
-    stubHttp(({ method, url }) => {
+    const calls = stubHttp(({ method, url }) => {
       if (url.pathname === "/auth/session")
         return expired
           ? { status: 401 }
           : { status: 200, body: { antiforgery_token: "t", antiforgery_header_name: "X" } };
-      if (expired) return { status: 401 };
       if (method === "POST") {
         expired = true;
         return { status: 201, body: { tenant_api_key: { ...listItem, status: "active" }, token } };
       }
       if (url.pathname === `/admin/tenants/${tenantId}`) return { status: 200, body: { id: tenantId, name: "Acme" } };
-      if (url.pathname.endsWith("/events/backlog")) return { status: 200, body: quietBacklog };
+      // Only the poll meets the lapsed session, so closing the key must re-check the session itself.
+      if (url.pathname.endsWith("/events/backlog"))
+        return expired ? { status: 401 } : { status: 200, body: quietBacklog };
       return { status: 200, body: page([]) };
     });
 
@@ -99,10 +108,14 @@ describe("Tenant API keys", () => {
     fireEvent.click(await screen.findByRole("button", { name: "New API key" }));
     fireEvent.change(await screen.findByLabelText("Name"), { target: { value: "Ingest" } });
     fireEvent.click(screen.getByRole("button", { name: "Create API key" }));
-
     expect(await screen.findByText(token)).toBeTruthy();
-    // An expired session moves the dashboard to sign-in on its next read, which would unmount the reveal.
-    await expect(screen.findByRole("heading", { name: "Sign in to Integrios" }, { timeout: 300 })).rejects.toThrow();
+
+    const polls = () => calls.filter(({ url }) => url.pathname.endsWith("/events/backlog")).length;
+    const pollsBefore = polls();
+    await act(() => vi.advanceTimersByTimeAsync(16_000));
+    expect(polls()).toBeGreaterThan(pollsBefore);
+
+    expect(screen.queryByRole("heading", { name: "Sign in to Integrios" })).toBeNull();
     expect(screen.getByText(token)).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Done" }));
