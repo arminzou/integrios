@@ -170,6 +170,20 @@ If you previously customized
 `Integrios:Worker:DeliveryLoop:IdlePollInterval`. The old key is no longer read. The new fanout and
 delivery loop defaults are both two seconds, so deployments that used the old default need no change.
 
+### Containers run as a non-root user
+
+Every role now runs as the base image's `app` user (uid and gid 1654) instead of root. An
+`admin_data_protection` volume created by an earlier release holds root-owned files, so Admin exits
+with `KeyRingPath ... must be a writable directory`. Hand the existing key ring to the app user
+once, before starting the new release:
+
+```bash
+docker compose run --rm --no-deps --user root --entrypoint chown admin -R 1654:1654 /var/lib/integrios/data-protection
+```
+
+The existing keys are kept. Tenant secret files on a Linux host
+must be readable by uid 1654, for example mode `0644`, or owned by that uid.
+
 ### Completed-history retention
 
 Completed-history retention is disabled unless the Worker receives
