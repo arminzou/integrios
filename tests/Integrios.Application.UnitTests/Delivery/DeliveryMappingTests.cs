@@ -30,6 +30,16 @@ public sealed class DeliveryMappingTests
     }
 
     [Fact]
+    public void Apply_ReportsAMappingSnapshotWithAnUndecodableStringAsATransformFailure()
+    {
+        (string? payload, string? error) = DeliveryMapping.Apply(
+            Substitute.For<ITransformEvaluator>(), """{"engine":"jsonata","version":"1","expression":"\uD800"}""", "{}", Context);
+
+        payload.ShouldBeNull();
+        error.ShouldNotBeNull();
+    }
+
+    [Fact]
     public void Apply_LetsAProgrammingErrorPropagateInsteadOfReportingATransformFailure()
     {
         var evaluator = Substitute.For<ITransformEvaluator>();
