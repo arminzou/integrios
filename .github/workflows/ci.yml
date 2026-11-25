@@ -52,6 +52,10 @@ jobs:
           for test_script in .claude/skills/verify-integrios/scripts/{control,prove}.test.sh; do
             if [ -f "$test_script" ]; then bash "$test_script"; fi
           done
+      - name: Test Azure deployment helpers
+        run: pwsh -NoProfile -File deploy/azure/tests/setup-helpers.Tests.ps1
+      - name: Compile Azure deployment template
+        run: az bicep build --file deploy/azure/main.bicep --stdout > /dev/null
 
   docs:
     needs: changes
@@ -104,15 +108,10 @@ jobs:
 
       - name: Run architecture and unit tests
         run: |
-          dotnet test tests/Integrios.ArchitectureTests/Integrios.ArchitectureTests.csproj --configuration Release --no-build
-          dotnet test tests/Integrios.Domain.UnitTests/Integrios.Domain.UnitTests.csproj --configuration Release --no-build
-          dotnet test tests/Integrios.Application.UnitTests/Integrios.Application.UnitTests.csproj --configuration Release --no-build
-          dotnet test tests/Integrios.Infrastructure.UnitTests/Integrios.Infrastructure.UnitTests.csproj --configuration Release --no-build
-          dotnet test tests/Integrios.Admin.UnitTests/Integrios.Admin.UnitTests.csproj --configuration Release --no-build
-          dotnet test tests/Integrios.Ingestion.UnitTests/Integrios.Ingestion.UnitTests.csproj --configuration Release --no-build
-          dotnet test tests/Integrios.Worker.UnitTests/Integrios.Worker.UnitTests.csproj --configuration Release --no-build
-          dotnet test tests/Integrios.Client.UnitTests/Integrios.Client.UnitTests.csproj --configuration Release --no-build
-          dotnet test tests/Integrios.UnitTests/Integrios.UnitTests.csproj --configuration Release --no-build
+          projects=$(python3 .github/ci/checks.py test-projects)
+          while IFS= read -r project; do
+            dotnet test "$project" --configuration Release --no-build
+          done <<< "$projects"
 
   frontend:
     name: frontend
@@ -329,15 +328,12 @@ jobs:
           dotnet restore Integrios.slnx --locked-mode
           dotnet list Integrios.slnx package --vulnerable --include-transitive --no-restore
           dotnet build Integrios.slnx --configuration Release --no-restore
-          dotnet test tests/Integrios.ArchitectureTests/Integrios.ArchitectureTests.csproj --configuration Release --no-build
-          dotnet test tests/Integrios.Domain.UnitTests/Integrios.Domain.UnitTests.csproj --configuration Release --no-build
-          dotnet test tests/Integrios.Application.UnitTests/Integrios.Application.UnitTests.csproj --configuration Release --no-build
-          dotnet test tests/Integrios.Infrastructure.UnitTests/Integrios.Infrastructure.UnitTests.csproj --configuration Release --no-build
-          dotnet test tests/Integrios.Admin.UnitTests/Integrios.Admin.UnitTests.csproj --configuration Release --no-build
-          dotnet test tests/Integrios.Ingestion.UnitTests/Integrios.Ingestion.UnitTests.csproj --configuration Release --no-build
-          dotnet test tests/Integrios.Worker.UnitTests/Integrios.Worker.UnitTests.csproj --configuration Release --no-build
-          dotnet test tests/Integrios.Client.UnitTests/Integrios.Client.UnitTests.csproj --configuration Release --no-build
-          dotnet test tests/Integrios.UnitTests/Integrios.UnitTests.csproj --configuration Release --no-build
+          EOF
+          projects=$(python3 .github/ci/checks.py test-projects)
+          while IFS= read -r project; do
+            printf 'dotnet test %q --configuration Release --no-build\n' "$project"
+          done <<< "$projects" >> evidence/commands.txt
+          cat >> evidence/commands.txt <<'EOF'
           INTEGRIOS_TEST_DATABASE_PROVIDER=postgres dotnet test tests/Integrios.FunctionalTests/Integrios.FunctionalTests.csproj --configuration Release --no-build
           INTEGRIOS_TEST_DATABASE_PROVIDER=sqlserver dotnet test tests/Integrios.FunctionalTests/Integrios.FunctionalTests.csproj --configuration Release --no-build
           dotnet test tests/Integrios.AcceptanceTests/Integrios.AcceptanceTests.csproj --configuration Release --no-restore
