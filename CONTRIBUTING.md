@@ -71,7 +71,8 @@ opening a PR; local proof supplements the shared CI gate.
 - `src/Integrios.Infrastructure` implements those ports: persistence, messaging, secret resolution,
   and other external-system adapters.
 - `src/Integrios.Domain` holds entities, enums, and value objects.
-- `src/Integrios.Client` is the unpublished .NET SDK preview for team-owned Subscriber hosts.
+- `src/Integrios.Client` is the .NET SDK preview for team-owned Subscriber hosts, published on
+  [nuget.org](https://www.nuget.org/packages/Integrios.Client).
   It depends only on the Delivery API's HTTP protocol, with no server-project references.
 - `src/Integrios.Migrations.Postgres/` and `src/Integrios.Migrations.SqlServer/` hold the
   provider-specific EF Core migrations.
@@ -95,7 +96,7 @@ Choose tests by what the change can actually break, not by default:
 
 | Change | Run |
 |---|---|
-| frontend-only code under `src/Integrios.Admin/frontend/` | `npm --prefix src/Integrios.Admin/frontend run check` |
+| frontend-only code under `src/Integrios.Admin/frontend/` | `npm --prefix src/Integrios.Admin/frontend run check`, after `npx playwright install chromium` in that folder for its browser tests |
 | backend or shared infrastructure code | `UnitTests` projects + `ArchitectureTests` |
 | backend behavior in `src/` | add `FunctionalTests` on the default provider |
 | raw SQL, JSON operators, migrations, or the `DbContext` | add the second provider leg, `INTEGRIOS_TEST_DATABASE_PROVIDER=sqlserver` |
@@ -135,7 +136,8 @@ Use [Conventional Commits](https://www.conventionalcommits.org/):
 ```
 
 Common types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `perf`. Suggested scopes:
-`admin`, `dashboard`, `ingestion`, `worker`, `api`, `core`, `db`, `infra`, `docs`.
+`admin`, `dashboard`, `ingestion`, `worker`, `subscriber`, `client`, `api`, `core`, `db`, `infra`,
+`docs`.
 
 ```text
 feat(api): add webhook intake endpoint with tenant resolution
