@@ -112,7 +112,9 @@ function subscriberLoop(key, handle, signal, stats, waitSeconds = 20) {
       stats.claims++;
       if (response.status === 204) { await response.arrayBuffer(); continue; }
       if (response.status !== 200) { stats.errors++; await response.arrayBuffer(); await sleep(1000, signal); continue; }
-      for (const d of (await response.json()).deliveries) {
+      let claimed;
+      try { claimed = (await response.json()).deliveries; } catch { if (!signal.aborted) stats.errors++; continue; }
+      for (const d of claimed) {
         await handle(d);
         if (signal.aborted) return;
         const ack = await fetch(`${DELIVERY_API}/delivery/v1/deliveries/${d.delivery_id}:ack`, {
@@ -156,10 +158,11 @@ async function fault(side) {
     subscriberLoop(x.key, async () => { if (stalling) { stats.x.stalled++; await sleep(STALL_MS, stop.signal); } }, stop.signal, stats.x),
     subscriberLoop(y.key, async () => {}, stop.signal, stats.y),
   ] : [];
+  let stub;
   const stall = async (on) => {
     stalling = on;
     if (side === "push" && on) {
-      await call(MOCKSINK, "POST", "/__admin/mappings", {
+      stub = await call(MOCKSINK, "POST", "/__admin/mappings", {
         priority: 1, request: { method: "POST", urlPathPattern: `/sink/${slug}-x.*` },
         response: { status: 200, fixedDelayMilliseconds: STALL_MS, jsonBody: { received: true } },
       });
@@ -196,7 +199,7 @@ async function fault(side) {
   await settle(drain);
   // Y is what is measured; X is left stalled. Proof that X really stalled:
   const xStalled = side === "pull" ? stats.x.stalled
-    : (await call(MOCKSINK, "POST", "/__admin/requests/count", { method: "POST", urlPathPattern: `/sink/${slug}-x.*` })).count - healthy * rate;
+    : (await call(MOCKSINK, "GET", `/__admin/requests?matchingStub=${stub.id}`)).requests.length;
   stop.abort();
   await Promise.all(loops);
   const xRejected = sent.filter((s) => s.connector === "x" && s.status !== 202).length;
@@ -212,8 +215,11 @@ async function fault(side) {
   });
   const summary = { mode: "fault", side, slug, healthy_seconds: healthy, fault_seconds: stalled, rate_per_connector: rate, drain_seconds: drain, stall_ms: STALL_MS, stall_at: stallAt, x_stalled: xStalled, subscribers: stats };
   for (const name of ["healthy", "fault"]) {
-    const y = samples.filter((s) => s.connector === "y" && s.phase === name);
-    const late = name === "healthy" ? y.filter((s) => s.completed_at && s.completed_at > stallAt).length : 0;
+    const all = samples.filter((s) => s.connector === "y" && s.phase === name);
+    // A healthy Y that finished after X stalled ran under fault, so it is left out of the healthy figures.
+    const lateHealthy = (s) => name === "healthy" && s.completed_at && s.completed_at > stallAt;
+    const late = all.filter(lateHealthy).length;
+    const y = all.filter((s) => !lateHealthy(s));
     summary[name] = {
       posted: y.length,
       intake_errors: y.filter((s) => s.status !== 202).length,
@@ -249,9 +255,10 @@ async function intake() {
       await Promise.all(loops);
     }
   }
-  // A 20-second long-poll may not finish inside a phase, so idle polls count when opened; any
+  // A phase longer than the 20-second long-poll must see each idle poll answered; any
   // rejected claim (a bad key, a 5xx) counts as an error.
-  if (stats.idle.errors || stats.stream.errors || stats.idle.opened < polls * rounds || !stats.stream.claims)
+  if (stats.idle.errors || stats.stream.errors || stats.idle.opened < polls * rounds || stats.stream.claims < rounds
+    || (seconds > 20 && stats.idle.claims < polls * rounds))
     throw new Error(`Subscriber load did not happen: ${JSON.stringify(stats)}`);
   const summary = { mode: "intake", slug, rounds, phase_seconds: seconds, rate_per_second: rate, idle_polls: polls, claim_stream: stream, subscribers: stats };
   for (const name of ["baseline", "load"]) {

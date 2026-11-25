@@ -10,7 +10,8 @@ V=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(git rev-parse --show-toplevel)
 RUNS=${1:-5}
 [ "$RUNS" = intake ] && RUNS=0
-OUT=$ROOT/artifacts/verify/measure/$(date -u +%Y%m%dT%H%M%SZ)
+STAMP=$(date -u +%Y%m%dT%H%M%SZ)
+OUT=$ROOT/artifacts/verify/measure/$STAMP
 export VERIFY_DB=sqlserver VERIFY_WORKERS=2 VERIFY_PORT_OFFSET=${VERIFY_PORT_OFFSET:-22000}
 mkdir -p "$OUT"
 { echo "commit $(git -C "$ROOT" rev-parse HEAD)"; echo "tracked diff $(git -C "$ROOT" diff HEAD | sha256sum | cut -c1-16)"
@@ -25,7 +26,8 @@ teardown() {
 current=
 trap '[ -z "$current" ] || teardown "$current"' EXIT
 stack() {
-  export VERIFY_RUN=measure-$1
+  # A run name of its own, so a failed start never tears down another invocation's stack.
+  export VERIFY_RUN=measure-${STAMP,,}-$1
   current=$1
   "$V/control.sh" up >"$OUT/$1.up.log" 2>&1 || { cat "$OUT/$1.up.log" >&2; exit 1; }
   # shellcheck disable=SC1090
