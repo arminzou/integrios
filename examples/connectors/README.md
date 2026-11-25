@@ -14,6 +14,11 @@ every rule they are validated against, is documented in the
 
 Each is applied at its own key and contract version, for example:
 
+```bash
+curl -s -X PUT "$ADMIN/admin/connectors/http/versions/1" -H "$AUTH" \
+  -H 'Content-Type: application/json' --data-binary @examples/connectors/http.json
+```
+
 [docs/setup.md](../../docs/setup.md) applies `http.json` on the way to a first delivered Event, and
 [docs/github-to-slack-walkthrough.md](../../docs/github-to-slack-walkthrough.md) applies
 `github.json` and `slack.json` end to end.
