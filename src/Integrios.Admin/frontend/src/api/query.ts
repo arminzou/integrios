@@ -1,4 +1,4 @@
-import { MutationCache, QueryCache, QueryClient } from "@tanstack/react-query";
+import { type Mutation, MutationCache, QueryCache, QueryClient } from "@tanstack/react-query";
 import { type Problem, problemFrom } from "./problem";
 
 /// The shape openapi-fetch returns for one call.
@@ -45,14 +45,27 @@ export function showSecret(client: QueryClient) {
 export const createQueryClient = () => {
   /// A 401 from any Admin call means the session lapsed under a signed-in shell. Re-reading the
   /// session lets its own 401 handling sign the Operator out, instead of every screen failing in place.
-  const onError = (error: unknown) => {
-    if ((error as Problem).status === 401 && secretsShown === 0)
+  /// A write whose answer exists only once holds a lapse as well, until it lands or fails; `settling` is
+  /// the write reporting its own failure, which no longer holds anything.
+  let lapseHeld = false;
+  const held = (settling?: Mutation<unknown, unknown, unknown, unknown>) =>
+    secretsShown > 0 ||
+    client
+      .getMutationCache()
+      .findAll({ status: "pending", predicate: (m) => m !== settling && m.meta?.holdsSheet === true }).length > 0;
+  const onError = (error: unknown, settling?: Mutation<unknown, unknown, unknown, unknown>) => {
+    const lapsed = (error as Problem).status === 401;
+    if (lapsed && held(settling)) lapseHeld = true;
+    // A held write that fails shows no secret, so a lapse it held is re-checked now rather than on a close.
+    else if (lapsed || (lapseHeld && settling?.meta?.holdsSheet === true)) {
+      lapseHeld = false;
       void client.invalidateQueries({ queryKey: ["session"] });
+    }
   };
   const client = new QueryClient({
     // The session read reports its own 401 as a signed-out answer; re-reading it on its own failure would loop.
     queryCache: new QueryCache({ onError: (error, query) => query.queryKey[0] !== "session" && onError(error) }),
-    mutationCache: new MutationCache({ onError }),
+    mutationCache: new MutationCache({ onError: (error, _variables, _context, mutation) => onError(error, mutation) }),
     defaultOptions: {
       queries: {
         // The dashboard reports authoritative server state, and an Operator acting on a stale count
