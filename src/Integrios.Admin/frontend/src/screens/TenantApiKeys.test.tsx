@@ -122,6 +122,31 @@ describe("Tenant API keys", () => {
     expect(await screen.findByRole("heading", { name: "Sign in to Integrios" })).toBeTruthy();
   });
 
+  it("stays open on Escape while the key is being created, then shows the key", async () => {
+    let answer = () => {};
+    stubHttp(({ method }) =>
+      method === "POST"
+        ? new Promise((resolve) => {
+            answer = () => resolve({ status: 201, body: { tenant_api_key: { ...listItem, status: "active" }, token } });
+          })
+        : { status: 200, body: page([listItem]) },
+    );
+
+    renderScreen(<TenantApiKeysScreen tenantId={tenantId} />);
+    fireEvent.click(await screen.findByRole("button", { name: "New API key" }));
+    fireEvent.change(await screen.findByLabelText("Name"), { target: { value: "Ingest" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create API key" }));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Create API key" }).hasAttribute("disabled")).toBe(true),
+    );
+
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    expect(screen.getByRole("dialog")).toBeTruthy();
+
+    answer();
+    expect(await screen.findByText(token)).toBeTruthy();
+  });
+
   it("names the key it is about to revoke and does not revoke until confirmed", async () => {
     // The panel reads the key by its own id, so the stub answers the detail path with a key rather
     // than with the list every other GET returns. Once the write has happened, both reads answer

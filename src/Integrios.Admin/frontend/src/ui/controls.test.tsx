@@ -1,6 +1,8 @@
+import { QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, describe, expect, it } from "vitest";
+import { createQueryClient } from "../api/query";
 import { CreateSheet, SheetButton } from "./controls";
 
 afterEach(cleanup);
@@ -10,13 +12,14 @@ afterEach(cleanup);
 /// that it is empty and the card replacing the table takes the action over.
 function Screen({ withTrigger }: { withTrigger: boolean }) {
   const [creating, setCreating] = useState(false);
+  const [client] = useState(createQueryClient);
   return (
-    <>
+    <QueryClientProvider client={client}>
       {withTrigger ? <SheetButton label="New Thing" expanded={creating} onOpen={() => setCreating(true)} /> : null}
       <CreateSheet label="New Thing" open={creating} onOpenChange={setCreating}>
         {() => <input aria-label="Name" />}
       </CreateSheet>
-    </>
+    </QueryClientProvider>
   );
 }
 
