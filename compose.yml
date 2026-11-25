@@ -6,7 +6,7 @@ x-integrios-image: &integrios-image
 
 services:
   postgres:
-    image: postgres:16.14-alpine3.24
+    image: postgres:16.16-alpine3.24
     restart: unless-stopped
     environment:
       POSTGRES_DB: integrios
@@ -143,7 +143,7 @@ services:
   # The platform bundles no observability backend; operators point it at their own stack.
   prometheus:
     profiles: ["observability"]
-    image: prom/prometheus:v3.13.1
+    image: prom/prometheus:v3.16.0
     restart: unless-stopped
     volumes:
       - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
@@ -152,7 +152,7 @@ services:
 
   grafana:
     profiles: ["observability"]
-    image: grafana/grafana:12.4.6
+    image: grafana/grafana:12.4.15
     restart: unless-stopped
     depends_on:
       - prometheus
