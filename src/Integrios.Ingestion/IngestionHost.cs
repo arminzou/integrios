@@ -14,6 +14,7 @@ namespace Integrios.Ingestion;
 public static class IngestionHost
 {
     public const string Name = "ingestion";
+    public const string DefaultUrl = "http://localhost:5231";
     public const int DefaultOperationalPort = 5232;
 
     public static async Task<int> RunAsync(string[] args)
@@ -69,7 +70,7 @@ public static class IngestionHost
         bool secretCommand = SourceSecretValidationCli.IsCommand(args);
 
         builder.Configuration.AddSecretConfigurationSources();
-        int operationalPort = builder.AddOperationalEndpoints(DefaultOperationalPort);
+        int operationalPort = builder.AddOperationalEndpoints(DefaultOperationalPort, DefaultUrl);
 
         builder.Services.ConfigureHttpJsonOptions(options =>
             options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower);

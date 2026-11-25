@@ -276,10 +276,10 @@ self-contained build with the dashboard, so the server needs no .NET runtime. Ve
 provenance with `gh attestation verify integrios-<version>-win-x64.zip --repo <owner>/<repo>`.
 
 Give each host its own ports, as the [Ports](#ports) table does. Each role's `OperationalPort`
-already defaults to its port there. Set `ASPNETCORE_URLS` on Ingestion and Admin: both default to
-`http://localhost:5000`, so without it only the first of the two starts. Delivery API listens on
-`http://localhost:5241`, so only Subscribers on the same server reach it; set `ASPNETCORE_URLS`
-such as `http://0.0.0.0:5241` to accept remote Subscribers. The operational
+already defaults to its port there. Without `ASPNETCORE_URLS`, each product listener binds to
+loopback on its port: Ingestion on `http://localhost:5231`, Admin on `http://localhost:5150`, and
+Delivery API on `http://localhost:5241`. Set `ASPNETCORE_URLS`, such as `http://0.0.0.0:5231`, on
+each role that must accept remote traffic. The operational
 port listens on every interface, as a container needs; on a server, allow it through the firewall
 only for the local monitoring agent, because it serves `/health`, `/ready`, and metrics without
 authentication.
