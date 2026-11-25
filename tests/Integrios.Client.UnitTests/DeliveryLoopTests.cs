@@ -36,9 +36,17 @@ public sealed class DeliveryLoopTests : IAsyncDisposable
 
     private Delivery Enqueue()
     {
-        var delivery = new Delivery(
-            Guid.NewGuid(), Guid.NewGuid().ToString("N"), 1, Guid.NewGuid(), "order.placed", null, time.GetUtcNow(),
-            JsonDocument.Parse("{}").RootElement, time.GetUtcNow() + Lease, null);
+        var delivery = new Delivery
+        {
+            DeliveryId = Guid.NewGuid(),
+            LeaseToken = Guid.NewGuid().ToString("N"),
+            AttemptNumber = 1,
+            EventId = Guid.NewGuid(),
+            EventType = "order.placed",
+            AcceptedAt = time.GetUtcNow(),
+            Payload = JsonDocument.Parse("{}").RootElement,
+            LeaseExpiresAt = time.GetUtcNow() + Lease,
+        };
         transport.Queue.Writer.TryWrite(delivery);
         return delivery;
     }
