@@ -1,0 +1,23 @@
+src/Integrios.Client/Delivery.cs
+  s_b19acd4aae4d50::t_ac718cf3eff6af 5-37
+tests/Integrios.Client.UnitTests/DeliveryLoopTests.cs
+  s_b19acd4aae4d50::t_9598272ae89a89 39-49
+tests/Integrios.Client.UnitTests/DeliveryTransportTests.cs
+  s_b19acd4aae4d50::t_02d81e2293eae4 1-69
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "d278b62b04c4b11ca5b29a7952686188059188f7",
+  "prompts": {},
+  "sessions": {
+    "s_b19acd4aae4d50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "01ddce99-a00c-49f1-9f76-21f5af0490d8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Armin Zou <arminzou@outlook.com>"
+    }
+  }
+}
