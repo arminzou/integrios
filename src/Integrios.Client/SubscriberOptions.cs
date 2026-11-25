@@ -1,13 +1,14 @@
 namespace Integrios.Client;
 
+/// <summary>Options for an Integrios subscriber.</summary>
 public sealed class SubscriberOptions
 {
-    /// The Delivery API's address, such as http://integrios-subscriber:5241/.
+    /// <summary>The Delivery API's address, such as http://integrios-subscriber:5241/.</summary>
     public Uri? BaseAddress { get; set; }
 
-    /// The SubscriberKey that selects this handler's pull Destination.
+    /// <summary>The SubscriberKey that selects this handler's pull Destination.</summary>
     public string SubscriberKey { get; set; } = "";
 
-    /// How many deliveries this process handles at once.
+    /// <summary>How many deliveries this process handles at once.</summary>
     public int Concurrency { get; set; } = 1;
 }
