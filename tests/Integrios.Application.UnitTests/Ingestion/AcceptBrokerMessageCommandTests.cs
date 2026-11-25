@@ -79,6 +79,19 @@ public sealed class AcceptBrokerMessageCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task Handle_BlankMessageIdLongerThan450Characters_CountsAsMissingWhenMissingIsAllowed()
+    {
+        JsonElement input = JsonSerializer.SerializeToElement(new { event_type = "order.created", payload = new { } });
+        var identityRule = new SourceEventIdentityRule { Kind = "message_id", Value = "ignored", AllowMissing = true };
+
+        await mediator.Send(
+            new AcceptBrokerMessageCommand(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), null, null, input,
+                identityRule, new string(' ', 451)));
+
+        eventAcceptance.LastSubmission!.SourceEventId.ShouldBeNull();
+    }
+
+    [Fact]
     public async Task Handle_MessageIdLongerThan450Characters_IsRejectedEvenWhenMissingIsAllowed()
     {
         JsonElement input = JsonSerializer.SerializeToElement(new { event_type = "order.created", payload = new { } });
