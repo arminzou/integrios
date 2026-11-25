@@ -18,7 +18,7 @@ public abstract class SubscriptionAdminTestBase : AdminApiTestBase, IClassFixtur
     public async Task InitializeAsync()
     {
         await Fixture.ResetAsync();
-        client = Fixture.WebFactory.CreateClient(new WebApplicationFactoryClientOptions
+        client = Fixture.Host.CreateClient(new WebApplicationFactoryClientOptions
         {
             AllowAutoRedirect = false
         });

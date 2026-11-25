@@ -5,7 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Integrios.Worker.Cli;
 
-public static class SecretValidationCli
+public static class DestinationSecretValidationCli
 {
     public static bool IsCommand(string[] args) =>
         args.Length > 0 && args[0].Equals("secrets", StringComparison.OrdinalIgnoreCase);

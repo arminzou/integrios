@@ -37,7 +37,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         Guid connectorId = await fixture.SeedSourceConnectorAsync(fixture.TenantAId, "payments-source");
         defaultTopicId = await fixture.SeedTopicAsync(fixture.TenantAId, "payments");
         defaultSourceId = await fixture.CreateEventApiSourceAsync(fixture.TenantAId, connectorId, defaultTopicId);
-        client = fixture.WebFactory.CreateClient(new WebApplicationFactoryClientOptions
+        client = fixture.Host.CreateClient(new WebApplicationFactoryClientOptions
         {
             AllowAutoRedirect = false
         });
@@ -331,7 +331,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
         });
         await db.SaveChangesAsync();
 
-        using var webhookHost = fixture.WebFactory.WithSetting($"SourceSecrets:test-tenant-a:{secretReference}", secret);
+        using var webhookHost = fixture.Host.WithSetting($"SourceSecrets:test-tenant-a:{secretReference}", secret);
         using var webhookClient = webhookHost.CreateClient();
         string signature = "sha256=" + Convert.ToHexStringLower(
             HMACSHA256.HashData(Encoding.UTF8.GetBytes(secret), Encoding.UTF8.GetBytes(payload)));
@@ -398,7 +398,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
     public async Task Acceptance_RefusesASubmissionResolvedBeforeACommittedChange(
         string status, string eventTypes, string refusal)
     {
-        var acceptance = fixture.WebFactory.Services.GetRequiredService<IEventAcceptance>();
+        var acceptance = fixture.Host.Services.GetRequiredService<IEventAcceptance>();
         var submission = new EventSubmission
         {
             TenantId = fixture.TenantAId,
@@ -421,7 +421,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
     [Fact]
     public async Task Acceptance_RefusesASubmissionResolvedBeforeTenantDeactivation()
     {
-        var acceptance = fixture.WebFactory.Services.GetRequiredService<IEventAcceptance>();
+        var acceptance = fixture.Host.Services.GetRequiredService<IEventAcceptance>();
         var submission = new EventSubmission
         {
             TenantId = fixture.TenantAId,
@@ -442,7 +442,7 @@ public sealed class EventsAcceptanceBoundaryTests : IClassFixture<PostgresApiFix
     [Fact]
     public async Task Acceptance_RefusesASubmissionResolvedBeforeCommittedDeletion()
     {
-        var acceptance = fixture.WebFactory.Services.GetRequiredService<IEventAcceptance>();
+        var acceptance = fixture.Host.Services.GetRequiredService<IEventAcceptance>();
         var submission = new EventSubmission
         {
             TenantId = fixture.TenantAId,

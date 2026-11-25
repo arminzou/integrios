@@ -7,7 +7,7 @@ using System.Text;
 using System.Text.Json;
 using Dapper;
 using Integrios.Application.Authoring.SubscriberKeys;
-using Integrios.Application.Subscriber;
+using Integrios.Application.PullDelivery;
 using Integrios.Infrastructure.Connectors;
 using Integrios.Ingestion;
 using Integrios.Subscriber;
@@ -29,7 +29,7 @@ public sealed class SubscriberKeysTests(AdminApiFixture fixture) : AdminApiTestB
     public async Task InitializeAsync()
     {
         await fixture.ResetAsync();
-        admin = fixture.WebFactory.CreateClient();
+        admin = fixture.Host.CreateClient();
         destinationId = await CreatePullDestinationAsync("orders-service");
     }
 

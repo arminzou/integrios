@@ -16,7 +16,7 @@ public sealed class DashboardShellTests(AdminApiFixture fixture)
     public async Task InitializeAsync()
     {
         await fixture.ResetAsync();
-        client = fixture.WebFactory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        client = fixture.Host.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
     }
 
     public Task DisposeAsync()
@@ -69,7 +69,7 @@ public sealed class DashboardShellTests(AdminApiFixture fixture)
             // A deployment with no human method still serves the shell and answers both browser
             // reads, so it reports "no sign-in method is configured" rather than a bare 404 or a
             // dead API.
-            using TestHostBuilder withoutOidc = fixture.WebFactory
+            using TestHostBuilder withoutOidc = fixture.Host
                 .WithSetting(WebHostDefaults.WebRootKey, webRoot)
                 .WithSetting(OperatorPasswordOptions.EnabledKey, "false");
             using HttpClient unavailable = withoutOidc.CreateClient();
@@ -88,7 +88,7 @@ public sealed class DashboardShellTests(AdminApiFixture fixture)
             options.GetProperty("oidc_enabled").GetBoolean().ShouldBeFalse();
             options.GetProperty("password_enabled").GetBoolean().ShouldBeFalse();
 
-            using TestHostBuilder withOidc = fixture.WebFactory
+            using TestHostBuilder withOidc = fixture.Host
                 .WithSetting(WebHostDefaults.WebRootKey, webRoot)
                 .WithSetting(OperatorOidcOptions.AuthorityKey, "https://oidc.example.test")
                 .WithSetting(OperatorOidcOptions.SectionKey + ":ClientId", "dashboard-test");
@@ -101,7 +101,7 @@ public sealed class DashboardShellTests(AdminApiFixture fixture)
             }
 
 
-            using TestHostBuilder withPassword = fixture.WebFactory
+            using TestHostBuilder withPassword = fixture.Host
                 .WithSetting(WebHostDefaults.WebRootKey, webRoot)
                 .WithSetting(OperatorPasswordOptions.EnabledKey, "true");
             using HttpClient passwordAvailable = withPassword.CreateClient();

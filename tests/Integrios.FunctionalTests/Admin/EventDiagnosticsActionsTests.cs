@@ -15,7 +15,7 @@ public sealed class EventDiagnosticsActionsTests(AdminApiFixture fixture) : Admi
     public async Task InitializeAsync()
     {
         await fixture.ResetAsync();
-        client = fixture.WebFactory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        client = fixture.Host.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
     }
 
     public Task DisposeAsync()
@@ -78,7 +78,7 @@ public sealed class EventDiagnosticsActionsTests(AdminApiFixture fixture) : Admi
         var (tracedEventId, _) = await fixture.SeedDeadLetteredDeliveryAsync();
         var (untracedEventId, _) = await fixture.SeedDeadLetteredDeliveryAsync();
         await fixture.AddOutboxTraceparentAsync(tracedEventId, "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01");
-        using TestHostBuilder configured = fixture.WebFactory.WithSetting(
+        using TestHostBuilder configured = fixture.Host.WithSetting(
             TraceUrlTemplateKey, "https://tracing.example.test/trace/{trace_id}?view=waterfall");
         using HttpClient tracing = configured.CreateClient();
 
@@ -92,7 +92,7 @@ public sealed class EventDiagnosticsActionsTests(AdminApiFixture fixture) : Admi
     [Fact]
     public void Startup_FailsForAMalformedTemplate()
     {
-        using TestHostBuilder misconfigured = fixture.WebFactory.WithSetting(
+        using TestHostBuilder misconfigured = fixture.Host.WithSetting(
             TraceUrlTemplateKey, "https://tracing.example.test/trace/");
 
         Exception failure = Should.Throw<Exception>(() => misconfigured.CreateClient());

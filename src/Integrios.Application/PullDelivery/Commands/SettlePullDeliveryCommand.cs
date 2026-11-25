@@ -3,7 +3,7 @@ using Integrios.Application.Telemetry;
 using Integrios.Domain.Entities;
 using MediatR;
 
-namespace Integrios.Application.Subscriber;
+namespace Integrios.Application.PullDelivery;
 
 public sealed record SettlePullDeliveryCommand(PullAttemptOwner Owner, PullSettlement Settlement)
     : IRequest<PullSettlementStatus>;

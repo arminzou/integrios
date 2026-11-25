@@ -1,12 +1,13 @@
 using Integrios.Application;
 using Integrios.Application.Delivery;
-using Integrios.Application.Subscriber;
+using Integrios.Application.PullDelivery;
 using Integrios.Application.Transforms;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
+using ClaimedDelivery = Integrios.Application.PullDelivery.PullDelivery;
 
-namespace Integrios.Application.UnitTests;
+namespace Integrios.Application.UnitTests.PullDelivery;
 
 public sealed class ClaimPullDeliveriesCommandTests
 {
@@ -21,7 +22,7 @@ public sealed class ClaimPullDeliveriesCommandTests
         queue.ClaimNextAsync(DestinationId, Arg.Any<CancellationToken>())
             .Returns(Task.FromResult<EventDeliveryClaimResult?>(new ClaimedPullDelivery(first)), Task.FromException<EventDeliveryClaimResult?>(failure));
 
-        IReadOnlyList<PullDelivery> claimed = await Send(queue, max: 5);
+        IReadOnlyList<ClaimedDelivery> claimed = await Send(queue, max: 5);
 
         claimed.ShouldHaveSingleItem().DeliveryId.ShouldBe(first.Id);
     }
@@ -40,7 +41,7 @@ public sealed class ClaimPullDeliveriesCommandTests
         queue.SettleAsync(Arg.Any<PullAttemptOwner>(), Arg.Any<PullSettlement>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromException<PullSettlementResult>(new TimeoutException("database timeout")));
 
-        IReadOnlyList<PullDelivery> claimed = await Send(queue, max: 5, FailingTransforms());
+        IReadOnlyList<ClaimedDelivery> claimed = await Send(queue, max: 5, FailingTransforms());
 
         claimed.ShouldHaveSingleItem().DeliveryId.ShouldBe(first.Id);
     }
@@ -61,7 +62,7 @@ public sealed class ClaimPullDeliveriesCommandTests
         new OperationCanceledException()
     };
 
-    private static async Task<IReadOnlyList<PullDelivery>> Send(
+    private static async Task<IReadOnlyList<ClaimedDelivery>> Send(
         IPullDeliveryQueue queue,
         int max,
         ITransformEvaluator? transforms = null)
