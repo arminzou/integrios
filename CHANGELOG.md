@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.1](https://github.com/arminzou/integrios/compare/v0.14.0...v0.14.1) (2026-11-25)
+
+
+### Bug Fixes
+
+* **subscriber:** stop logging a Subscriber's disconnect as an unhandled error ([#130](https://github.com/arminzou/integrios/issues/130)) ([57612a9](https://github.com/arminzou/integrios/commit/57612a918354fc8969a82092b400868f064b8405))
+
 ## [0.14.0](https://github.com/arminzou/integrios/compare/v0.13.0...v0.14.0) (2026-11-25)
 
 
