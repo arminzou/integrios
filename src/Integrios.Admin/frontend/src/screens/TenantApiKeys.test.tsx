@@ -122,6 +122,44 @@ describe("Tenant API keys", () => {
     expect(await screen.findByRole("heading", { name: "Sign in to Integrios" })).toBeTruthy();
   });
 
+  it("keeps the session while a poll finds it expired during the create, then shows the key", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    let expired = false;
+    let answer = () => {};
+    const calls = stubHttp(({ method, url }) => {
+      if (url.pathname === "/auth/session")
+        return expired
+          ? { status: 401 }
+          : { status: 200, body: { antiforgery_token: "t", antiforgery_header_name: "X" } };
+      if (method === "POST") {
+        expired = true;
+        return new Promise((resolve) => {
+          answer = () => resolve({ status: 201, body: { tenant_api_key: { ...listItem, status: "active" }, token } });
+        });
+      }
+      if (url.pathname === `/admin/tenants/${tenantId}`) return { status: 200, body: { id: tenantId, name: "Acme" } };
+      if (url.pathname.endsWith("/events/backlog"))
+        return expired ? { status: 401 } : { status: 200, body: quietBacklog };
+      return { status: 200, body: page([]) };
+    });
+
+    renderApp(`/tenants/${tenantId}/tenant-api-keys`);
+    fireEvent.click(await screen.findByRole("button", { name: "New API key" }));
+    fireEvent.change(await screen.findByLabelText("Name"), { target: { value: "Ingest" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create API key" }));
+
+    const polls = () => calls.filter(({ url }) => url.pathname.endsWith("/events/backlog")).length;
+    const pollsBefore = polls();
+    await act(() => vi.advanceTimersByTimeAsync(16_000));
+    expect(polls()).toBeGreaterThan(pollsBefore);
+    expect(screen.queryByRole("heading", { name: "Sign in to Integrios" })).toBeNull();
+
+    answer();
+    expect(await screen.findByText(token)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    expect(await screen.findByRole("heading", { name: "Sign in to Integrios" })).toBeTruthy();
+  });
+
   it("stays open on Escape while the key is being created, then shows the key", async () => {
     let answer = () => {};
     stubHttp(({ method }) =>
