@@ -5,7 +5,7 @@ public interface IDeadLetterReplay
     Task<DeadLetterReplayResult> ReplayAsync(
         Guid tenantId,
         Guid eventId,
-        Guid subscriptionDeliveryId,
+        Guid eventDeliveryId,
         CancellationToken cancellationToken);
 }
 

@@ -14,16 +14,16 @@ namespace Integrios.Infrastructure.Events;
 internal sealed class SqlServerEventAcceptance(IDbContextFactory<IntegriosDbContext> contextFactory)
     : IEventAcceptance
 {
-    public async Task<EventAcceptance?> FindBySourceEventIdAsync(
-        Guid sourceId,
-        string sourceEventId,
+    public async Task<EventAcceptance?> FindByIdempotencyKeyAsync(
+        Guid tenantId,
+        string idempotencyKey,
         CancellationToken cancellationToken)
     {
         await using IntegriosDbContext context = await contextFactory.CreateDbContextAsync(cancellationToken);
         var connection = context.Database.GetDbConnection();
         EventAcceptanceRow? existing = await connection.QuerySingleOrDefaultAsync<EventAcceptanceRow>(new CommandDefinition(
-            "SELECT id AS EventId, status AS Status, accepted_at AS AcceptedAt FROM events WHERE source_id=@SourceId AND source_event_id=@SourceEventId",
-            new { SourceId = sourceId, SourceEventId = sourceEventId }, cancellationToken: cancellationToken));
+            "SELECT id AS EventId, status AS Status, accepted_at AS AcceptedAt FROM events WHERE tenant_id=@TenantId AND idempotency_key=@IdempotencyKey",
+            new { TenantId = tenantId, IdempotencyKey = idempotencyKey }, cancellationToken: cancellationToken));
         return existing is null ? null : new EventAcceptance
         {
             EventId = existing.EventId,
@@ -135,11 +135,6 @@ internal sealed class SqlServerEventAcceptance(IDbContextFactory<IntegriosDbCont
                 throw;
 
             return ToAlreadyAccepted(existing);
-        }
-        catch
-        {
-            await transaction.RollbackAsync(cancellationToken);
-            throw;
         }
     }
 

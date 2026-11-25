@@ -16,14 +16,13 @@ public static class OperationalEndpointExtensions
     public static int AddOperationalEndpoints(
         this WebApplicationBuilder builder,
         int defaultPort,
-        bool operationalOnly = false,
-        string defaultProductUrl = "http://localhost:5000")
+        string? defaultProductUrl)
     {
         int port = builder.Configuration.GetValue(PortConfigurationKey, defaultPort);
         if (port is < 1 or > 65535)
             throw new InvalidOperationException($"{PortConfigurationKey} must be a valid TCP port.");
 
-        if (operationalOnly)
+        if (defaultProductUrl is null)
             builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
         else
             builder.WebHost.UseUrls([.. ConfiguredProductUrls(builder, defaultProductUrl), $"http://0.0.0.0:{port}"]);

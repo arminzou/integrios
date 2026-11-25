@@ -34,16 +34,18 @@ internal sealed class AcceptBrokerMessageCommandHandler(
         string? sourceEventId = command.EventIdentityRule is { } identityRule
             ? SourceEventIdentityExtractor.ExtractBroker(identityRule, command.BrokerMessageId, command.RawInput)
             : null;
-        if (sourceEventId is not null
-            && await eventAcceptance.FindBySourceEventIdAsync(command.SourceId, sourceEventId, cancellationToken) is { } existing)
+        string? idempotencyKey = sourceEventId is not null
+            ? SourceEventIdentityExtractor.IdempotencyKey(command.SourceId, sourceEventId)
+            : null;
+        if (idempotencyKey is not null
+            && await eventAcceptance.FindByIdempotencyKeyAsync(command.TenantId, idempotencyKey, cancellationToken) is { } existing)
             return ToResult(existing);
 
         SourceContractOutput output = SourceContractEvaluator.Evaluate(
             evaluator, command.SourceContractSchema, command.SourceMapping, command.RawInput);
         sourceEventId ??= output.SourceEventId;
-        string? idempotencyKey = sourceEventId is not null
-            ? SourceEventIdentityExtractor.IdempotencyKey(command.SourceId, sourceEventId)
-            : null;
+        if (idempotencyKey is null && sourceEventId is not null)
+            idempotencyKey = SourceEventIdentityExtractor.IdempotencyKey(command.SourceId, sourceEventId);
 
         var activity = Activity.Current;
         activity?.SetTag("integrios.tenant.id", command.TenantId);

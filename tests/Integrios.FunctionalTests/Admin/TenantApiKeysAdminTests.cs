@@ -23,7 +23,7 @@ public sealed class TenantApiKeysAdminTests : AdminApiTestBase, IClassFixture<Ad
     public async Task InitializeAsync()
     {
         await fixture.ResetAsync();
-        client = fixture.WebFactory.CreateClient(new WebApplicationFactoryClientOptions
+        client = fixture.Host.CreateClient(new WebApplicationFactoryClientOptions
         {
             AllowAutoRedirect = false
         });

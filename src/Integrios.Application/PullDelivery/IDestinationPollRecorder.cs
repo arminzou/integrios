@@ -1,4 +1,4 @@
-namespace Integrios.Application.Subscriber;
+namespace Integrios.Application.PullDelivery;
 
 public interface IDestinationPollRecorder
 {

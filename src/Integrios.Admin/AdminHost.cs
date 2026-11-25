@@ -15,6 +15,7 @@ namespace Integrios.Admin;
 public static class AdminHost
 {
     public const string Name = "admin";
+    public const string DefaultUrl = "http://localhost:5150";
     public const int DefaultOperationalPort = 5151;
 
     public static async Task<int> RunAsync(string[] args)
@@ -68,7 +69,7 @@ public static class AdminHost
     {
         var builder = ServiceHosting.CreateBuilder(args, Name, typeof(AdminHost).Assembly.GetName().Name!);
         builder.Logging.AddOperationalConsoleLogging(builder.Environment.IsDevelopment());
-        int operationalPort = builder.AddOperationalEndpoints(DefaultOperationalPort);
+        int operationalPort = builder.AddOperationalEndpoints(DefaultOperationalPort, DefaultUrl);
 
         builder.Services.AddSingleton(PublicIngestionBaseUri.Parse(
             builder.Configuration[PublicIngestionBaseUri.ConfigurationKey],

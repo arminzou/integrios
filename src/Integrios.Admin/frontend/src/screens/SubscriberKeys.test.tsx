@@ -1,10 +1,13 @@
-import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
-import { page, stubHttp } from "../test/http";
-import { renderScreen } from "../test/router";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { page, quietBacklog, stubHttp } from "../test/http";
+import { renderApp, renderScreen } from "../test/router";
 import { SubscriberKeysScreen } from "./SubscriberKeys";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 const tenantId = "11111111-1111-1111-1111-111111111111";
 const destinationId = "22222222-2222-2222-2222-222222222222";
@@ -62,7 +65,7 @@ describe("Subscriber keys", () => {
   });
 
   it("shows a new key once and stops showing it once it is dismissed", async () => {
-    stubHttp(({ method }) =>
+    const calls = stubHttp(({ method }) =>
       method === "POST"
         ? { status: 201, body: { subscriber_key: { ...listItem, status: "active" }, token } }
         : { status: 200, body: page([listItem]) },
@@ -74,11 +77,52 @@ describe("Subscriber keys", () => {
     fireEvent.click(screen.getByRole("button", { name: "Create Subscriber key" }));
 
     expect(await screen.findByText(token)).toBeTruthy();
+    const listReads = () =>
+      calls.filter(({ method, url }) => method === "GET" && url.pathname.endsWith("/subscriber-keys")).length;
+    const readsWhileShown = listReads();
 
     fireEvent.click(screen.getByRole("button", { name: "Done" }));
 
     expect(screen.queryByText(token)).toBeNull();
+    await waitFor(() => expect(listReads()).toBeGreaterThan(readsWhileShown));
     expect(await screen.findByText("intg_sub_ab12cd3")).toBeTruthy();
+  });
+
+  it("keeps a new key on screen while a backlog poll finds the session expired, then signs out on Done", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    let expired = false;
+    const calls = stubHttp(({ method, url }) => {
+      if (url.pathname === "/auth/session")
+        return expired
+          ? { status: 401 }
+          : { status: 200, body: { antiforgery_token: "t", antiforgery_header_name: "X" } };
+      if (expired) return { status: 401 };
+      if (method === "POST") {
+        expired = true;
+        return { status: 201, body: { subscriber_key: { ...listItem, status: "active" }, token } };
+      }
+      if (url.pathname === `/admin/tenants/${tenantId}`) return { status: 200, body: { id: tenantId, name: "Acme" } };
+      if (url.pathname.endsWith("/events/backlog")) return { status: 200, body: quietBacklog };
+      return { status: 200, body: page([]) };
+    });
+
+    renderApp(`/tenants/${tenantId}/destinations/${destinationId}/subscriber-keys`);
+    fireEvent.click(await screen.findByRole("button", { name: "New Subscriber key" }));
+    fireEvent.change(await screen.findByLabelText("Name"), { target: { value: "Ingest" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create Subscriber key" }));
+
+    expect(await screen.findByText(token)).toBeTruthy();
+
+    const polls = () => calls.filter(({ url }) => url.pathname.endsWith("/events/backlog")).length;
+    const pollsBefore = polls();
+    await act(() => vi.advanceTimersByTimeAsync(16_000));
+    expect(polls()).toBeGreaterThan(pollsBefore);
+
+    expect(screen.queryByRole("heading", { name: "Sign in to Integrios" })).toBeNull();
+    expect(screen.getByText(token)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    expect(await screen.findByRole("heading", { name: "Sign in to Integrios" })).toBeTruthy();
   });
 
   it("names the key it is about to revoke and does not revoke until confirmed", async () => {

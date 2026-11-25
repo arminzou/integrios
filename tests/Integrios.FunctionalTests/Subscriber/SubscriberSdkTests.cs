@@ -17,9 +17,9 @@ namespace Integrios.FunctionalTests.Subscriber;
 public sealed class SubscriberSdkTests : IClassFixture<WorkerRoutingFixture>, IAsyncLifetime
 {
     private readonly WorkerRoutingFixture fixture;
-    private TestHostBuilder deliveryApi = null!;
+    private TestHostBuilder subscriber = null!;
     private string subscriberKey = null!;
-    private IHost? subscriber;
+    private IHost? subscriberSdk;
 
     public SubscriberSdkTests(WorkerRoutingFixture fixture)
     {
@@ -31,7 +31,7 @@ public sealed class SubscriberSdkTests : IClassFixture<WorkerRoutingFixture>, IA
         await fixture.ResetAsync();
         await fixture.SeedPullDestinationsAsync();
         // A three-second lease makes the SDK renew about every second.
-        deliveryApi = new TestHostBuilder(SubscriberHost.CreateBuilder, SubscriberHost.ConfigurePipeline)
+        subscriber = new TestHostBuilder(SubscriberHost.CreateBuilder, SubscriberHost.ConfigurePipeline)
             .WithSettings(fixture.Configuration)
             .WithSetting("Integrios:Delivery:HttpTimeout", "00:00:01")
             .WithSetting("Integrios:Delivery:AttemptDeadline", "00:00:02")
@@ -42,12 +42,12 @@ public sealed class SubscriberSdkTests : IClassFixture<WorkerRoutingFixture>, IA
 
     public async Task DisposeAsync()
     {
-        if (subscriber is not null)
+        if (subscriberSdk is not null)
         {
-            await subscriber.StopAsync();
-            subscriber.Dispose();
+            await subscriberSdk.StopAsync();
+            subscriberSdk.Dispose();
         }
-        deliveryApi.Dispose();
+        subscriber.Dispose();
     }
 
     private async Task StartSubscriberAsync(
@@ -63,9 +63,9 @@ public sealed class SubscriberSdkTests : IClassFixture<WorkerRoutingFixture>, IA
                 options.Concurrency = concurrency;
             })
             .ConfigurePrimaryHttpMessageHandler(() =>
-                ((TestServer)deliveryApi.Services.GetRequiredService<IServer>()).CreateHandler());
-        subscriber = builder.Build();
-        await subscriber.StartAsync();
+                ((TestServer)subscriber.Services.GetRequiredService<IServer>()).CreateHandler());
+        subscriberSdk = builder.Build();
+        await subscriberSdk.StartAsync();
     }
 
     /// Waits for the delivery to reach the status after its first attempt.
@@ -148,7 +148,7 @@ public sealed class SubscriberSdkTests : IClassFixture<WorkerRoutingFixture>, IA
         Guid deliveryId = await fixture.FanoutPullDeliveryAsync("order.placed");
         await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
 
-        await subscriber!.StopAsync();
+        await subscriberSdk!.StopAsync();
 
         await WaitForStatusAsync(deliveryId, "pending");
         (await fixture.GetDeliveryAttemptsAsync(deliveryId)).ShouldHaveSingleItem().Status.ShouldBe("failed");
@@ -187,7 +187,7 @@ public sealed class SubscriberSdkTests : IClassFixture<WorkerRoutingFixture>, IA
         Guid deliveryId = await fixture.FanoutPullDeliveryAsync("order.placed");
         Delivery first = await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
 
-        using HttpClient other = deliveryApi.CreateClient();
+        using HttpClient other = subscriber.CreateClient();
         other.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", subscriberKey);
         HttpResponseMessage reclaim;
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));

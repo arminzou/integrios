@@ -97,9 +97,9 @@ public sealed class StubEventAcceptance : IEventAcceptance
     public EventSubmission? LastSubmission { get; set; }
     public EventAcceptance? ExistingBySourceEventId { get; set; }
 
-    public Task<EventAcceptance?> FindBySourceEventIdAsync(
-        Guid sourceId,
-        string sourceEventId,
+    public Task<EventAcceptance?> FindByIdempotencyKeyAsync(
+        Guid tenantId,
+        string idempotencyKey,
         CancellationToken cancellationToken) => Task.FromResult(ExistingBySourceEventId);
 
     public Task<EventAcceptance> AcceptAsync(

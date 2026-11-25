@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { NavLink, useNavigate } from "react-router";
 import { z } from "zod";
@@ -25,7 +25,7 @@ import {
   SheetButton,
   WriteStatus,
 } from "../ui/controls";
-import { BodyPanel } from "../ui/copy";
+import { SecretReveal } from "../ui/copy";
 import { Filter, Form, TextField } from "../ui/fields";
 import { useListFilters } from "../ui/filters";
 import { applyProblem } from "../ui/formProblem";
@@ -403,6 +403,7 @@ function CreateTenantApiKey({ tenantId, onCreated }: { tenantId: string; onCreat
   });
 
   const create = useMutation({
+    meta: { holdsSheet: true },
     mutationFn: (values: CreateValues) =>
       call(() =>
         api.POST("/admin/tenants/{tenantId}/tenant-api-keys", {
@@ -413,12 +414,14 @@ function CreateTenantApiKey({ tenantId, onCreated }: { tenantId: string; onCreat
           },
         }),
       ),
-    onSuccess: (result) => {
-      // The list re-reads and will only ever carry the key's prefix.
-      setCreated(result ?? null);
-      void queryClient.invalidateQueries({ queryKey: ["tenant-api-keys", tenantId] });
-    },
+    onSuccess: (result) => setCreated(result ?? null),
   });
+
+  // The list re-reads, carrying only the key's prefix, once the reveal closes. Re-reading while it is
+  // open could answer 401 and move to sign-in, unmounting the only copy of the key.
+  useEffect(() => {
+    if (created) return () => void queryClient.invalidateQueries({ queryKey: ["tenant-api-keys", tenantId] });
+  }, [created, queryClient, tenantId]);
 
   const submit = form.handleSubmit((values) =>
     create.mutate(values, { onError: (failure) => applyProblem(form, failure, createFields) }),
@@ -433,10 +436,7 @@ function CreateTenantApiKey({ tenantId, onCreated }: { tenantId: string; onCreat
         <h3 role="status" className="m-0">
           {created.tenant_api_key.name} is active
         </h3>
-        <p className="m-0 rounded-md bg-warning-surface p-3 text-sm text-warning-ink">
-          This is the only time the key is shown. Store it in your secret manager before you close this.
-        </p>
-        <BodyPanel label="Key" value={created.token} language="text" unbounded />
+        <SecretReveal value={created.token} />
         <section className="flex flex-col gap-2">
           <h4 className="m-0 text-sm font-semibold">Use it</h4>
           <CodeBlock

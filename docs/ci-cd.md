@@ -124,8 +124,8 @@ that their snapshotted authentication is unexecutable and will follow the normal
 
 Successful release runs retain a downloadable evidence artifact for 90 days. It contains
 the workflow and commit identity, .NET and dependency versions, exact verification
-commands, test logs and TRX results, resolved external image digests, and the published image
-digest.
+commands, test logs and TRX results, resolved digests of the external images the release gates
+run, and the published image digest.
 
 Each release also attaches `integrios-<version>-win-x64.zip`, a self-contained Windows build
 cross-published on the Linux runner, and `checksums.txt` with the SHA-256 of every attached file.

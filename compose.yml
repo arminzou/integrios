@@ -6,7 +6,7 @@ x-integrios-image: &integrios-image
 
 services:
   postgres:
-    image: postgres:16.14-alpine3.24
+    image: postgres:16.16-alpine3.24
     restart: unless-stopped
     environment:
       POSTGRES_DB: integrios
@@ -119,7 +119,7 @@ services:
 
   servicebus-sql:
     profiles: ["queue-demo"]
-    image: mcr.microsoft.com/azure-sql-edge:2.0.0
+    image: mcr.microsoft.com/mssql/server:2022-CU20-ubuntu-22.04
     environment:
       ACCEPT_EULA: "Y"
       MSSQL_SA_PASSWORD: ${INTEGRIOS_SERVICEBUS_SQL_PASSWORD:-Integrios_dev1!}
@@ -143,16 +143,16 @@ services:
   # The platform bundles no observability backend; operators point it at their own stack.
   prometheus:
     profiles: ["observability"]
-    image: prom/prometheus:v3.13.1
+    image: prom/prometheus:v3.16.0
     restart: unless-stopped
     volumes:
       - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
 
   grafana:
     profiles: ["observability"]
-    image: grafana/grafana:12.4.6
+    image: grafana/grafana:12.4.15
     restart: unless-stopped
     depends_on:
       - prometheus
@@ -164,7 +164,7 @@ services:
       - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
 
 volumes:
   postgres_data:

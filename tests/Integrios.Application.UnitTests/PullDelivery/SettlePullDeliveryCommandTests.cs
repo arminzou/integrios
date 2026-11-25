@@ -1,13 +1,13 @@
 using Integrios.Application;
 using Integrios.Application.Delivery;
-using Integrios.Application.Subscriber;
+using Integrios.Application.PullDelivery;
 using Integrios.Application.Telemetry;
 using Integrios.Tests.Shared;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 
-namespace Integrios.Application.UnitTests;
+namespace Integrios.Application.UnitTests.PullDelivery;
 
 [Collection(TelemetryListenerCollection.Name)]
 public sealed class SettlePullDeliveryCommandTests

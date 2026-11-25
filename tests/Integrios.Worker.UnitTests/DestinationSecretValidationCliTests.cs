@@ -11,7 +11,7 @@ using NSubstitute;
 
 namespace Integrios.Worker.UnitTests;
 
-public sealed class SecretValidationCliTests
+public sealed class DestinationSecretValidationCliTests
 {
     [Fact]
     public async Task RunAsync_ValidatesSelectedTenantAndReturnsFailureForMissingReference()
@@ -25,7 +25,7 @@ public sealed class SecretValidationCliTests
         using var output = new StringWriter();
         using var error = new StringWriter();
 
-        int exitCode = await SecretValidationCli.RunAsync(
+        int exitCode = await DestinationSecretValidationCli.RunAsync(
             ["secrets", "validate", "--tenant", "tenant-a"], services, output, error);
 
         exitCode.ShouldBe(1);
@@ -56,7 +56,7 @@ public sealed class SecretValidationCliTests
         using var output = new StringWriter();
         using var error = new StringWriter();
 
-        int exitCode = await SecretValidationCli.RunAsync(
+        int exitCode = await DestinationSecretValidationCli.RunAsync(
             ["secrets", "validate", "--all"], services, output, error);
 
         exitCode.ShouldBe(0);
@@ -72,7 +72,7 @@ public sealed class SecretValidationCliTests
         using var output = new StringWriter();
         using var error = new StringWriter();
 
-        int exitCode = await SecretValidationCli.RunAsync(
+        int exitCode = await DestinationSecretValidationCli.RunAsync(
             ["secrets", "validate", "--tenant", "tenant-a"], services, output, error);
 
         exitCode.ShouldBe(2);
@@ -92,7 +92,7 @@ public sealed class SecretValidationCliTests
         using var output = new StringWriter();
         using var error = new StringWriter();
 
-        int exitCode = await SecretValidationCli.RunAsync(
+        int exitCode = await DestinationSecretValidationCli.RunAsync(
             ["secrets", "validate", "--tenant", "tenant-a", "--destination", selected.Id.ToString()],
             services,
             output,
@@ -113,7 +113,7 @@ public sealed class SecretValidationCliTests
         using var output = new StringWriter();
         using var error = new StringWriter();
 
-        int exitCode = await SecretValidationCli.RunAsync(args, services, output, error);
+        int exitCode = await DestinationSecretValidationCli.RunAsync(args, services, output, error);
 
         exitCode.ShouldBe(2);
         error.ToString().ShouldContain("Usage: secrets validate", Case.Sensitive);

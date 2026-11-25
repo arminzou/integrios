@@ -20,7 +20,7 @@ public sealed class DeliveryRecoveryAdminTests : AdminApiTestBase, IClassFixture
     public async Task InitializeAsync()
     {
         await fixture.ResetAsync();
-        client = fixture.WebFactory.CreateClient(new WebApplicationFactoryClientOptions
+        client = fixture.Host.CreateClient(new WebApplicationFactoryClientOptions
         {
             AllowAutoRedirect = false
         });

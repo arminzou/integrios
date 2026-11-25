@@ -7,7 +7,7 @@ public sealed class OperationalEndpointTests(PostgresApiFixture fixture) : IClas
     [Fact]
     public async Task LivenessAndReadiness_WithAvailableDatabase_AreHealthy()
     {
-        using HttpClient client = fixture.WebFactory.CreateClient();
+        using HttpClient client = fixture.Host.CreateClient();
 
         using HttpResponseMessage liveness = await client.GetAsync("/health");
         using HttpResponseMessage readiness = await client.GetAsync("/ready");

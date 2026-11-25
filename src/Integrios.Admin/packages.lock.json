@@ -22,9 +22,9 @@
       },
       "Microsoft.OpenApi": {
         "type": "Direct",
-        "requested": "[2.13.0, )",
-        "resolved": "2.13.0",
-        "contentHash": "wavlgBYnn7uU/ZGhFHNl0UlDOlwz+6KRduKkqdCCbfxxANaQ1rmBpETVGdwXanAM6twQOxsvI3CBEGF4OScbeQ=="
+        "requested": "[2.13.1, )",
+        "resolved": "2.13.1",
+        "contentHash": "qPyM4L+CQvM7ljcJN15e3lTx3439fBZoGs03OlpfxiUUxxhPJX+7h8BCJQO1z6ANQbxBAirMA4JkHq7j/naA/A=="
       },
       "Azure.Core": {
         "type": "Transitive",
@@ -84,8 +84,8 @@
       },
       "Dapper": {
         "type": "Transitive",
-        "resolved": "2.1.89",
-        "contentHash": "1VjFE664wnxvuhlgP8kS4PeFFF4jqD3VkbIHW6Zlc52zuibgcz5ICnIHcQXlTp6pURpPNGLV0ZpNe5x9KePJnA=="
+        "resolved": "2.1.100",
+        "contentHash": "zKwgGfxkDIVLGU2WIsl57DwTgj17+fa5v0u2eiVMxU92GXN2fRIn2M8QMGtyGFrPSbVOYKgGFxAxEFL6CB9tTw=="
       },
       "Jsonata.Net.Native": {
         "type": "Transitive",
@@ -278,25 +278,25 @@
       },
       "Npgsql": {
         "type": "Transitive",
-        "resolved": "10.0.3",
-        "contentHash": "7nb5YzXuvWWJxB0J8DiyL3we+X4FOctZrt0fIBnucOIaIevFEEwGQVZKtiu9olXdlNAK1eNgqSral6r/jlhI4w=="
+        "resolved": "10.0.4",
+        "contentHash": "m2VCpcU9MKD8lLxTn+YaNIRWd+Gz3y/9wIaM+2ifDF24xZ2Kvvjx4CDB2BIgobr1Gj6a/gsdmfz1sQ+kmd7liw=="
       },
       "Npgsql.EntityFrameworkCore.PostgreSQL": {
         "type": "Transitive",
-        "resolved": "10.0.3",
-        "contentHash": "IPGrrZnRkuW7OlHDhUESZz4G5DLkW7Nej/O3Cx+0iTsgyU5XJxBgpsvTHLloo3WWuAKKbDHXBvWPVkX1deRh1Q==",
+        "resolved": "10.0.4",
+        "contentHash": "KRFbmHOn260bgSSQTKZsKtvEFW1k1AaZUtb/IPmW31M47qMkzAOglP7FHQgMeqpZeMJ2rjRwczfEUP5lyWUAdA==",
         "dependencies": {
-          "Microsoft.EntityFrameworkCore": "[10.0.4, 11.0.0)",
-          "Microsoft.EntityFrameworkCore.Relational": "[10.0.4, 11.0.0)",
-          "Npgsql": "10.0.3"
+          "Microsoft.EntityFrameworkCore": "[10.0.15, 11.0.0)",
+          "Microsoft.EntityFrameworkCore.Relational": "[10.0.15, 11.0.0)",
+          "Npgsql": "10.0.4"
         }
       },
       "Npgsql.OpenTelemetry": {
         "type": "Transitive",
-        "resolved": "10.0.3",
-        "contentHash": "ShsdG/FHxJ2VuWM6tebJL/mCWkcxymmvtENN59c85EsJdT4TStWwwtgZoBu/9UvC0qi1jpFZ6bOfl9ijiWD+vA==",
+        "resolved": "10.0.4",
+        "contentHash": "FQBFufPAD1fUcXgp8aIZY/C5S1lCjxUZ7ZumIl+pxMoIXRhDzVYPYgY0l1xI8N0VH5iC1Kg3XmZapmH5EAMLIg==",
         "dependencies": {
-          "Npgsql": "10.0.3",
+          "Npgsql": "10.0.4",
           "OpenTelemetry.API": "1.15.3"
         }
       },
@@ -417,8 +417,8 @@
       },
       "System.Security.Cryptography.Pkcs": {
         "type": "Transitive",
-        "resolved": "10.0.13",
-        "contentHash": "a+EovgC1fBnwdlQ6cn3j4JFBfKqiFaFvoAhjisOoSvazLAcIznaBzPQP0oYnvccmeXfqUH1KebVZOxSeH6rMaw=="
+        "resolved": "10.0.15",
+        "contentHash": "4jEv/lXDuQkh60lPU3hlwASErXdv1ZMKmsxVuBfZWiVKT5Q2QGo58kTa6rN519+PU+m4Hsj1m3yT8fN+Xw0XZw=="
       },
       "System.Security.Cryptography.ProtectedData": {
         "type": "Transitive",
@@ -433,7 +433,7 @@
       "integrios.application": {
         "type": "Project",
         "dependencies": {
-          "Integrios.Domain": "[0.11.0, )",
+          "Integrios.Domain": "[0.13.0, )",
           "MediatR": "[12.5.0, )"
         }
       },
@@ -446,16 +446,16 @@
           "Azure.Extensions.AspNetCore.Configuration.Secrets": "[1.5.2, )",
           "Azure.Identity": "[1.21.0, )",
           "Azure.Messaging.ServiceBus": "[7.21.0, )",
-          "Dapper": "[2.1.89, )",
-          "Integrios.Application": "[0.11.0, )",
-          "Integrios.Domain": "[0.11.0, )",
+          "Dapper": "[2.1.100, )",
+          "Integrios.Application": "[0.13.0, )",
+          "Integrios.Domain": "[0.13.0, )",
           "Jsonata.Net.Native": "[3.0.0, )",
           "Microsoft.EntityFrameworkCore.SqlServer": "[10.0.15, )",
           "Microsoft.Extensions.Hosting.Systemd": "[10.0.15, )",
           "Microsoft.Extensions.Hosting.WindowsServices": "[10.0.15, )",
-          "Npgsql": "[10.0.3, )",
-          "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.3, )",
-          "Npgsql.OpenTelemetry": "[10.0.3, )",
+          "Npgsql": "[10.0.4, )",
+          "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.4, )",
+          "Npgsql.OpenTelemetry": "[10.0.4, )",
           "OpenTelemetry.Exporter.OpenTelemetryProtocol": "[1.21.0, )",
           "OpenTelemetry.Exporter.Prometheus.AspNetCore": "[1.20.1-beta.1, )",
           "OpenTelemetry.Extensions.Hosting": "[1.21.0, )",
@@ -463,21 +463,30 @@
           "OpenTelemetry.Instrumentation.Http": "[1.21.0, )",
           "OpenTelemetry.Instrumentation.Runtime": "[1.21.0, )",
           "OpenTelemetry.Instrumentation.SqlClient": "[1.21.0, )",
-          "System.Security.Cryptography.Pkcs": "[10.0.13, )"
+          "System.Security.Cryptography.Pkcs": "[10.0.15, )"
         }
       },
       "integrios.migrations.postgres": {
         "type": "Project",
         "dependencies": {
-          "Integrios.Infrastructure": "[0.11.0, )",
-          "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.3, )"
+          "Dapper": "[2.1.100, )",
+          "Integrios.Infrastructure": "[0.13.0, )",
+          "Npgsql": "[10.0.4, )",
+          "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.4, )",
+          "Npgsql.OpenTelemetry": "[10.0.4, )",
+          "System.Security.Cryptography.Pkcs": "[10.0.15, )"
         }
       },
       "integrios.migrations.sqlserver": {
         "type": "Project",
         "dependencies": {
-          "Integrios.Infrastructure": "[0.11.0, )",
-          "Microsoft.EntityFrameworkCore.SqlServer": "[10.0.15, )"
+          "Dapper": "[2.1.100, )",
+          "Integrios.Infrastructure": "[0.13.0, )",
+          "Microsoft.EntityFrameworkCore.SqlServer": "[10.0.15, )",
+          "Npgsql": "[10.0.4, )",
+          "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.4, )",
+          "Npgsql.OpenTelemetry": "[10.0.4, )",
+          "System.Security.Cryptography.Pkcs": "[10.0.15, )"
         }
       }
     }

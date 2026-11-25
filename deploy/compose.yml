@@ -2,7 +2,7 @@ services:
   # Swap point for a managed/external Postgres: remove this service and point
   # ConnectionStrings__Postgres at your database instead.
   postgres:
-    image: postgres:16.14-alpine3.24
+    image: postgres:16.15-alpine3.24
     restart: unless-stopped
     environment:
       POSTGRES_DB: integrios
@@ -20,7 +20,7 @@ services:
   # updates the two runtime principals, then creates the first deployment-wide OperatorKey only
   # when none is live. Production fails closed unless the Operator supplies that key's secret.
   setup:
-    image: ghcr.io/arminzou/integrios:${INTEGRIOS_VERSION:-0.13.0} # x-release-please-version
+    image: ghcr.io/arminzou/integrios:${INTEGRIOS_VERSION:-0.14.0} # x-release-please-version
     entrypoint: ["/app/integrios", "admin"]
     depends_on:
       postgres:
@@ -38,7 +38,7 @@ services:
     command: ["setup"]
 
   ingestion:
-    image: ghcr.io/arminzou/integrios:${INTEGRIOS_VERSION:-0.13.0} # x-release-please-version
+    image: ghcr.io/arminzou/integrios:${INTEGRIOS_VERSION:-0.14.0} # x-release-please-version
     entrypoint: ["/app/integrios", "ingestion"]
     restart: unless-stopped
     depends_on:
@@ -66,7 +66,7 @@ services:
       - "127.0.0.1:${INTEGRIOS_INGESTION_OPERATIONAL_PORT:-5232}:5299"
 
   admin:
-    image: ghcr.io/arminzou/integrios:${INTEGRIOS_VERSION:-0.13.0} # x-release-please-version
+    image: ghcr.io/arminzou/integrios:${INTEGRIOS_VERSION:-0.14.0} # x-release-please-version
     entrypoint: ["/app/integrios", "admin"]
     restart: unless-stopped
     depends_on:
@@ -91,7 +91,7 @@ services:
       - "127.0.0.1:${INTEGRIOS_ADMIN_OPERATIONAL_PORT:-5151}:5299"
 
   worker:
-    image: ghcr.io/arminzou/integrios:${INTEGRIOS_VERSION:-0.13.0} # x-release-please-version
+    image: ghcr.io/arminzou/integrios:${INTEGRIOS_VERSION:-0.14.0} # x-release-please-version
     entrypoint: ["/app/integrios", "worker"]
     restart: unless-stopped
     # Above Integrios:Delivery:ShutdownGracePeriod (60s by default), so in-flight attempts finish on stop.
@@ -112,7 +112,7 @@ services:
       - "127.0.0.1:${INTEGRIOS_WORKER_METRICS_PORT:-5299}:5299"
 
   subscriber:
-    image: ghcr.io/arminzou/integrios:${INTEGRIOS_VERSION:-0.13.0} # x-release-please-version
+    image: ghcr.io/arminzou/integrios:${INTEGRIOS_VERSION:-0.14.0} # x-release-please-version
     entrypoint: ["/app/integrios", "subscriber"]
     restart: unless-stopped
     depends_on:

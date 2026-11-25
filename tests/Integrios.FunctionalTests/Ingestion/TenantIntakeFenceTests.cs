@@ -28,7 +28,7 @@ public sealed class TenantIntakeFenceTests : IClassFixture<PostgresApiFixture>, 
         await fixture.ResetDataAsync();
         connectorId = await fixture.SeedSourceConnectorAsync(fixture.TenantAId, "fence-source");
         topicId = await fixture.SeedTopicAsync(fixture.TenantAId, "fence-topic");
-        client = fixture.WebFactory.CreateClient(new WebApplicationFactoryClientOptions
+        client = fixture.Host.CreateClient(new WebApplicationFactoryClientOptions
         {
             AllowAutoRedirect = false
         });
@@ -85,7 +85,7 @@ public sealed class TenantIntakeFenceTests : IClassFixture<PostgresApiFixture>, 
     public async Task DeactivatingTenant_RemovesItsBrokerSourceFromReconciliation()
     {
         Guid sourceId = await fixture.CreateBrokerSourceAsync(fixture.TenantAId, connectorId, topicId);
-        IBrokerSourceReader reader = fixture.WebFactory.Services.GetRequiredService<IBrokerSourceReader>();
+        IBrokerSourceReader reader = fixture.Host.Services.GetRequiredService<IBrokerSourceReader>();
 
         (await reader.ListActiveAzureServiceBusSourcesAsync(CancellationToken.None))
             .ShouldContain(source => source.SourceId == sourceId);

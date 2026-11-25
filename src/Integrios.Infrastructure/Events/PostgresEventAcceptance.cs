@@ -14,14 +14,14 @@ namespace Integrios.Infrastructure.Events;
 internal sealed class PostgresEventAcceptance(IDbContextFactory<IntegriosDbContext> contextFactory)
     : IEventAcceptance
 {
-    public async Task<EventAcceptance?> FindBySourceEventIdAsync(
-        Guid sourceId,
-        string sourceEventId,
+    public async Task<EventAcceptance?> FindByIdempotencyKeyAsync(
+        Guid tenantId,
+        string idempotencyKey,
         CancellationToken cancellationToken)
     {
         await using IntegriosDbContext context = await contextFactory.CreateDbContextAsync(cancellationToken);
         DomainEvent? existing = await context.Events.AsNoTracking().SingleOrDefaultAsync(
-            candidate => candidate.SourceId == sourceId && candidate.SourceEventId == sourceEventId,
+            candidate => candidate.TenantId == tenantId && candidate.IdempotencyKey == idempotencyKey,
             cancellationToken);
         return existing is null ? null : ToAlreadyAccepted(existing);
     }
@@ -135,11 +135,6 @@ internal sealed class PostgresEventAcceptance(IDbContextFactory<IntegriosDbConte
                 throw;
 
             return ToAlreadyAccepted(existing);
-        }
-        catch
-        {
-            await transaction.RollbackAsync(cancellationToken);
-            throw;
         }
     }
 

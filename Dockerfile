@@ -37,8 +37,11 @@ WORKDIR /app
 COPY --from=build /app .
 COPY --from=dashboard /dashboard ./wwwroot
 # Empty key-per-file configuration root. Ingestion and Worker read it at startup when an operator
-# mounts one process's own directory over it; Admin never reads it.
-RUN mkdir -p /run/secrets/integrios
+# mounts one process's own directory over it; Admin never reads it. Admin's key ring directory is
+# owned by the app user so a fresh named volume mounted over it inherits that ownership.
+RUN mkdir -p /run/secrets/integrios /var/lib/integrios/data-protection \
+    && chown $APP_UID:$APP_UID /run/secrets/integrios /var/lib/integrios/data-protection
+USER $APP_UID
 ENV ASPNETCORE_HTTP_PORTS=${HTTP_PORT} \
     OperationalPort=5299
 EXPOSE ${HTTP_PORT} 5299

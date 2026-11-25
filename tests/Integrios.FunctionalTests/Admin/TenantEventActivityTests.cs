@@ -18,7 +18,7 @@ public sealed class TenantEventActivityTests(AdminApiFixture fixture) : AdminApi
     public async Task InitializeAsync()
     {
         await fixture.ResetAsync();
-        client = fixture.WebFactory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        client = fixture.Host.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
     }
 
     public Task DisposeAsync()
@@ -115,7 +115,7 @@ public sealed class TenantEventActivityTests(AdminApiFixture fixture) : AdminApi
         await InsertEventAsync(fixture.TenantId, sourceId, topicId, "routed", windowStart - TimeSpan.FromMilliseconds(1)); // before it
         await InsertEventAsync(fixture.OtherTenantId, otherSourceId, otherTopicId, "routed", windowStart);
 
-        var monitoring = new TenantEventMonitoring(fixture.WebFactory.Services.GetRequiredService<IDbConnectionFactory>());
+        var monitoring = new TenantEventMonitoring(fixture.Host.Services.GetRequiredService<IDbConnectionFactory>());
         IReadOnlyList<EventActivityBucketCounts> counted = await monitoring.GetActivityAsync(
             fixture.TenantId, windowStart, bucket, 12, CancellationToken.None);
 

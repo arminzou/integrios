@@ -9,7 +9,7 @@ internal sealed class DeadLetterReplay(IDbConnectionFactory connectionFactory) :
     public async Task<DeadLetterReplayResult> ReplayAsync(
         Guid tenantId,
         Guid eventId,
-        Guid subscriptionDeliveryId,
+        Guid eventDeliveryId,
         CancellationToken cancellationToken)
     {
         await using var connection = await connectionFactory.OpenConnectionAsync(cancellationToken);
@@ -44,7 +44,7 @@ internal sealed class DeadLetterReplay(IDbConnectionFactory connectionFactory) :
                   AND sd.id = @EventDeliveryId
                   AND sd.status = 'dead_lettered';
                 """,
-                new { TenantId = tenantId, EventId = eventId, EventDeliveryId = subscriptionDeliveryId },
+                new { TenantId = tenantId, EventId = eventId, EventDeliveryId = eventDeliveryId },
                 cancellationToken: cancellationToken));
 
         if (resetCount > 0)
@@ -61,7 +61,7 @@ internal sealed class DeadLetterReplay(IDbConnectionFactory connectionFactory) :
                   AND sd.id = @EventDeliveryId)
                 THEN 1 ELSE 0 END;
             """,
-            new { TenantId = tenantId, EventId = eventId, EventDeliveryId = subscriptionDeliveryId },
+            new { TenantId = tenantId, EventId = eventId, EventDeliveryId = eventDeliveryId },
             cancellationToken: cancellationToken));
 
         return exists == 0 ? DeadLetterReplayResult.NotFound : DeadLetterReplayResult.NotDeadLettered;

@@ -42,9 +42,9 @@
       },
       "Npgsql": {
         "type": "Direct",
-        "requested": "[10.0.3, )",
-        "resolved": "10.0.3",
-        "contentHash": "7nb5YzXuvWWJxB0J8DiyL3we+X4FOctZrt0fIBnucOIaIevFEEwGQVZKtiu9olXdlNAK1eNgqSral6r/jlhI4w==",
+        "requested": "[10.0.4, )",
+        "resolved": "10.0.4",
+        "contentHash": "m2VCpcU9MKD8lLxTn+YaNIRWd+Gz3y/9wIaM+2ifDF24xZ2Kvvjx4CDB2BIgobr1Gj6a/gsdmfz1sQ+kmd7liw==",
         "dependencies": {
           "Microsoft.Extensions.Logging.Abstractions": "10.0.0"
         }
@@ -77,44 +77,44 @@
       },
       "Testcontainers.MsSql": {
         "type": "Direct",
-        "requested": "[4.16.0, )",
-        "resolved": "4.16.0",
-        "contentHash": "UVLYLyq9CDSfLZUeu+CyDmwV7wo2LMNlpBLP8ZO9HG42WT3KTMI/p7qYesiCAZmo6GUeWH/Z6SOIw66Y4qnWuw==",
+        "requested": "[4.17.0, )",
+        "resolved": "4.17.0",
+        "contentHash": "OOy8z14wc0g2ay4LE6i7I82RwNVlwx7Sa2n2gPPTXMt/Q3xl2CvAjloXYmmBOHKtFH3JzvK7hRrFxqdy8EA0ow==",
         "dependencies": {
-          "Testcontainers": "4.16.0"
+          "Testcontainers": "4.17.0"
         }
       },
       "Testcontainers.PostgreSql": {
         "type": "Direct",
-        "requested": "[4.16.0, )",
-        "resolved": "4.16.0",
-        "contentHash": "QqvFS8Oj+i6deH3QJOMd7jgFF9P3h7RZ37wOaoR97ZahMcSYMYCb+COR4nUVznT1d7EavEcZdUs1QV0ow69JiA==",
+        "requested": "[4.17.0, )",
+        "resolved": "4.17.0",
+        "contentHash": "fRb6dVf6QCOkNYmPp0x1MHJFkjBtomV4dpU1YinO87Yw8t5qSzKbSmJ9EsP0CUUZTi5zNjYSkhQ5wBxkvDHrgA==",
         "dependencies": {
-          "Testcontainers": "4.16.0"
+          "Testcontainers": "4.17.0"
         }
       },
       "Testcontainers.ServiceBus": {
         "type": "Direct",
-        "requested": "[4.16.0, )",
-        "resolved": "4.16.0",
-        "contentHash": "+/J+aXtHZCZW+58jg0ZtCxyr5+VMS2kZZNMuWoCJeJKfc/e7C6YbKi/jXevR6E0cd73jFK1K4BGXoaYwNvtPIw==",
+        "requested": "[4.17.0, )",
+        "resolved": "4.17.0",
+        "contentHash": "st5oISvIrOgwVT9d/84ohjzDH1WGZfTlH1HF8wYCtS6OkAy0WdTFKk+VgNgp4bd9sIFDs9kRAcpFCBrpjz/pAg==",
         "dependencies": {
-          "Testcontainers": "4.16.0",
-          "Testcontainers.MsSql": "4.16.0"
+          "Testcontainers": "4.17.0",
+          "Testcontainers.MsSql": "4.17.0"
         }
       },
       "WireMock.Net": {
         "type": "Direct",
-        "requested": "[2.32.0, )",
-        "resolved": "2.32.0",
-        "contentHash": "injl4LBf/pWN6PURbpxZGu/2L5UGcb+JbrD+3hWPx+P1pbST0ioNtJerpXKaINAF7tLpG1BIo0aRZXgyNYK5iw==",
+        "requested": "[2.33.0, )",
+        "resolved": "2.33.0",
+        "contentHash": "HgDX2A7xSLv/XSVuLRs1r9Q0dqISdEzyP1hgBqwWZ+/vbR87id8/Ha9YHiOtkDgK68Q9ZjiJ/aKYxqYJaQnznw==",
         "dependencies": {
-          "WireMock.Net.GraphQL": "2.32.0",
-          "WireMock.Net.Matchers.SystemTextJsonPath": "2.32.0",
-          "WireMock.Net.MimePart": "2.32.0",
-          "WireMock.Net.Minimal": "2.32.0",
-          "WireMock.Net.OpenTelemetry": "2.32.0",
-          "WireMock.Net.ProtoBuf": "2.32.0"
+          "WireMock.Net.GraphQL": "2.33.0",
+          "WireMock.Net.Matchers.SystemTextJsonPath": "2.33.0",
+          "WireMock.Net.MimePart": "2.33.0",
+          "WireMock.Net.Minimal": "2.33.0",
+          "WireMock.Net.OpenTelemetry": "2.33.0",
+          "WireMock.Net.ProtoBuf": "2.33.0"
         }
       },
       "xunit": {
@@ -195,8 +195,8 @@
       },
       "Dapper": {
         "type": "Transitive",
-        "resolved": "2.1.89",
-        "contentHash": "1VjFE664wnxvuhlgP8kS4PeFFF4jqD3VkbIHW6Zlc52zuibgcz5ICnIHcQXlTp6pURpPNGLV0ZpNe5x9KePJnA=="
+        "resolved": "2.1.100",
+        "contentHash": "zKwgGfxkDIVLGU2WIsl57DwTgj17+fa5v0u2eiVMxU92GXN2fRIn2M8QMGtyGFrPSbVOYKgGFxAxEFL6CB9tTw=="
       },
       "DiffEngine": {
         "type": "Transitive",
@@ -1466,8 +1466,8 @@
       },
       "Microsoft.OpenApi": {
         "type": "Transitive",
-        "resolved": "2.13.0",
-        "contentHash": "wavlgBYnn7uU/ZGhFHNl0UlDOlwz+6KRduKkqdCCbfxxANaQ1rmBpETVGdwXanAM6twQOxsvI3CBEGF4OScbeQ=="
+        "resolved": "2.13.1",
+        "contentHash": "qPyM4L+CQvM7ljcJN15e3lTx3439fBZoGs03OlpfxiUUxxhPJX+7h8BCJQO1z6ANQbxBAirMA4JkHq7j/naA/A=="
       },
       "Microsoft.SqlServer.Server": {
         "type": "Transitive",
@@ -1517,20 +1517,20 @@
       },
       "Npgsql.EntityFrameworkCore.PostgreSQL": {
         "type": "Transitive",
-        "resolved": "10.0.3",
-        "contentHash": "IPGrrZnRkuW7OlHDhUESZz4G5DLkW7Nej/O3Cx+0iTsgyU5XJxBgpsvTHLloo3WWuAKKbDHXBvWPVkX1deRh1Q==",
+        "resolved": "10.0.4",
+        "contentHash": "KRFbmHOn260bgSSQTKZsKtvEFW1k1AaZUtb/IPmW31M47qMkzAOglP7FHQgMeqpZeMJ2rjRwczfEUP5lyWUAdA==",
         "dependencies": {
-          "Microsoft.EntityFrameworkCore": "[10.0.4, 11.0.0)",
-          "Microsoft.EntityFrameworkCore.Relational": "[10.0.4, 11.0.0)",
-          "Npgsql": "10.0.3"
+          "Microsoft.EntityFrameworkCore": "[10.0.15, 11.0.0)",
+          "Microsoft.EntityFrameworkCore.Relational": "[10.0.15, 11.0.0)",
+          "Npgsql": "10.0.4"
         }
       },
       "Npgsql.OpenTelemetry": {
         "type": "Transitive",
-        "resolved": "10.0.3",
-        "contentHash": "ShsdG/FHxJ2VuWM6tebJL/mCWkcxymmvtENN59c85EsJdT4TStWwwtgZoBu/9UvC0qi1jpFZ6bOfl9ijiWD+vA==",
+        "resolved": "10.0.4",
+        "contentHash": "FQBFufPAD1fUcXgp8aIZY/C5S1lCjxUZ7ZumIl+pxMoIXRhDzVYPYgY0l1xI8N0VH5iC1Kg3XmZapmH5EAMLIg==",
         "dependencies": {
-          "Npgsql": "10.0.3",
+          "Npgsql": "10.0.4",
           "OpenTelemetry.API": "1.15.3"
         }
       },
@@ -1754,8 +1754,8 @@
       },
       "System.Security.Cryptography.Pkcs": {
         "type": "Transitive",
-        "resolved": "10.0.13",
-        "contentHash": "a+EovgC1fBnwdlQ6cn3j4JFBfKqiFaFvoAhjisOoSvazLAcIznaBzPQP0oYnvccmeXfqUH1KebVZOxSeH6rMaw=="
+        "resolved": "10.0.15",
+        "contentHash": "4jEv/lXDuQkh60lPU3hlwASErXdv1ZMKmsxVuBfZWiVKT5Q2QGo58kTa6rN519+PU+m4Hsj1m3yT8fN+Xw0XZw=="
       },
       "System.Security.Cryptography.ProtectedData": {
         "type": "Transitive",
@@ -1772,8 +1772,8 @@
       },
       "Testcontainers": {
         "type": "Transitive",
-        "resolved": "4.16.0",
-        "contentHash": "JmMUZk6ZXQovbGQjaMB+YxOR0PbJTdYjOYjRcrm5LrA2dhLVMuCbhVGGunzCGIQfFMUB5Lno2LPOHMMuaGmuIg==",
+        "resolved": "4.17.0",
+        "contentHash": "yXAdoZ3dcrg84Iy05X10qRfz8EO35tpSmI1kK91Qe32MNz0DyPuSbiCi33i5AvSbYMET9HxBw32UuHJHSSK49A==",
         "dependencies": {
           "Docker.DotNet.Enhanced": "4.3.3",
           "Docker.DotNet.Enhanced.X509": "4.3.3",
@@ -1789,40 +1789,40 @@
       },
       "WireMock.Net.Abstractions": {
         "type": "Transitive",
-        "resolved": "2.32.0",
-        "contentHash": "rrdEXPgIqcCSAxGt2c/EBKXoJYbLBUQ2ceaKkkuy2S1dHJCiRuHGXHkEb1VP1lcQ6QXgohVJcr5dCY5gISuPYQ=="
+        "resolved": "2.33.0",
+        "contentHash": "MlJomuj8wzHRBuPaEuFPbJRWu4C2XYOy/y1S7Lggw0vDY/vIQWhiRQldLJMH7CUsVxujv2qFcZZcNFGeD1Cw8g=="
       },
       "WireMock.Net.GraphQL": {
         "type": "Transitive",
-        "resolved": "2.32.0",
-        "contentHash": "ifHqKZu4yxuKtfIWCEog3+GamaKADGG/99zmKQX+akYdXoTvw6OnWqYEvWkQbtP/9qskygLfzev07MxYdPGxoA==",
+        "resolved": "2.33.0",
+        "contentHash": "0TniVfJ4DVdD2Wqxl+AbrnWJHBME7rFk5N2ONO9O7ellUAxHdCU7B9Pd/7lc15n2dihXd1a50DsI2gp6uU2OyQ==",
         "dependencies": {
           "GraphQL.NewtonsoftJson": "8.5.0",
-          "WireMock.Net.Shared": "2.32.0"
+          "WireMock.Net.Shared": "2.33.0"
         }
       },
       "WireMock.Net.Matchers.SystemTextJsonPath": {
         "type": "Transitive",
-        "resolved": "2.32.0",
-        "contentHash": "S4OUVuFPOdJrHqYDZVsvpYccqcGKVy6/4iFqhiZzsqYcZ01/ntSzvYyREkYAg5zkgbifQOKzjxUiJGnCPRBEqA==",
+        "resolved": "2.33.0",
+        "contentHash": "qjiEhqdfs/slNfylSQzc5Qqw5wUdtPwjJWBJdtYzRINehzDnQH+CItJuyGSTV+DtvOuvlYuFyEm4Sl8qvrM58Q==",
         "dependencies": {
           "JsonPath.Net": "2.2.0",
-          "WireMock.Net.Shared": "2.32.0"
+          "WireMock.Net.Shared": "2.33.0"
         }
       },
       "WireMock.Net.MimePart": {
         "type": "Transitive",
-        "resolved": "2.32.0",
-        "contentHash": "oqSoBsrPULwk1YsBXOxMBDzM8W3l+y+bWIU4aFaPcDpYu1oVJx+UAAB5rz4xAH6BuGvOVf8ZYSpQzOH0lNBS2A==",
+        "resolved": "2.33.0",
+        "contentHash": "kyHWe6wl4RIs8PhDDIa0yzVm/H/E2RObuHG48fv3nfYBhOtXaguS9mUlPhyUdIC0XHQ2t/yNTcn2WGjSDrXexQ==",
         "dependencies": {
           "Stef.Validation": "0.3.0",
-          "WireMock.Net.Shared": "2.32.0"
+          "WireMock.Net.Shared": "2.33.0"
         }
       },
       "WireMock.Net.Minimal": {
         "type": "Transitive",
-        "resolved": "2.32.0",
-        "contentHash": "ahNCnIJ379iRFs19r3k2okm4eXVf16zk5DYSRUn/JR2jsSBqkqf0Y7rOXa7sNWKkvArP+fNwcJd3PtRdmjCmcQ==",
+        "resolved": "2.33.0",
+        "contentHash": "rsCA3g5aKphELAG6aKmj5xPB+PDuMB+Cc1SthgTaxgwEV4oFiJYOnfGJFT9BRoIIybqeJXtOoH1CyTjgOeq9pA==",
         "dependencies": {
           "JmesPath.Net": "1.1.0",
           "Microsoft.IdentityModel.Protocols.OpenIdConnect": "6.34.0",
@@ -1831,48 +1831,48 @@
           "Scriban.Signed": "7.5.3",
           "SimMetrics.Net": "1.0.5",
           "TinyMapper.Signed": "4.0.0",
-          "WireMock.Net.OpenApiParser": "2.32.0",
-          "WireMock.Net.Shared": "2.32.0",
-          "WireMock.Org.Abstractions": "2.32.0"
+          "WireMock.Net.OpenApiParser": "2.33.0",
+          "WireMock.Net.Shared": "2.33.0",
+          "WireMock.Org.Abstractions": "2.33.0"
         }
       },
       "WireMock.Net.OpenApiParser": {
         "type": "Transitive",
-        "resolved": "2.32.0",
-        "contentHash": "gFYgwQSKH+CscyMJE6YgECHcrgs+uONh+qfApbintHANcFhysvEERXjfChyLlyNmCppn7CzIIvas+kTw+zaF/g==",
+        "resolved": "2.33.0",
+        "contentHash": "313vGQFzrfMa+brY1ikPhFNI7SXLAtLU+PvfrpvqVHtpTb5bUQasE8B1cd2brxCf+5zM44xuDdkvdJHKT3jFTQ==",
         "dependencies": {
           "Newtonsoft.Json": "13.0.4",
           "RamlToOpenApiConverter.SourceOnly": "0.50.0",
           "RandomDataGenerator.Net": "1.0.19.1",
           "SharpYaml": "2.1.5",
           "Stef.Validation": "0.3.0",
-          "WireMock.Net.Abstractions": "2.32.0"
+          "WireMock.Net.Abstractions": "2.33.0"
         }
       },
       "WireMock.Net.OpenTelemetry": {
         "type": "Transitive",
-        "resolved": "2.32.0",
-        "contentHash": "eZa4iH5B6m/zi8QO6CJoIJwZfVl2Dgw/IXHwy07/F/vUk5HyPG5gK0T9AdNlKAfp036nP//VyyqEIu60llw8NA==",
+        "resolved": "2.33.0",
+        "contentHash": "AeeL0mGgFnGab8/6i+yBEM75WW6HsIV+cv/c+6955Fn1pcifCGE1vuck8JBOkucrBf1vd/gka1SSb78t2PpWPA==",
         "dependencies": {
           "OpenTelemetry.Exporter.OpenTelemetryProtocol": "1.15.3",
           "OpenTelemetry.Extensions.Hosting": "1.15.3",
           "OpenTelemetry.Instrumentation.AspNetCore": "1.15.2",
-          "WireMock.Net.Shared": "2.32.0"
+          "WireMock.Net.Shared": "2.33.0"
         }
       },
       "WireMock.Net.ProtoBuf": {
         "type": "Transitive",
-        "resolved": "2.32.0",
-        "contentHash": "5caEirejHAlJk+LJqSTaynrte7HTdfV/YnhmBccL8qPvcIcikgXTUXdIyETwaE7AntVX+DYSmWZjflSKa6lmPw==",
+        "resolved": "2.33.0",
+        "contentHash": "E0JGqc/8fHaYbTpYD5rK2pkHY237J5AA/7j+Gu0ggWsePDC+HtVm1ZPuf54lMbVrp6bp0EeZD1Lb4mQNnUMf9w==",
         "dependencies": {
           "ProtoBufJsonConverter": "0.12.0",
-          "WireMock.Net.Shared": "2.32.0"
+          "WireMock.Net.Shared": "2.33.0"
         }
       },
       "WireMock.Net.Shared": {
         "type": "Transitive",
-        "resolved": "2.32.0",
-        "contentHash": "Ik/WGgwZI4gfQrBoh6u+AAZtSVWauuuhP/F4VRf+7LhtQPxgzd/HgQ+80v+9dCf8+ChRbLSveCyDjjzxssaO+w==",
+        "resolved": "2.33.0",
+        "contentHash": "vslgkvy/FtKQd8U4PnKL0P9gT6zHLj9W8/8cvZCECKbqVFP4FyTv/nwfI9PlqTqi2ZkEFxNCcsMhnrQn2btYMQ==",
         "dependencies": {
           "AnyOf": "0.5.0.1",
           "Handlebars.Net.Helpers": "2.5.5",
@@ -1885,13 +1885,13 @@
           "JsonConverter.Newtonsoft.Json": "0.13.0",
           "JsonConverter.System.Text.Json": "0.13.0",
           "Stef.Validation": "0.3.0",
-          "WireMock.Net.Abstractions": "2.32.0"
+          "WireMock.Net.Abstractions": "2.33.0"
         }
       },
       "WireMock.Org.Abstractions": {
         "type": "Transitive",
-        "resolved": "2.32.0",
-        "contentHash": "y99Mv0XJsV8Y6PPF6IFU4ayifA1nQaM/w/6MJVHxy5KWWL/Il0nhhrZ1+VQlRj0+m+slutOuW0C3mPIiUKgKeg=="
+        "resolved": "2.33.0",
+        "contentHash": "IfQ913ZxqXlwma5HGCsZnyDUDKLkHvjhh7GUiT2ZGZccbRASFtI5QQNWELUiI3aaD1flHeThifP4QePwcNlHQw=="
       },
       "XPath2": {
         "type": "Transitive",
@@ -1966,7 +1966,7 @@
           "Integrios.Migrations.SqlServer": "[0.13.0, )",
           "Microsoft.AspNetCore.Authentication.OpenIdConnect": "[10.0.15, )",
           "Microsoft.AspNetCore.OpenApi": "[10.0.15, )",
-          "Microsoft.OpenApi": "[2.13.0, )"
+          "Microsoft.OpenApi": "[2.13.1, )"
         }
       },
       "integrios.application": {
@@ -1995,16 +1995,16 @@
           "Azure.Extensions.AspNetCore.Configuration.Secrets": "[1.5.2, )",
           "Azure.Identity": "[1.21.0, )",
           "Azure.Messaging.ServiceBus": "[7.21.0, )",
-          "Dapper": "[2.1.89, )",
+          "Dapper": "[2.1.100, )",
           "Integrios.Application": "[0.13.0, )",
           "Integrios.Domain": "[0.13.0, )",
           "Jsonata.Net.Native": "[3.0.0, )",
           "Microsoft.EntityFrameworkCore.SqlServer": "[10.0.15, )",
           "Microsoft.Extensions.Hosting.Systemd": "[10.0.15, )",
           "Microsoft.Extensions.Hosting.WindowsServices": "[10.0.15, )",
-          "Npgsql": "[10.0.3, )",
-          "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.3, )",
-          "Npgsql.OpenTelemetry": "[10.0.3, )",
+          "Npgsql": "[10.0.4, )",
+          "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.4, )",
+          "Npgsql.OpenTelemetry": "[10.0.4, )",
           "OpenTelemetry.Exporter.OpenTelemetryProtocol": "[1.21.0, )",
           "OpenTelemetry.Exporter.Prometheus.AspNetCore": "[1.20.1-beta.1, )",
           "OpenTelemetry.Extensions.Hosting": "[1.21.0, )",
@@ -2012,7 +2012,7 @@
           "OpenTelemetry.Instrumentation.Http": "[1.21.0, )",
           "OpenTelemetry.Instrumentation.Runtime": "[1.21.0, )",
           "OpenTelemetry.Instrumentation.SqlClient": "[1.21.0, )",
-          "System.Security.Cryptography.Pkcs": "[10.0.13, )"
+          "System.Security.Cryptography.Pkcs": "[10.0.15, )"
         }
       },
       "integrios.ingestion": {
@@ -2022,21 +2022,30 @@
           "Integrios.Domain": "[0.13.0, )",
           "Integrios.Infrastructure": "[0.13.0, )",
           "Microsoft.AspNetCore.OpenApi": "[10.0.15, )",
-          "Microsoft.OpenApi": "[2.13.0, )"
+          "Microsoft.OpenApi": "[2.13.1, )"
         }
       },
       "integrios.migrations.postgres": {
         "type": "Project",
         "dependencies": {
+          "Dapper": "[2.1.100, )",
           "Integrios.Infrastructure": "[0.13.0, )",
-          "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.3, )"
+          "Npgsql": "[10.0.4, )",
+          "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.4, )",
+          "Npgsql.OpenTelemetry": "[10.0.4, )",
+          "System.Security.Cryptography.Pkcs": "[10.0.15, )"
         }
       },
       "integrios.migrations.sqlserver": {
         "type": "Project",
         "dependencies": {
+          "Dapper": "[2.1.100, )",
           "Integrios.Infrastructure": "[0.13.0, )",
-          "Microsoft.EntityFrameworkCore.SqlServer": "[10.0.15, )"
+          "Microsoft.EntityFrameworkCore.SqlServer": "[10.0.15, )",
+          "Npgsql": "[10.0.4, )",
+          "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.4, )",
+          "Npgsql.OpenTelemetry": "[10.0.4, )",
+          "System.Security.Cryptography.Pkcs": "[10.0.15, )"
         }
       },
       "integrios.subscriber": {
@@ -2046,7 +2055,7 @@
           "Integrios.Domain": "[0.13.0, )",
           "Integrios.Infrastructure": "[0.13.0, )",
           "Microsoft.AspNetCore.OpenApi": "[10.0.15, )",
-          "Microsoft.OpenApi": "[2.13.0, )"
+          "Microsoft.OpenApi": "[2.13.1, )"
         }
       },
       "integrios.tests.shared": {

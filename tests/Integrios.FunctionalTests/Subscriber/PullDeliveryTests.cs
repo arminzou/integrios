@@ -1,5 +1,5 @@
 using Integrios.Application.Delivery;
-using Integrios.Application.Subscriber;
+using Integrios.Application.PullDelivery;
 using Integrios.Application.Telemetry;
 using Integrios.FunctionalTests.Worker;
 using Integrios.Tests.Shared;

@@ -285,8 +285,8 @@ describe("The dashboard in a real browser", () => {
   }, 60_000);
 
   // One case per shape of control the dashboard has: navigation and table links, the capability
-  // list, an authoring form, and the Event summary's pressed buttons beside the ledger. Contrast and
-  // target size are measured, so each needs real layout rather than jsdom.
+  // list, and an authoring form. Contrast and target size are measured, so each needs real layout
+  // rather than jsdom.
   it.each([
     ["the list", "/tenants", null],
     ["a detail screen", `/tenants/${tenants.items[0].id}`, null],
@@ -295,8 +295,6 @@ describe("The dashboard in a real browser", () => {
       `/tenants/${tenants.items[0].id}/destinations`,
       "New Destination",
     ],
-    // The Event ledger's filters are on screen from the start, so there is nothing to open here.
-    ["the Event ledger and its Right now backlog", `/tenants/${tenants.items[0].id}/events`, undefined],
   ])(
     "passes the accessibility rules that need real layout on %s",
     async (_name, path, disclosure) => {

@@ -8,6 +8,8 @@ namespace Integrios.Application.Transforms;
 // or (with no mapping declared) directly from the caller's input document.
 public static class SourceMappingOutputValidator
 {
+    internal const int MaxSourceEventIdLength = 450;
+
     private static readonly HashSet<string> AllowedOutputFields =
         ["event_type", "source_event_id", "payload", "metadata"];
 
@@ -52,6 +54,8 @@ public static class SourceMappingOutputValidator
             if (sourceEventIdElement.ValueKind != JsonValueKind.String)
                 throw new TransformEvaluationException("Source mapping output 'source_event_id' must be a string when present.");
             sourceEventId = sourceEventIdElement.GetString();
+            if (sourceEventId?.Length > MaxSourceEventIdLength)
+                throw new TransformEvaluationException($"Source mapping output 'source_event_id' must be at most {MaxSourceEventIdLength} characters.");
         }
 
         JsonElement? metadata = null;

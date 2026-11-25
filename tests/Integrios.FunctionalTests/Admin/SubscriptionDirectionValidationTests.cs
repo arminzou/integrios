@@ -23,7 +23,7 @@ public sealed class SubscriptionDirectionValidationTests : AdminApiTestBase, ICl
     public async Task InitializeAsync()
     {
         await fixture.ResetAsync();
-        client = fixture.WebFactory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        client = fixture.Host.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
     }
 
     public Task DisposeAsync()

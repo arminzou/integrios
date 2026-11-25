@@ -170,6 +170,34 @@ If you previously customized
 `Integrios:Worker:DeliveryLoop:IdlePollInterval`. The old key is no longer read. The new fanout and
 delivery loop defaults are both two seconds, so deployments that used the old default need no change.
 
+### Containers run as a non-root user
+
+Every role now runs as the base image's `app` user (uid and gid 1654) instead of root. An
+`admin_data_protection` volume created by an earlier release holds root-owned files, so Admin exits
+with `KeyRingPath ... must be a writable directory`. Hand the existing key ring to the app user
+once, before starting the new release:
+
+```bash
+docker compose run --rm --no-deps --user root --entrypoint chown admin -R 1654:1654 /var/lib/integrios/data-protection
+```
+
+The existing keys are kept.
+
+On a Linux host, uid 1654 must be able to read the Tenant secret files the containers mount. A
+root-owned `0600` file stops Ingestion or the Worker at startup, and `secrets validate` fails on it.
+Give the app user traverse access to the directory and read access to each file, for example:
+
+```bash
+sudo chown -R 1654:1654 secrets/sources secrets/destinations
+sudo chmod 0750 secrets/sources secrets/destinations
+sudo chmod 0640 secrets/sources/* secrets/destinations/*
+```
+
+Use a group or an ACL instead when another account must keep owning the files.
+
+`admin openapi <path>` writes as the app user too, so give it a writable path such as
+`/tmp/openapi.json`.
+
 ### Completed-history retention
 
 Completed-history retention is disabled unless the Worker receives
@@ -248,13 +276,19 @@ self-contained build with the dashboard, so the server needs no .NET runtime. Ve
 provenance with `gh attestation verify integrios-<version>-win-x64.zip --repo <owner>/<repo>`.
 
 Give each host its own ports, as the [Ports](#ports) table does. Each role's `OperationalPort`
-already defaults to its port there. Set `ASPNETCORE_URLS` on Ingestion and Admin: both default to
-`http://localhost:5000`, so without it only the first of the two starts. Delivery API listens on
-`http://localhost:5241`, so only Subscribers on the same server reach it; set `ASPNETCORE_URLS`
-such as `http://0.0.0.0:5241` to accept remote Subscribers. The operational
+already defaults to its port there. Without `ASPNETCORE_URLS`, each product listener binds to
+loopback on its port: Ingestion on `http://localhost:5231`, Admin on `http://localhost:5150`, and
+Delivery API on `http://localhost:5241`. Set `ASPNETCORE_URLS`, such as `http://0.0.0.0:5231`, on
+each role that must accept remote traffic. The operational
 port listens on every interface, as a container needs; on a server, allow it through the firewall
 only for the local monitoring agent, because it serves `/health`, `/ready`, and metrics without
 authentication.
+
+Upgrading a service install from a release where Admin and Ingestion defaulted to
+`http://localhost:5000`: a local reverse proxy that points at that port stops reaching them. Before
+upgrading, point the proxy at the new port, or pin the old listener with
+`ASPNETCORE_URLS=http://localhost:5000` on the role behind it. Containers are unaffected, because
+`ASPNETCORE_HTTP_PORTS` sets their listener.
 
 - **Windows Service.** Register each host with `sc.exe create`, pointing `binPath` at the one
   `integrios.exe` followed by the role, such as `C:\integrios\integrios.exe worker`. A host started

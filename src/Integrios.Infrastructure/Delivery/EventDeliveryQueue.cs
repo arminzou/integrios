@@ -1,6 +1,6 @@
 using Dapper;
 using Integrios.Application.Delivery;
-using Integrios.Application.Subscriber;
+using Integrios.Application.PullDelivery;
 using Integrios.Domain.Entities;
 using Integrios.Domain.Enums;
 using Integrios.Infrastructure.Data;

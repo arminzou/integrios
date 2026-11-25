@@ -16,7 +16,7 @@ public sealed class AuthoringLockTests(AdminApiFixture fixture) : SubscriptionAd
     [Fact]
     public async Task Lease_ExcludesTheSameResourceUntilItIsDisposed()
     {
-        using IServiceScope scope = Fixture.WebFactory.Services.CreateScope();
+        using IServiceScope scope = Fixture.Host.Services.CreateScope();
         var authoringLock = scope.ServiceProvider.GetRequiredService<IAuthoringLock>();
         Guid id = Guid.NewGuid();
 

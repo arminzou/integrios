@@ -1,3 +1,4 @@
+import { useIsMutating } from "@tanstack/react-query";
 import { cn } from "cn";
 import { LoaderCircle } from "lucide-react";
 import { Dialog as DialogPrimitive } from "radix-ui";
@@ -148,9 +149,12 @@ function FormSheet({
   const screenOwned = open !== undefined;
   const isOpen = screenOwned ? open : ownOpen;
   const setOpen = screenOwned ? (onOpenChange ?? (() => {})) : setOwnOpen;
+  // A write whose answer exists only once, such as a new key, holds its sheet open until it lands.
+  // Other writes do not, so a stalled revoke elsewhere cannot trap an Operator in an untouched form.
+  const writing = useIsMutating({ predicate: (mutation) => mutation.meta?.holdsSheet === true }) > 0;
 
   return (
-    <Sheet open={isOpen} onOpenChange={setOpen}>
+    <Sheet open={isOpen} onOpenChange={(next) => (next || !writing) && setOpen(next)}>
       {screenOwned ? null : (
         <SheetTrigger asChild>
           <Button type="button" variant={variant}>

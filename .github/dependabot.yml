@@ -78,3 +78,53 @@ updates:
       # building; CI and the image build on the newest band, which global.json's latestFeature allows.
       - dependency-name: "*"
         versions: [">= 10.0.200"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      actions:
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: "*"
+        update-types: [version-update:semver-major]
+
+  # Development and test stacks; nothing here ships in a release.
+  # Image strings in test code, such as mssql/server in tests/Integrios.FunctionalTests/FunctionalDatabase.cs, need manual bumps.
+  - package-ecosystem: docker-compose
+    directories:
+      - /
+      - /scripts/sink
+      - /tests/Integrios.AcceptanceTests
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      compose-images:
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: "*"
+        update-types: [version-update:semver-major]
+      # compose.yml's `${INTEGRIOS_IMAGE:-integrios:dev}` default is the locally built image.
+      - dependency-name: integrios
+
+  # deploy/compose.yml is the Operator deployment definition, so its images reach Operators as a release.
+  - package-ecosystem: docker-compose
+    directory: /deploy
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: fix
+      include: scope
+    groups:
+      deploy-images:
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: "*"
+        update-types: [version-update:semver-major]

@@ -262,12 +262,14 @@ fi
 # --- 9. Wait for the failing Delivery to exhaust its retries ------------------------------------
 # Three attempts on a 30s exponential base, so dead-lettering lands ~90s after the first attempt.
 say "waiting for the failing Delivery to dead-letter (about two minutes)"
-for _ in $(seq 1 40); do
+# One poll more than sleeps, so a dead-letter during the last sleep still counts.
+for i in $(seq 0 40); do
   dead=$(psql_q "select count(*) from event_deliveries where status = 'dead_lettered';")
   printf '  dead-lettered: %s\n' "$dead"
   [ "$dead" -ge 1 ] && break
-  sleep 10
+  [ "$i" -lt 40 ] && sleep 10
 done
+[ "$dead" -ge 1 ] || { printf 'Failing Delivery did not dead-letter within about seven minutes.\n' >&2; exit 1; }
 
 say "done"
 docker compose exec -T postgres psql -U integrios -d integrios -c \

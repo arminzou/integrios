@@ -383,10 +383,10 @@ internal sealed class FaultInjectingEventAcceptance(IEventAcceptance inner) : IE
     private readonly ConcurrentDictionary<string, int> attempts = new();
     private readonly ConcurrentDictionary<string, byte> failures = new();
 
-    public Task<EventAcceptance?> FindBySourceEventIdAsync(
-        Guid sourceId,
-        string sourceEventId,
-        CancellationToken cancellationToken) => inner.FindBySourceEventIdAsync(sourceId, sourceEventId, cancellationToken);
+    public Task<EventAcceptance?> FindByIdempotencyKeyAsync(
+        Guid tenantId,
+        string idempotencyKey,
+        CancellationToken cancellationToken) => inner.FindByIdempotencyKeyAsync(tenantId, idempotencyKey, cancellationToken);
 
     internal void FailNext(string sourceEventId) => failures[sourceEventId] = 0;
 

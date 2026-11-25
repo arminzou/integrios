@@ -176,9 +176,9 @@ public sealed class IngestMetricsTests
         public EventSubmission? LastSubmission { get; private set; }
         public string? LastTraceparent { get; private set; }
 
-        public Task<EventAcceptance?> FindBySourceEventIdAsync(
-            Guid sourceId,
-            string sourceEventId,
+        public Task<EventAcceptance?> FindByIdempotencyKeyAsync(
+            Guid tenantId,
+            string idempotencyKey,
             CancellationToken cancellationToken) => Task.FromResult<EventAcceptance?>(null);
 
         public FakeEventAcceptance(bool alreadyAccepted)
