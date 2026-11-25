@@ -1,0 +1,19 @@
+docs/ci-cd.md
+  s_b19acd4aae4d50::t_5e4aad4bf0c0bc 11,103-105,110,113-114,161,169
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "c4034438ebbefec66d9bd9058341c8036e314c2b",
+  "prompts": {},
+  "sessions": {
+    "s_b19acd4aae4d50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "01ddce99-a00c-49f1-9f76-21f5af0490d8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Armin Zou <arminzou@outlook.com>"
+    }
+  }
+}
