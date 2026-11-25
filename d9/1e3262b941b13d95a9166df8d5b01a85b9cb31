@@ -1,0 +1,19 @@
+src/Integrios.Admin/frontend/src/screens/TenantApiKeys.test.tsx
+  s_b19acd4aae4d50::t_f4298e403e445c 125-162
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "d91e3262b941b13d95a9166df8d5b01a85b9cb31",
+  "prompts": {},
+  "sessions": {
+    "s_b19acd4aae4d50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "01ddce99-a00c-49f1-9f76-21f5af0490d8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Armin Zou <arminzou@outlook.com>"
+    }
+  }
+}
