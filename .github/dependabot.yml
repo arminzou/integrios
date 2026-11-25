@@ -44,6 +44,9 @@ updates:
     ignore:
       - dependency-name: "*"
         update-types: [version-update:semver-major]
+      # Keep the SDK's dependency floor at 10.0.0 so consumers can choose their patch version.
+      - dependency-name: Microsoft.Extensions.Hosting.Abstractions
+      - dependency-name: Microsoft.Extensions.Http
 
   # The image and the Windows archive bundle the .NET runtime, so a runtime patch reaches Operators
   # only as an Integrios release. `fix` makes release-please cut a patch release for it.
