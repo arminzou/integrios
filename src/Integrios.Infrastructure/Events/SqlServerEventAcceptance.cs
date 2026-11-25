@@ -136,11 +136,6 @@ internal sealed class SqlServerEventAcceptance(IDbContextFactory<IntegriosDbCont
 
             return ToAlreadyAccepted(existing);
         }
-        catch
-        {
-            await transaction.RollbackAsync(cancellationToken);
-            throw;
-        }
     }
 
     private static bool IsIdempotencyConflict(SqlException ex, string? idempotencyKey) =>
