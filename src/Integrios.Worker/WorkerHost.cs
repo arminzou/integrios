@@ -48,7 +48,7 @@ public static class WorkerHost
         bool secretCommand = DestinationSecretValidationCli.IsCommand(args);
 
         builder.Configuration.AddSecretConfigurationSources();
-        int operationalPort = builder.AddOperationalEndpoints(DefaultOperationalPort, operationalOnly: true);
+        int operationalPort = builder.AddOperationalEndpoints(DefaultOperationalPort, defaultProductUrl: null);
 
         builder.Services.AddWorkerApplicationServices();
         builder.Services.AddWorkerInfrastructureServices(builder.Configuration);

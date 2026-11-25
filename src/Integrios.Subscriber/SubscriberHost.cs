@@ -55,7 +55,7 @@ public static class SubscriberHost
     {
         var builder = ServiceHosting.CreateBuilder(args, Name, typeof(SubscriberHost).Assembly.GetName().Name!);
         builder.Logging.AddOperationalConsoleLogging(builder.Environment.IsDevelopment());
-        int operationalPort = builder.AddOperationalEndpoints(DefaultOperationalPort, defaultProductUrl: DefaultUrl);
+        int operationalPort = builder.AddOperationalEndpoints(DefaultOperationalPort, DefaultUrl);
 
         builder.Services.ConfigureHttpJsonOptions(options =>
             options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower);

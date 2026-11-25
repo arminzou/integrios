@@ -35,7 +35,7 @@ their detailed validation belongs to .NET or OpenTelemetry rather than Integrios
 | Setting / environment variable | Reader | Default or requirement |
 |---|---|---|
 | `DOTNET_ENVIRONMENT` | All four | .NET defaults to `Production`; the dev Compose stack sets `Development` and loads each role's `appsettings.<role>.Development.json`. |
-| `ASPNETCORE_URLS`, `ASPNETCORE_HTTP_PORTS`, `ASPNETCORE_HTTPS_PORTS` | Admin, Ingestion, Subscriber (Delivery API) | Product listener; without one, Admin and Ingestion use `http://localhost:5000` and Delivery API uses `http://localhost:5241`, which only local Subscribers can reach. Set one, such as `http://0.0.0.0:5241`, to accept remote Subscribers. The operational listener uses its separate port. Worker serves only its operational listener. |
+| `ASPNETCORE_URLS`, `ASPNETCORE_HTTP_PORTS`, `ASPNETCORE_HTTPS_PORTS` | Admin, Ingestion, Subscriber (Delivery API) | Product listener; without one, each role listens on loopback at its own port: Ingestion `http://localhost:5231`, Admin `http://localhost:5150`, and Delivery API `http://localhost:5241`. Set one, such as `http://0.0.0.0:5241`, to accept remote callers. The operational listener uses its separate port. Worker serves only its operational listener. |
 | `Logging:LogLevel:*` / `Logging__LogLevel__*` | All four | Role-specific levels in `appsettings.<role>.json`; override individual categories through configuration. |
 | `AllowedHosts` | Admin, Ingestion, Subscriber (Delivery API) | `*` in their `appsettings.<role>.json` files; restrict for an exposed deployment. |
 | `OTEL_TRACES_SAMPLER`, `OTEL_TRACES_SAMPLER_ARG` | All four | Standard trace sampling settings; see [observability](observability.md#traces). |

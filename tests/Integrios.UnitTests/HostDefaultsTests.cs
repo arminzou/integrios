@@ -55,6 +55,16 @@ public sealed class HostDefaultsTests : IDisposable
             .ShouldBe("http://0.0.0.0:5241;http://0.0.0.0:5242");
     }
 
+    [Fact]
+    public void AdminAndIngestion_DefaultToTheirOwnLaunchProfileUrls()
+    {
+        AdminHost.CreateBuilder(Args()).Builder.WebHost.GetSetting(WebHostDefaults.ServerUrlsKey)
+            .ShouldBe("http://localhost:5150;http://0.0.0.0:5151");
+
+        IngestionHost.CreateBuilder(Args()).Builder.WebHost.GetSetting(WebHostDefaults.ServerUrlsKey)
+            .ShouldBe("http://localhost:5231;http://0.0.0.0:5232");
+    }
+
     private string[] Args() =>
     [
         "--ConnectionStrings:Postgres=Host=localhost;Database=integrios;Username=integrios;Password=integrios",
