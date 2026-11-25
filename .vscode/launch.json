@@ -41,6 +41,20 @@
         "DOTNET_ENVIRONMENT": "Development"
       },
       "console": "integratedTerminal"
+    },
+    {
+      "name": "Subscriber",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build-integrios",
+      "program": "${workspaceFolder}/src/Integrios/bin/Debug/net10.0/integrios.dll",
+      "args": ["subscriber"],
+      "cwd": "${workspaceFolder}/src/Integrios.Subscriber",
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ASPNETCORE_URLS": "http://localhost:5241"
+      },
+      "console": "integratedTerminal"
     }
   ],
   "compounds": [
@@ -49,14 +63,16 @@
       "configurations": [
         "Ingestion",
         "Admin",
-        "Worker"
+        "Worker",
+        "Subscriber"
       ]
     },
     {
       "name": "Data Plane",
       "configurations": [
         "Ingestion",
-        "Worker"
+        "Worker",
+        "Subscriber"
       ]
     }
   ]
