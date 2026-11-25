@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { NavLink, useNavigate } from "react-router";
 import { z } from "zod";
@@ -413,12 +413,14 @@ function CreateTenantApiKey({ tenantId, onCreated }: { tenantId: string; onCreat
           },
         }),
       ),
-    onSuccess: (result) => {
-      // The list re-reads and will only ever carry the key's prefix.
-      setCreated(result ?? null);
-      void queryClient.invalidateQueries({ queryKey: ["tenant-api-keys", tenantId] });
-    },
+    onSuccess: (result) => setCreated(result ?? null),
   });
+
+  // The list re-reads, carrying only the key's prefix, once the reveal closes. Re-reading while it is
+  // open could answer 401 and move to sign-in, unmounting the only copy of the key.
+  useEffect(() => {
+    if (created) return () => void queryClient.invalidateQueries({ queryKey: ["tenant-api-keys", tenantId] });
+  }, [created, queryClient, tenantId]);
 
   const submit = form.handleSubmit((values) =>
     create.mutate(values, { onError: (failure) => applyProblem(form, failure, createFields) }),
