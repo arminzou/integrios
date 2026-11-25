@@ -1,4 +1,4 @@
-import { QueryClient } from "@tanstack/react-query";
+import { MutationCache, QueryCache, QueryClient } from "@tanstack/react-query";
 import { type Problem, problemFrom } from "./problem";
 
 /// The shape openapi-fetch returns for one call.
@@ -30,8 +30,15 @@ export const asProblem = (error: unknown): Problem | null => (error as Problem |
 export const nextCursor = <Item>(page: CursorPage<Item>) => page.next_cursor ?? undefined;
 
 /// One client per running dashboard, and one per test, so nothing cached by one leaks into another.
-export const createQueryClient = () =>
-  new QueryClient({
+export const createQueryClient = () => {
+  /// A 401 from any Admin call means the session lapsed under a signed-in shell. Re-reading the
+  /// session lets its own 401 handling sign the Operator out, instead of every screen failing in place.
+  const onError = (error: unknown) => {
+    if ((error as Problem).status === 401) void client.invalidateQueries({ queryKey: ["session"] });
+  };
+  const client = new QueryClient({
+    queryCache: new QueryCache({ onError }),
+    mutationCache: new MutationCache({ onError }),
     defaultOptions: {
       queries: {
         // The dashboard reports authoritative server state, and an Operator acting on a stale count
@@ -45,3 +52,5 @@ export const createQueryClient = () =>
       },
     },
   });
+  return client;
+};
