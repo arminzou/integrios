@@ -13,14 +13,16 @@ and reliable HTTP delivery with retries, dead-lettering, replay, and auditable d
 - Topic/subscription routing with optional JSONata payload transforms
 - Authenticated HTTP JSON delivery using open, API-key-header, bearer-token, or OAuth 2.0 client-credentials authentication
 - Reliable async delivery with bounded retries, dead-lettering, and replay
+- Pull delivery (preview): Subscriber services claim deliveries over HTTP from the Delivery API, with the
+  [Integrios.Client](https://www.nuget.org/packages/Integrios.Client) SDK on nuget.org
 - Per-event status and delivery-attempt history
-- Pluggable, vendor-neutral observability (OpenTelemetry metrics, logs, traces); bring your own backend
+- Vendor-neutral observability: Prometheus metrics, structured stdout logs, and OpenTelemetry traces over OTLP; bring your own backend
 - Clean control-plane / data-plane / worker separation; scales horizontally
 - Self-hostable and Docker-first
 
 ## Architecture
 
-Integrios splits platform intent from runtime execution. The **control plane** (`Integrios.Admin`) owns tenants, connectors, sources, destinations, topics, and subscriptions. The **data plane** takes over at runtime: `Integrios.Ingestion` validates, authenticates, and durably accepts events behind a transactional outbox; `Integrios.Worker` fans out to subscriptions, applies transforms, delivers to destinations, and handles retries, dead-lettering, and replay.
+Integrios splits platform intent from runtime execution. The **control plane** (`Integrios.Admin`) owns tenants, connectors, sources, destinations, topics, and subscriptions. The **data plane** takes over at runtime: `Integrios.Ingestion` validates, authenticates, and durably accepts events behind a transactional outbox; `Integrios.Worker` fans out to subscriptions, applies transforms, delivers to destinations, and handles retries, dead-lettering, and replay; `Integrios.Subscriber` serves the Delivery API, from which Subscriber services pull deliveries for pull Destinations.
 
 A **Connector** is a reusable, deployment-wide declarative contract: it declares what an external
 system can do and the bounded choices its instances may configure, and it never holds a concrete
@@ -34,7 +36,8 @@ semantics cannot shift underneath a stable identity.
 
 A **Subscription** carries one delivery operation from a Topic to a Destination: its match rules,
 body mapping, HTTP method and path, and its success rule. Generic external event producers are the
-universal source path; HTTP(S) is the only destination protocol. Integrios deliberately does not
+universal source path. Delivery is HTTP(S) only: the Worker pushes to a Destination, or a Subscriber
+service pulls from the Delivery API. Integrios deliberately does not
 require provider-specific destination actions or runtime plugins.
 
 For the full design (processing flow, durability guarantees, and platform concepts), see the [architecture guide](https://arminzou.github.io/integrios/architecture.html).
@@ -47,7 +50,7 @@ Prerequisite: Docker.
 make up
 ```
 
-This starts the services, Postgres, migrations, and a test sink (Admin API on `http://localhost:5150`, Ingestion on `http://localhost:5231`). Then follow the [setup guide](https://arminzou.github.io/integrios/setup.html) to onboard a tenant and send your first event end to end. For a production deployment, see [deploy/](deploy/README.md) (Docker Compose) or [deploy/azure](deploy/azure/README.md) (Azure Container Apps).
+This starts Postgres, the setup job (migrations and the first OperatorKey), and the four roles (Admin API on `http://localhost:5150`, Ingestion on `http://localhost:5231`, Delivery API on `http://localhost:5241`). Then follow the [setup guide](https://arminzou.github.io/integrios/setup.html) to onboard a tenant and send your first event end to end. For a production deployment, see [deploy/](deploy/README.md) (Docker Compose) or [deploy/azure](deploy/azure/README.md) (Azure Container Apps).
 
 ## Documentation
 
