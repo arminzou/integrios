@@ -1,0 +1,21 @@
+src/Integrios.Client/SubscriberServiceCollectionExtensions.cs
+  s_b19acd4aae4d50::t_5bd7e0f3140322 40
+src/Integrios.Infrastructure/DependencyInjection.cs
+  s_b19acd4aae4d50::t_c71a2716f981b7 335,337-340
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "b15ec5393dd06c50e4b3b5d22195371a9a60f73d",
+  "prompts": {},
+  "sessions": {
+    "s_b19acd4aae4d50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "01ddce99-a00c-49f1-9f76-21f5af0490d8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Armin Zou <arminzou@outlook.com>"
+    }
+  }
+}
