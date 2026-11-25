@@ -191,9 +191,9 @@ the upgrade in an appropriate maintenance window and monitor the migration befor
 matched runtime images.
 
 Pull the `deploy/` directory for the release you are moving to — its `compose.yml` already
-defaults to that version — or set `INTEGRIOS_VERSION` in `.env` to pin one explicitly. All three
-services resolve from that single value, so they always upgrade as a matched set. Never point it
-at a mutable tag such as `latest`, which tracks the latest stable release. Then:
+defaults to that version — or set `INTEGRIOS_VERSION` in `.env` to pin one explicitly. The setup
+job and all four roles resolve from that single value, so they always upgrade as a matched set.
+Never point it at a mutable tag such as `latest`, which tracks the latest stable release. Then:
 
 ```bash
 docker compose pull
