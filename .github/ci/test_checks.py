@@ -9,6 +9,27 @@ import unittest
 from checks import CHECKS, select_checks, validate_results
 
 
+class TestProjectTests(unittest.TestCase):
+    def test_lists_unit_and_architecture_projects_from_solution(self):
+        script = Path(__file__).resolve().with_name("checks.py")
+        result = subprocess.run(
+            [sys.executable, str(script), "test-projects"],
+            cwd=script.parents[2], capture_output=True, text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        paths = result.stdout.splitlines()
+        self.assertEqual(paths, sorted(set(paths)))
+        self.assertTrue(all(path.startswith("tests/") for path in paths))
+        for name in (
+            "Integrios.Admin.UnitTests", "Integrios.Application.UnitTests", "Integrios.ArchitectureTests",
+            "Integrios.Client.UnitTests", "Integrios.Domain.UnitTests", "Integrios.Infrastructure.UnitTests",
+            "Integrios.Ingestion.UnitTests", "Integrios.UnitTests", "Integrios.Worker.UnitTests",
+        ):
+            self.assertIn(f"tests/{name}/{name}.csproj", paths)
+        for name in ("Integrios.FunctionalTests", "Integrios.AcceptanceTests", "Integrios.Tests.Shared"):
+            self.assertNotIn(f"tests/{name}/{name}.csproj", paths)
+
+
 class SelectionTests(unittest.TestCase):
     def assert_selected(self, paths, *expected):
         result = select_checks(paths, "pull_request")
