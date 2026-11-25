@@ -156,6 +156,53 @@ describe("Application session", () => {
     expect(calls.some(({ url }) => url.pathname.startsWith("/admin/"))).toBe(true);
   });
 
+  it("signs in with the sign-in token when a cancelled session read answers late", async () => {
+    const tenant = {
+      id: "22222222-2222-2222-2222-222222222222",
+      slug: "acme",
+      name: "Acme",
+      status: "active",
+      environment: "production",
+      description: null,
+      created_at: "2026-09-01T00:00:00Z",
+      updated_at: "2026-09-01T00:00:00Z",
+    };
+    let release = () => {};
+    let sessionReads = 0;
+    const calls = stubHttp(({ url }) => {
+      if (url.pathname === "/auth/session") {
+        sessionReads += 1;
+        if (sessionReads === 1) return { status: 200, body: session };
+        // The first re-read is cancelled by the next 401 and answers only after the Operator is signed out.
+        if (sessionReads === 2)
+          return new Promise((resolve) => {
+            release = () => resolve({ status: 200, body: session });
+          });
+        return { status: 401 };
+      }
+      if (url.pathname === "/auth/options") return { status: 200, body: authOptions };
+      if (url.pathname === "/auth/password/login") return { status: 200, body: { return_to: "/" } };
+      if (url.pathname === `/admin/tenants/${tenant.id}`) return { status: 200, body: tenant };
+      return { status: 401 };
+    });
+
+    // The Events screen makes several Admin reads at once, so more than one 401 re-reads the session.
+    renderApp("/tenants/22222222-2222-2222-2222-222222222222/events");
+
+    expect(await screen.findByRole("heading", { name: "Sign in to Integrios" })).toBeTruthy();
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "operator@example.test" } });
+    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "correct horse battery staple" } });
+    fireEvent.submit(screen.getByRole("form", { name: "Sign in with email and password" }));
+
+    await vi.waitFor(() => expect(calls.some(({ url }) => url.pathname === "/auth/password/login")).toBe(true));
+    const request = calls.find(({ url }) => url.pathname === "/auth/password/login")!;
+    expect(sessionReads).toBeGreaterThan(2);
+    expect(request.headers.get("X-Integrios-Antiforgery")).toBe("sign-in-token");
+  });
+
   it("renders the signed-in shell, unknown route, and server-named logout token", async () => {
     vi.stubGlobal(
       "fetch",

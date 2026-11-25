@@ -37,16 +37,15 @@ export const api = createClient<paths>({
 });
 api.use(browserBoundary);
 
-export async function loadSession(): Promise<OperatorSession | null> {
-  const response = await fetch("/auth/session", { credentials: "same-origin" });
-  if (response.status === 401) {
-    session = null;
-    return null;
-  }
-  if (!response.ok) throw new Error(`The session could not be read (${response.status}).`);
+export async function loadSession(signal: AbortSignal): Promise<OperatorSession | null> {
+  const response = await fetch("/auth/session", { credentials: "same-origin", signal });
+  if (!response.ok && response.status !== 401) throw new Error(`The session could not be read (${response.status}).`);
 
-  session = (await response.json()) as OperatorSession;
-  return session;
+  const read = response.status === 401 ? null : ((await response.json()) as OperatorSession);
+  // A cancelled read was replaced by a newer one, and its token must not overwrite the newer answer.
+  signal.throwIfAborted();
+  session = read;
+  return read;
 }
 
 export async function loadAuthenticationOptions(): Promise<OperatorAuthenticationOptions> {

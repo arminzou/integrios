@@ -37,7 +37,8 @@ export const createQueryClient = () => {
     if ((error as Problem).status === 401) void client.invalidateQueries({ queryKey: ["session"] });
   };
   const client = new QueryClient({
-    queryCache: new QueryCache({ onError }),
+    // The session read reports its own 401 as a signed-out answer; re-reading it on its own failure would loop.
+    queryCache: new QueryCache({ onError: (error, query) => query.queryKey[0] !== "session" && onError(error) }),
     mutationCache: new MutationCache({ onError }),
     defaultOptions: {
       queries: {
