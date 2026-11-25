@@ -753,7 +753,8 @@ resource admin 'Microsoft.App/containerApps@2025-07-01' = {
           { type: 'Readiness', httpGet: { path: '/ready', port: 5299, scheme: 'HTTP' }, initialDelaySeconds: 10, periodSeconds: 10 }
         ]
       }, adminCollectorContainer]
-      volumes: [{ name: 'admin-data-protection', storageType: 'AzureFile', storageName: adminDataProtectionEnvironmentStorage.name }]
+      // SMB shares mount root-owned; the image runs as its app user, uid and gid 1654.
+      volumes: [{ name: 'admin-data-protection', storageType: 'AzureFile', storageName: adminDataProtectionEnvironmentStorage.name, mountOptions: 'uid=1654,gid=1654' }]
       scale: { minReplicas: runtimeReplicaCount, maxReplicas: max(runtimeReplicaCount, 1) }
     }
   }
