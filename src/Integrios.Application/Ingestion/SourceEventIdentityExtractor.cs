@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Integrios.Application.Transforms;
 using Integrios.Domain.ValueObjects;
 
 namespace Integrios.Application.Ingestion;
@@ -43,6 +44,8 @@ internal static class SourceEventIdentityExtractor
     // mapping, so the caller can then use an identity produced by the mapping, if any.
     private static string? Extracted(SourceEventIdentityRule rule, string? value)
     {
+        if (value?.Length > SourceMappingOutputValidator.MaxSourceEventIdLength)
+            throw new EventAcceptanceException($"The Source Event identity must be at most {SourceMappingOutputValidator.MaxSourceEventIdLength} characters.");
         if (!string.IsNullOrWhiteSpace(value))
             return value;
         if (rule.AllowMissing)

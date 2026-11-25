@@ -28,13 +28,12 @@ internal sealed class IngestEventCommandHandler(
                 "No active event_api Source matches the requested id.");
 
         SourceContractOutput output = EventApiSubmissionValidator.Validate(command.RawInput);
-        if (output.SourceEventId is { } eventApiSourceEventId
-            && await eventAcceptance.FindBySourceEventIdAsync(command.SourceId, eventApiSourceEventId, cancellationToken) is { } existing)
-            return ToResult(existing);
-
         string? idempotencyKey = output.SourceEventId is { } sourceEventId
             ? SourceEventIdentityExtractor.IdempotencyKey(command.SourceId, sourceEventId)
             : null;
+        if (idempotencyKey is not null
+            && await eventAcceptance.FindByIdempotencyKeyAsync(command.TenantId, idempotencyKey, cancellationToken) is { } existing)
+            return ToResult(existing);
 
         // The ambient request span is the acceptance span; its id becomes the trace anchor
         // carried across the outbox hop.

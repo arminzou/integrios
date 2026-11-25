@@ -58,15 +58,18 @@ internal sealed class AcceptVerifiedWebhookCommandHandler(
         string? sourceEventId = endpoint.EventIdentityRule is { } identityRule
             ? SourceEventIdentityExtractor.ExtractWebhook(identityRule, headers, rawInput)
             : null;
-        if (sourceEventId is not null && await eventAcceptance.FindBySourceEventIdAsync(endpoint.SourceId, sourceEventId, cancellationToken) is { } existing)
+        string? idempotencyKey = sourceEventId is not null
+            ? SourceEventIdentityExtractor.IdempotencyKey(endpoint.SourceId, sourceEventId)
+            : null;
+        if (idempotencyKey is not null
+            && await eventAcceptance.FindByIdempotencyKeyAsync(endpoint.TenantId, idempotencyKey, cancellationToken) is { } existing)
             return ToResult(existing);
 
         SourceContractOutput output = SourceContractEvaluator.Evaluate(
             evaluator, endpoint.SourceContractSchema, endpoint.SourceMapping, rawInput, context);
         sourceEventId ??= output.SourceEventId;
-        string? idempotencyKey = sourceEventId is not null
-            ? SourceEventIdentityExtractor.IdempotencyKey(endpoint.SourceId, sourceEventId)
-            : null;
+        if (idempotencyKey is null && sourceEventId is not null)
+            idempotencyKey = SourceEventIdentityExtractor.IdempotencyKey(endpoint.SourceId, sourceEventId);
 
         var activity = Activity.Current;
         activity?.SetTag("integrios.tenant.id", endpoint.TenantId);
