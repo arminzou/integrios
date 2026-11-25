@@ -181,8 +181,22 @@ once, before starting the new release:
 docker compose run --rm --no-deps --user root --entrypoint chown admin -R 1654:1654 /var/lib/integrios/data-protection
 ```
 
-The existing keys are kept. Tenant secret files on a Linux host
-must be readable by uid 1654, for example mode `0644`, or owned by that uid.
+The existing keys are kept.
+
+On a Linux host, uid 1654 must be able to read the Tenant secret files the containers mount. A
+root-owned `0600` file stops Ingestion or the Worker at startup, and `secrets validate` fails on it.
+Give the app user traverse access to the directory and read access to each file, for example:
+
+```bash
+sudo chown -R 1654:1654 secrets/sources secrets/destinations
+sudo chmod 0750 secrets/sources secrets/destinations
+sudo chmod 0640 secrets/sources/* secrets/destinations/*
+```
+
+Use a group or an ACL instead when another account must keep owning the files.
+
+`admin openapi <path>` writes as the app user too, so give it a writable path such as
+`/tmp/openapi.json`.
 
 ### Completed-history retention
 
