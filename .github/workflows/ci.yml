@@ -412,13 +412,26 @@ jobs:
           # Hub repository that does not exist, and the whole release fails on it.
           stages=$(awk 'toupper($1) == "FROM" && toupper($3) == "AS" { print $4 }' Dockerfile | sort -u)
 
+          # Testcontainers images live as C# string literals. Finding none means the pattern
+          # drifted from the code, so fail rather than silently drop them from the evidence.
+          test_images=$(grep -rhoE --include='*.cs' \
+            '"[a-z0-9.-]+(/[a-z0-9._-]+)*(:[A-Za-z0-9._-]+|@sha256:[0-9a-f]{64})"' \
+            tests/Integrios.FunctionalTests tests/Integrios.AcceptanceTests |
+            tr -d '"' | grep -v '^sha256:') || {
+            echo 'No container images found in the functional or acceptance test code.' >&2
+            exit 1
+          }
+
+          # The acceptance stack layers its compose file over deploy/compose.yml. The dev
+          # compose.yml is left out: of its images the acceptance run starts only postgres, which
+          # deploy/compose.yml pins to the same tag; its profiled dev images run in no gate.
           mapfile -t images < <(
             {
               awk 'toupper($1) == "FROM" { print $2 }' Dockerfile
               awk '$1 == "image:" { print $2 }' \
-                compose.yml \
                 deploy/compose.yml \
                 tests/Integrios.AcceptanceTests/compose.acceptance.yml
+              printf '%s\n' "$test_images"
             } | grep -v '\${' | grep -vxF "$stages" | sort -u
           )
 
