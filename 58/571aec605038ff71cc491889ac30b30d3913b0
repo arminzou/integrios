@@ -1,0 +1,33 @@
+tests/Integrios.UnitTests/HostDefaultsTests.cs
+  s_b19acd4aae4d50::t_98f659b00bc8f6 58-67
+deploy/README.md
+  s_b19acd4aae4d50::t_cfa9a1bdb1f63d 251-254
+docs/configuration.md
+  s_b19acd4aae4d50::t_2746386472cb71 38
+src/Integrios.Admin/AdminHost.cs
+  s_b19acd4aae4d50::t_1706074eae942d 18,72
+src/Integrios.Infrastructure/Hosting/OperationalEndpointExtensions.cs
+  s_b19acd4aae4d50::t_27af317974712b 19,25
+src/Integrios.Ingestion/IngestionHost.cs
+  s_b19acd4aae4d50::t_c5fd3fc6208f7c 17,73
+src/Integrios.Subscriber/SubscriberHost.cs
+  s_b19acd4aae4d50::t_cacc1d0a9b800a 58
+src/Integrios.Worker/WorkerHost.cs
+  s_b19acd4aae4d50::t_dbd0062de48f1e 51
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "58571aec605038ff71cc491889ac30b30d3913b0",
+  "prompts": {},
+  "sessions": {
+    "s_b19acd4aae4d50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "01ddce99-a00c-49f1-9f76-21f5af0490d8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Armin Zou <arminzou@outlook.com>"
+    }
+  }
+}
