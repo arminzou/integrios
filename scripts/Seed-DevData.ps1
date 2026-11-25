@@ -415,11 +415,12 @@ if ($includeQueueDemo) {
 # --- 9. Wait for the failing Delivery to exhaust its retries ------------------------------------
 # Three attempts on a 30s exponential base, so dead-lettering lands ~90s after the first attempt.
 Say 'waiting for the failing Delivery to dead-letter (about two minutes)'
-for ($i = 0; $i -lt 40; $i++) {
+# One poll more than sleeps, so a dead-letter during the last sleep still counts.
+for ($i = 0; $i -le 40; $i++) {
     $dead = [int](Get-SqlScalar "select count(*) from event_deliveries where status = 'dead_lettered';")
     Write-Host "  dead-lettered: $dead"
     if ($dead -ge 1) { break }
-    Start-Sleep -Seconds 10
+    if ($i -lt 40) { Start-Sleep -Seconds 10 }
 }
 if ($dead -lt 1) { throw 'Failing Delivery did not dead-letter within about seven minutes.' }
 
