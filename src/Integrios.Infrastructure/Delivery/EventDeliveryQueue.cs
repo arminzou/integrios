@@ -20,25 +20,6 @@ internal sealed class EventDeliveryQueue(
         TimeSpan.FromMilliseconds(200)
     ];
 
-    internal async Task<EventDeliveryWorkItem?> ClaimNextAsync(CancellationToken cancellationToken)
-    {
-        while (true)
-        {
-            EventDeliveryClaimResult? result = await ClaimNextWithRecoveryAsync(cancellationToken);
-            switch (result)
-            {
-                case null:
-                    return null;
-                case ClaimedEventDelivery claimed:
-                    return claimed.WorkItem;
-                case RecoveredEventDeliveryDeadLetter:
-                    continue;
-                default:
-                    throw new InvalidOperationException($"Unknown delivery claim result '{result.GetType().Name}'.");
-            }
-        }
-    }
-
     public async Task<EventDeliveryClaimResult?> ClaimNextWithRecoveryAsync(
         CancellationToken cancellationToken) =>
         await ClaimRowAsync(null, cancellationToken) switch

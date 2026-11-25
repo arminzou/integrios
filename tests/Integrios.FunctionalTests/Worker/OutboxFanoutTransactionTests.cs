@@ -117,7 +117,7 @@ public sealed class OutboxFanoutTransactionTests : IClassFixture<WorkerRoutingFi
         async Task<int> DeliverUntilEmptyAsync()
         {
             int total = 0;
-            while (await fixture.DeliveryQueue.ClaimNextAsync(CancellationToken.None) is { } claimed)
+            while (await fixture.DeliveryQueue.ClaimNextWithRecoveryAsync(CancellationToken.None) is ClaimedEventDelivery { WorkItem: var claimed })
             {
                 DeliveryFinalizationResult result = await fixture.DeliveryQueue.FinalizeAsync(
                     new DeliveryAttemptCompletion(

@@ -745,11 +745,11 @@ public class WorkerRoutingFixture : IAsyncLifetime
     internal async Task RunExpiredLeaseRaceAsync(bool finalizationWins)
     {
         Guid deliveryId = await FanoutSingleDeliveryAsync();
-        EventDeliveryWorkItem first = (await DeliveryQueue.ClaimNextAsync(CancellationToken.None))
-            .ShouldBeOfType<EventDeliveryWorkItem>();
+        EventDeliveryWorkItem first = (await DeliveryQueue.ClaimNextWithRecoveryAsync(CancellationToken.None))
+            .ShouldBeOfType<ClaimedEventDelivery>().WorkItem;
         await ForceLeaseExpiredAsync(deliveryId);
 
-        (DeliveryFinalizationResult finalization, EventDeliveryWorkItem? reclaim) =
+        (DeliveryFinalizationResult finalization, EventDeliveryClaimResult? reclaim) =
             database.Provider == "postgres"
                 ? await RunPostgresExpiredLeaseRaceAsync(first, finalizationWins)
                 : await RunSqlServerExpiredLeaseRaceAsync(first, finalizationWins);
@@ -765,13 +765,12 @@ public class WorkerRoutingFixture : IAsyncLifetime
         }
 
         finalization.Status.ShouldBe(DeliveryFinalizationStatus.OwnershipLost);
-        reclaim.ShouldNotBeNull();
-        reclaim.AttemptNumber.ShouldBe(2);
+        reclaim.ShouldBeOfType<ClaimedEventDelivery>().WorkItem.AttemptNumber.ShouldBe(2);
         (await GetDeliveryAttemptsAsync(deliveryId)).Select(attempt => attempt.Status).ShouldBe(
             ["indeterminate", "in_progress"]);
     }
 
-    private async Task<(DeliveryFinalizationResult, EventDeliveryWorkItem?)>
+    private async Task<(DeliveryFinalizationResult, EventDeliveryClaimResult?)>
         RunPostgresExpiredLeaseRaceAsync(EventDeliveryWorkItem first, bool finalizationWins)
     {
         const long advisoryLockKey = 8_931_047_221;
@@ -794,14 +793,14 @@ public class WorkerRoutingFixture : IAsyncLifetime
         await barrier.OpenAsync();
         await barrier.ExecuteScalarAsync("SELECT pg_advisory_lock(@LockKey)", new { LockKey = advisoryLockKey });
         Task<DeliveryFinalizationResult>? finalizationTask = null;
-        Task<EventDeliveryWorkItem?>? reclaimTask = null;
+        Task<EventDeliveryClaimResult?>? reclaimTask = null;
 
         try
         {
             if (finalizationWins)
                 finalizationTask = DeliveryQueue.FinalizeAsync(Success(first), CancellationToken.None);
             else
-                reclaimTask = DeliveryQueue.ClaimNextAsync(CancellationToken.None);
+                reclaimTask = DeliveryQueue.ClaimNextWithRecoveryAsync(CancellationToken.None);
 
             await WaitUntilAsync(async () =>
             {
@@ -812,7 +811,7 @@ public class WorkerRoutingFixture : IAsyncLifetime
 
             if (finalizationWins)
             {
-                reclaimTask = DeliveryQueue.ClaimNextAsync(CancellationToken.None);
+                reclaimTask = DeliveryQueue.ClaimNextWithRecoveryAsync(CancellationToken.None);
                 (await reclaimTask).ShouldBeNull();
             }
             else
@@ -850,7 +849,7 @@ public class WorkerRoutingFixture : IAsyncLifetime
         }
     }
 
-    private async Task<(DeliveryFinalizationResult, EventDeliveryWorkItem?)>
+    private async Task<(DeliveryFinalizationResult, EventDeliveryClaimResult?)>
         RunSqlServerExpiredLeaseRaceAsync(EventDeliveryWorkItem first, bool finalizationWins)
     {
         const string resource = "delivery-race";
@@ -879,14 +878,14 @@ public class WorkerRoutingFixture : IAsyncLifetime
             new { Resource = resource });
         bool barrierHeld = true;
         Task<DeliveryFinalizationResult>? finalizationTask = null;
-        Task<EventDeliveryWorkItem?>? reclaimTask = null;
+        Task<EventDeliveryClaimResult?>? reclaimTask = null;
 
         try
         {
             if (finalizationWins)
                 finalizationTask = DeliveryQueue.FinalizeAsync(Success(first), CancellationToken.None);
             else
-                reclaimTask = DeliveryQueue.ClaimNextAsync(CancellationToken.None);
+                reclaimTask = DeliveryQueue.ClaimNextWithRecoveryAsync(CancellationToken.None);
 
             await WaitUntilAsync(
                 async () => await control.ExecuteScalarAsync<int>(
@@ -895,7 +894,7 @@ public class WorkerRoutingFixture : IAsyncLifetime
 
             if (finalizationWins)
             {
-                reclaimTask = DeliveryQueue.ClaimNextAsync(CancellationToken.None);
+                reclaimTask = DeliveryQueue.ClaimNextWithRecoveryAsync(CancellationToken.None);
                 (await reclaimTask).ShouldBeNull();
             }
             else

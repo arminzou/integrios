@@ -51,8 +51,8 @@ public sealed class BacklogSnapshotReaderTests : IClassFixture<WorkerRoutingFixt
     public async Task ReadAsync_IncludesExpiredLeaseAndAnchorsAgeAtLeaseExpiry()
     {
         Guid deliveryId = await fixture.FanoutSingleDeliveryAsync();
-        EventDeliveryWorkItem claimed = (await fixture.DeliveryQueue.ClaimNextAsync(CancellationToken.None))
-            .ShouldBeOfType<EventDeliveryWorkItem>();
+        EventDeliveryWorkItem claimed = (await fixture.DeliveryQueue.ClaimNextWithRecoveryAsync(CancellationToken.None))
+            .ShouldBeOfType<ClaimedEventDelivery>().WorkItem;
         claimed.Id.ShouldBe(deliveryId);
         await fixture.ForceLeaseExpiredAsync(deliveryId);
 
