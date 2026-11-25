@@ -183,6 +183,8 @@ doctor() {
 
 down() {
   local role pid attempt
+  # Every role this run recorded, whatever VERIFY_WORKERS says now.
+  [ -d "$STATE" ] && ROLES=$(cd "$STATE" && ls *.pid 2>/dev/null | sed 's/\.pid$//' | tr '\n' ' ')
   for role in $ROLES; do
     [ -f "$STATE/$role.pid" ] && kill "$(cat "$STATE/$role.pid")" 2>/dev/null || true
   done

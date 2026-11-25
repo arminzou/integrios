@@ -16,21 +16,28 @@ mkdir -p "$OUT"
 { echo "commit $(git -C "$ROOT" rev-parse HEAD)"; echo "tracked diff $(git -C "$ROOT" diff HEAD | sha256sum | cut -c1-16)"
   echo "runs per side $RUNS"; env | grep '^MEASURE_' || true; } >"$OUT/run.txt"
 
+# Role logs live in the state directory, which down deletes; a failed run tears down on exit.
+teardown() {
+  mkdir -p "$OUT/$1"
+  cp "$ROOT/artifacts/verify/$VERIFY_RUN/state/"*.log "$OUT/$1/" 2>/dev/null || true
+  "$V/control.sh" down >>"$OUT/$1.down.log" 2>&1
+}
+current=
+trap '[ -z "$current" ] || teardown "$current"' EXIT
 stack() {
   export VERIFY_RUN=measure-$1
-  "$V/control.sh" up >"$OUT/$1.up.log" 2>&1 || { cat "$OUT/$1.up.log" >&2; "$V/control.sh" down >&2 || true; exit 1; }
+  current=$1
+  "$V/control.sh" up >"$OUT/$1.up.log" 2>&1 || { cat "$OUT/$1.up.log" >&2; exit 1; }
   # shellcheck disable=SC1090
   source "$ROOT/artifacts/verify/$VERIFY_RUN/state/env"
 }
-# Role logs live in the state directory, which down deletes.
-teardown() { cp "$ROOT/artifacts/verify/$VERIFY_RUN/state/"*.log "$OUT/$1/" 2>/dev/null || true; "$V/control.sh" down >>"$OUT/$1.down.log" 2>&1; }
 
 for ((i = 1; i <= RUNS; i++)); do
   for side in push pull; do
     name=fault-$side-$i
     stack "$name"
     node "$V/measure.mjs" fault "$side" "$OUT/$name" | tee -a "$OUT/progress.jsonl"
-    teardown "$name"
+    teardown "$name"; current=
   done
 done
 
@@ -38,5 +45,5 @@ stack intake
 for role in worker worker-2; do kill "$(cat "$ROOT/artifacts/verify/$VERIFY_RUN/state/$role.pid")"; done
 sleep 5
 node "$V/measure.mjs" intake "$OUT/intake" | tee -a "$OUT/progress.jsonl"
-teardown intake
+teardown intake; current=
 echo "results: $OUT"

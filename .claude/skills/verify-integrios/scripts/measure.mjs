@@ -114,6 +114,7 @@ function subscriberLoop(key, handle, signal, stats, waitSeconds = 20) {
       if (response.status !== 200) { stats.errors++; await response.arrayBuffer(); await sleep(1000, signal); continue; }
       for (const d of (await response.json()).deliveries) {
         await handle(d);
+        if (signal.aborted) return;
         const ack = await fetch(`${DELIVERY_API}/delivery/v1/deliveries/${d.delivery_id}:ack`, {
           method: "POST", headers, body: JSON.stringify({ lease_token: d.lease_token }),
         }).catch(() => ({ status: 0, arrayBuffer: async () => {} }));
@@ -150,9 +151,9 @@ async function fault(side) {
 
   let stalling = false;
   const stop = new AbortController();
-  const stats = { x: { opened: 0, claims: 0, acks: 0, errors: 0 }, y: { opened: 0, claims: 0, acks: 0, errors: 0 } };
+  const stats = { x: { opened: 0, claims: 0, acks: 0, errors: 0, stalled: 0 }, y: { opened: 0, claims: 0, acks: 0, errors: 0 } };
   const loops = side === "pull" ? [
-    subscriberLoop(x.key, async () => { if (stalling) await sleep(STALL_MS, stop.signal); }, stop.signal, stats.x),
+    subscriberLoop(x.key, async () => { if (stalling) { stats.x.stalled++; await sleep(STALL_MS, stop.signal); } }, stop.signal, stats.x),
     subscriberLoop(y.key, async () => {}, stop.signal, stats.y),
   ] : [];
   const stall = async (on) => {
@@ -173,24 +174,33 @@ async function fault(side) {
     });
     sent.push(...results.flat());
   };
+  const timings = new Map();
+  const settle = async (seconds) => {
+    const ys = sent.filter((s) => s.connector === "y" && s.event_id);
+    const deadline = Date.now() + seconds * 1000;
+    while (timings.size < ys.length && Date.now() < deadline) {
+      for (const s of ys) {
+        if (timings.has(s.event_id)) continue;
+        const done = await settled(t, s.event_id, y.id);
+        if (done) timings.set(s.event_id, done);
+      }
+      if (timings.size < ys.length) await sleep(1000);
+    }
+  };
   await phase("healthy", healthy);
+  // Healthy Y must finish before X stalls, or the healthy figures include time under fault.
+  await settle(60);
+  const stallAt = new Date().toISOString();
   await stall(true);
   await phase("fault", stalled);
-
-  // Y is what is measured; X is left stalled and only counted.
-  const ys = sent.filter((s) => s.connector === "y" && s.event_id);
-  const deadline = Date.now() + drain * 1000;
-  const timings = new Map();
-  while (timings.size < ys.length && Date.now() < deadline) {
-    for (const s of ys) {
-      if (timings.has(s.event_id)) continue;
-      const done = await settled(t, s.event_id, y.id);
-      if (done) timings.set(s.event_id, done);
-    }
-    if (timings.size < ys.length) await sleep(2000);
-  }
+  await settle(drain);
+  // Y is what is measured; X is left stalled. Proof that X really stalled:
+  const xStalled = side === "pull" ? stats.x.stalled
+    : (await call(MOCKSINK, "POST", "/__admin/requests/count", { method: "POST", urlPathPattern: `/sink/${slug}-x.*` })).count - healthy * rate;
   stop.abort();
   await Promise.all(loops);
+  const xRejected = sent.filter((s) => s.connector === "x" && s.status !== 202).length;
+  if (xRejected || xStalled < 1) throw new Error(`fault did not happen: ${xRejected} X Events rejected, ${xStalled} X deliveries stalled`);
 
   const samples = sent.map((s) => {
     const done = s.connector === "y" ? timings.get(s.event_id) : undefined;
@@ -200,13 +210,15 @@ async function fault(side) {
       ack_latency_ms: done ? Date.parse(done.completed_at) - Date.parse(done.accepted_at) : null,
     };
   });
-  const summary = { mode: "fault", side, slug, healthy_seconds: healthy, fault_seconds: stalled, rate_per_connector: rate, drain_seconds: drain, stall_ms: STALL_MS, subscribers: stats };
+  const summary = { mode: "fault", side, slug, healthy_seconds: healthy, fault_seconds: stalled, rate_per_connector: rate, drain_seconds: drain, stall_ms: STALL_MS, stall_at: stallAt, x_stalled: xStalled, subscribers: stats };
   for (const name of ["healthy", "fault"]) {
     const y = samples.filter((s) => s.connector === "y" && s.phase === name);
+    const late = name === "healthy" ? y.filter((s) => s.completed_at && s.completed_at > stallAt).length : 0;
     summary[name] = {
       posted: y.length,
       intake_errors: y.filter((s) => s.status !== 202).length,
       unsettled: y.filter((s) => s.status === 202 && s.ack_latency_ms === null).length,
+      settled_after_stall: late,
       y_ack: describe(y.map((s) => s.ack_latency_ms).filter((v) => v !== null)),
       x_posted: samples.filter((s) => s.connector === "x" && s.phase === name).length,
     };
@@ -237,6 +249,10 @@ async function intake() {
       await Promise.all(loops);
     }
   }
+  // A 20-second long-poll may not finish inside a phase, so idle polls count when opened; any
+  // rejected claim (a bad key, a 5xx) counts as an error.
+  if (stats.idle.errors || stats.stream.errors || stats.idle.opened < polls * rounds || !stats.stream.claims)
+    throw new Error(`Subscriber load did not happen: ${JSON.stringify(stats)}`);
   const summary = { mode: "intake", slug, rounds, phase_seconds: seconds, rate_per_second: rate, idle_polls: polls, claim_stream: stream, subscribers: stats };
   for (const name of ["baseline", "load"]) {
     const phase = samples.filter((s) => s.phase === name);
