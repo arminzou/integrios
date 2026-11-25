@@ -332,11 +332,12 @@ public static class DependencyInjection
         if (enableOAuthExecution)
         {
             services.AddHttpClient("oauth2-token", client => client.Timeout = deliveryOptions!.HttpTimeout)
-                .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+                .UseSocketsHttpHandler((handler, _) =>
                 {
-                    AllowAutoRedirect = false,
-                    UseCookies = false,
-                    MeterFactory = SuppressedHttpMetricsFactory.Instance
+                    handler.AllowAutoRedirect = false;
+                    handler.UseCookies = false;
+                    handler.MeterFactory = SuppressedHttpMetricsFactory.Instance;
+                    handler.PooledConnectionLifetime = TimeSpan.FromMinutes(2);
                 })
                 .RemoveAllLoggers();
             services.AddSingleton<IDestinationAuthenticator>(provider => new OAuth2ClientCredentialsAuthenticator(
