@@ -37,6 +37,6 @@ public static class SubscriberServiceCollectionExtensions
             // Without a trailing slash, relative request paths would replace the base path's last segment.
             client.BaseAddress = new Uri(address.EndsWith('/') ? address : address + "/");
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", options.SubscriberKey);
-        });
+        }).UseSocketsHttpHandler((handler, _) => handler.PooledConnectionLifetime = TimeSpan.FromMinutes(2));
     }
 }
