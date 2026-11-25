@@ -1,0 +1,21 @@
+.dockerignore
+  s_b19acd4aae4d50::t_dc78e9c8f5c144 9-13,15-17,24
+Makefile
+  s_b19acd4aae4d50::t_c762bf9a88845b 8-9,43
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "030b9ed754a7b7736f0b8c0bbf2a34886215185f",
+  "prompts": {},
+  "sessions": {
+    "s_b19acd4aae4d50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "01ddce99-a00c-49f1-9f76-21f5af0490d8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Armin Zou <arminzou@outlook.com>"
+    }
+  }
+}
