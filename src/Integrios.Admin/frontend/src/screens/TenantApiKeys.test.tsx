@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import { page, stubHttp } from "../test/http";
-import { renderScreen } from "../test/router";
+import { page, quietBacklog, stubHttp } from "../test/http";
+import { renderApp, renderScreen } from "../test/router";
 import { TenantApiKeysScreen } from "./TenantApiKeys";
 
 afterEach(cleanup);
@@ -76,6 +76,37 @@ describe("Tenant API keys", () => {
     // The key exists in that one response and nowhere else: the reloaded list carries only a prefix.
     expect(screen.queryByText(token)).toBeNull();
     expect(await screen.findByText("itk_live_ab")).toBeTruthy();
+  });
+
+  it("keeps a new key on screen when the session lapses right after it is created", async () => {
+    let expired = false;
+    stubHttp(({ method, url }) => {
+      if (url.pathname === "/auth/session")
+        return expired
+          ? { status: 401 }
+          : { status: 200, body: { antiforgery_token: "t", antiforgery_header_name: "X" } };
+      if (expired) return { status: 401 };
+      if (method === "POST") {
+        expired = true;
+        return { status: 201, body: { tenant_api_key: { ...listItem, status: "active" }, token } };
+      }
+      if (url.pathname === `/admin/tenants/${tenantId}`) return { status: 200, body: { id: tenantId, name: "Acme" } };
+      if (url.pathname.endsWith("/events/backlog")) return { status: 200, body: quietBacklog };
+      return { status: 200, body: page([]) };
+    });
+
+    renderApp(`/tenants/${tenantId}/tenant-api-keys`);
+    fireEvent.click(await screen.findByRole("button", { name: "New API key" }));
+    fireEvent.change(await screen.findByLabelText("Name"), { target: { value: "Ingest" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create API key" }));
+
+    expect(await screen.findByText(token)).toBeTruthy();
+    // An expired session moves the dashboard to sign-in on its next read, which would unmount the reveal.
+    await expect(screen.findByRole("heading", { name: "Sign in to Integrios" }, { timeout: 300 })).rejects.toThrow();
+    expect(screen.getByText(token)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    expect(await screen.findByRole("heading", { name: "Sign in to Integrios" })).toBeTruthy();
   });
 
   it("names the key it is about to revoke and does not revoke until confirmed", async () => {
