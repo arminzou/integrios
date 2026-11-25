@@ -1,11 +1,11 @@
 # Zero-config dev: defaults below match compose.yml; an optional .env overrides them.
 -include .env
-POSTGRES_USER ?= integrios
-POSTGRES_PASSWORD ?= integrios_dev
 DOTNET_ENVIRONMENT ?= Development
 INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET ?= operator_bootstrap_secret
 export DOTNET_ENVIRONMENT
 export INTEGRIOS_BOOTSTRAP_OPERATOR_KEY_SECRET
+
+.PHONY: up up-observability down logs db-migrate db-info bootstrap dashboard
 
 # --- Docker Compose stack ---
 
@@ -40,4 +40,4 @@ bootstrap:
 # --- Operator dashboard dev server ---
 # Vite on :5173, proxying /admin and /auth to the Admin host from `make up`.
 dashboard:
-	cd src/Integrios.Admin/frontend && npm install && npm run dev
+	cd src/Integrios.Admin/frontend && npm ci && npm run dev
