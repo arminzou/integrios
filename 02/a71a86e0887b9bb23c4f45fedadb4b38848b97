@@ -1,0 +1,25 @@
+src/Integrios.Admin/frontend/src/screens/SubscriberKeys.test.tsx
+  s_b19acd4aae4d50::t_6e8b739793c859 3-4,84-114
+src/Integrios.Admin/frontend/src/screens/SubscriberKeys.tsx
+  s_b19acd4aae4d50::t_9581a4164dad0f 3,419,422-428
+src/Integrios.Admin/frontend/src/screens/TenantApiKeys.test.tsx
+  s_b19acd4aae4d50::t_69eb2c91c575e5 3-4,81-111
+src/Integrios.Admin/frontend/src/screens/TenantApiKeys.tsx
+  s_b19acd4aae4d50::t_04ad7b5a24aa6d 3,416,419-424
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "02a71a86e0887b9bb23c4f45fedadb4b38848b97",
+  "prompts": {},
+  "sessions": {
+    "s_b19acd4aae4d50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "01ddce99-a00c-49f1-9f76-21f5af0490d8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Armin Zou <arminzou@outlook.com>"
+    }
+  }
+}
