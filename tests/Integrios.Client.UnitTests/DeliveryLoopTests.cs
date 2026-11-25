@@ -51,6 +51,23 @@ public sealed class DeliveryLoopTests : IAsyncDisposable
     }
 
     [Fact]
+    public void SubscriberClientRecyclesConnectionsWithoutHandlerRotation()
+    {
+        var services = new ServiceCollection();
+        IHttpClientBuilder client = services.AddIntegriosSubscriber<TestHandler>(options =>
+        {
+            options.BaseAddress = new Uri("https://example.test/");
+            options.SubscriberKey = "test-key";
+        }).SetHandlerLifetime(Timeout.InfiniteTimeSpan);
+        using ServiceProvider provider = services.BuildServiceProvider();
+        HttpMessageHandler handler = provider.GetRequiredService<IHttpMessageHandlerFactory>().CreateHandler(client.Name);
+        while (handler is DelegatingHandler delegatingHandler)
+            handler = delegatingHandler.InnerHandler!;
+
+        handler.ShouldBeOfType<SocketsHttpHandler>().PooledConnectionLifetime.ShouldBe(TimeSpan.FromMinutes(2));
+    }
+
+    [Fact]
     public async Task ASuccessfulHandlerAcks()
     {
         await StartAsync((_, _) => Task.FromResult(DeliveryResult.Ack));
