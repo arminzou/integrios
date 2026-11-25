@@ -2,24 +2,25 @@
 
 Integrios emits Prometheus metrics, structured stdout logs, and OpenTelemetry traces. It bundles no production observability backend: Operators collect these signals with the systems they already run. Integrios provides no default alerts, thresholds, or SLOs.
 
-Hosts share AddOperationalConsoleLogging and AddTelemetryServices. Admin and Ingestion add UseRequestCompletionLogging; the Worker adds AddOutboxDepthMetricsServices.
+Hosts share AddOperationalConsoleLogging and AddTelemetryServices. Admin, Ingestion, and Subscriber add UseRequestCompletionLogging; the Worker adds AddOutboxDepthMetricsServices.
 
 ## Metrics
 
-All three hosts expose `/health`, `/ready`, and Prometheus-format `/metrics` on an operational
+All four hosts expose `/health`, `/ready`, and Prometheus-format `/metrics` on an operational
 listener. `/health` has no dependency checks. `/ready` checks only database connectivity and
-returns 503 while the database is unavailable. Admin and Ingestion product listeners do not expose
-these routes.
+returns 503 while the database is unavailable. The Admin, Ingestion, and Subscriber product
+listeners do not expose these routes.
 
 | Host | Local operational URL | In-container port |
 |---|---|---|
 | Ingestion | http://localhost:5232 | 5299 (`OperationalPort`) |
 | Admin | http://localhost:5151 | 5299 (`OperationalPort`) |
 | Worker | http://localhost:5299 | 5299 (`OperationalPort`) |
+| Subscriber | http://localhost:5242 | 5299 (`OperationalPort`) |
 
 The operational listener is for probes and scraping within the deployment network. The local
-Compose stack publishes the Admin and Ingestion operational ports for development; production
-deployments keep them private. Alongside standard ASP.NET Core, HTTP client, and runtime
+Compose stack publishes every operational port for development; production deployments keep them
+private. Alongside standard ASP.NET Core, HTTP client, and runtime
 instruments, Integrios emits the following application instruments.
 
 | Metric | Type | Labels | Meaning |
@@ -89,6 +90,7 @@ Each host supplies these resource attributes:
 | Admin | integrios-admin |
 | Ingestion | integrios-ingestion |
 | Worker | integrios-worker |
+| Subscriber | integrios-subscriber |
 
 service.version is the built Integrios version and service.instance.id is a generated instance identifier. Add Operator resource attributes, such as deployment.environment.name, through standard OTEL_RESOURCE_ATTRIBUTES.
 
@@ -114,9 +116,9 @@ The Admin API returns the resolved link as nullable `trace_url` on Event detail 
 
 ## Logs
 
-Packaged Admin, Ingestion, and Worker hosts write JSON logs to stdout. Development uses readable console output instead. Log scopes include operational identifiers such as event_id, delivery_id, and subscription_id; active traces also add TraceId and SpanId.
+Packaged Admin, Ingestion, Worker, and Subscriber hosts write JSON logs to stdout. Development uses readable console output instead. Log scopes include operational identifiers such as event_id, delivery_id, and subscription_id; active traces also add TraceId and SpanId.
 
-Admin and Ingestion emit one completion record for each non-operational HTTP request with method, route_template, status, duration_ms, and request_id, plus trace correlation when active. The completion record never includes request bodies, query strings, arbitrary headers, or full URLs. It does not run for /health, /ready, /metrics, /_framework, /_content, /assets, or /favicon.ico. The Worker has only its operational HTTP surface and emits no completion record.
+Admin, Ingestion, and Subscriber emit one completion record for each non-operational HTTP request with method, route_template, status, duration_ms, and request_id, plus trace correlation when active. The completion record never includes request bodies, query strings, arbitrary headers, or full URLs. It does not run for /health, /ready, /metrics, /_framework, /_content, /assets, or /favicon.ico. The Worker has only its operational HTTP surface and emits no completion record.
 
 ## Local Prometheus and Grafana
 
