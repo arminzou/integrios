@@ -17,10 +17,8 @@ permissions:
 jobs:
   release-please:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
-      issues: write
+    # Every step authenticates with the App token below, so GITHUB_TOKEN needs no scope.
+    permissions: {}
     steps:
       # A GitHub App installation token, not GITHUB_TOKEN: GitHub does not start a workflow run
       # from an event its own token caused, so a tag created under GITHUB_TOKEN would never fire
