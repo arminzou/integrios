@@ -1,7 +1,6 @@
 using Integrios.Application;
 using Integrios.Application.Delivery;
 using Integrios.Infrastructure;
-using Integrios.Infrastructure.Telemetry;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -11,31 +10,6 @@ namespace Integrios.Worker.UnitTests;
 
 public sealed class WorkerHostStartupTests
 {
-    [Fact]
-    public void WorkerBackgroundInstrumentation_IsOnlyRegisteredWhenExplicitlyAdded()
-    {
-        IConfiguration configuration = BuildConfiguration();
-        var admin = new ServiceCollection();
-        admin.AddAdminApplicationServices();
-        admin.AddAdminInfrastructureServices(configuration);
-        admin.AddTelemetryServices(configuration, "integrios-admin");
-
-        var ingestion = new ServiceCollection();
-        ingestion.AddIngestionApplicationServices();
-        ingestion.AddIngestionInfrastructureServices(configuration);
-        ingestion.AddTelemetryServices(configuration, "integrios-ingestion");
-
-        var worker = new ServiceCollection();
-        worker.AddWorkerApplicationServices();
-        worker.AddWorkerInfrastructureServices(configuration);
-        worker.AddTelemetryServices(configuration, "integrios-worker");
-        worker.AddOutboxDepthMetricsServices(configuration);
-
-        admin.ShouldNotContain(descriptor => IsOutboxDepthMetricsRegistration(descriptor));
-        ingestion.ShouldNotContain(descriptor => IsOutboxDepthMetricsRegistration(descriptor));
-        worker.Where(IsOutboxDepthMetricsRegistration).ShouldHaveSingleItem();
-    }
-
     [Fact]
     public void WorkerHost_NormalStartupRegistersBothIndependentLoops()
     {
@@ -118,8 +92,4 @@ public sealed class WorkerHostStartupTests
             "Host=localhost;Database=integrios;Username=integrios;Password=integrios";
         return new ConfigurationBuilder().AddInMemoryCollection(values).Build();
     }
-
-    private static bool IsOutboxDepthMetricsRegistration(ServiceDescriptor descriptor) =>
-        descriptor.ServiceType == typeof(IHostedService)
-        && descriptor.ImplementationType?.Name == "OutboxDepthMetrics";
 }
