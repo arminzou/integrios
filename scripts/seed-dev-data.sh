@@ -268,6 +268,7 @@ for _ in $(seq 1 40); do
   [ "$dead" -ge 1 ] && break
   sleep 10
 done
+[ "$dead" -ge 1 ] || { printf 'Failing Delivery did not dead-letter within about seven minutes.\n' >&2; exit 1; }
 
 say "done"
 docker compose exec -T postgres psql -U integrios -d integrios -c \

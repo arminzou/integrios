@@ -421,6 +421,7 @@ for ($i = 0; $i -lt 40; $i++) {
     if ($dead -ge 1) { break }
     Start-Sleep -Seconds 10
 }
+if ($dead -lt 1) { throw 'Failing Delivery did not dead-letter within about seven minutes.' }
 
 Say 'done'
 Show-Sql 'select t.slug, e.status event_status, count(*) from events e join tenants t on t.id = e.tenant_id group by 1,2 order by 1,2;'
