@@ -406,6 +406,7 @@ function CreateSubscriberKey({
   });
 
   const create = useMutation({
+    meta: { holdsSheet: true },
     mutationFn: (values: CreateValues) =>
       call(() =>
         api.POST("/admin/tenants/{tenantId}/destinations/{destinationId}/subscriber-keys", {

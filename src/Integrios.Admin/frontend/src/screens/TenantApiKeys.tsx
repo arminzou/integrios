@@ -403,6 +403,7 @@ function CreateTenantApiKey({ tenantId, onCreated }: { tenantId: string; onCreat
   });
 
   const create = useMutation({
+    meta: { holdsSheet: true },
     mutationFn: (values: CreateValues) =>
       call(() =>
         api.POST("/admin/tenants/{tenantId}/tenant-api-keys", {
