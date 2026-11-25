@@ -1,0 +1,20 @@
+tests/Integrios.Application.UnitTests/Ingestion/AcceptBrokerMessageCommandTests.cs
+  s_b19acd4aae4d50::t_62faa77a634f1f 82-93
+  s_b19acd4aae4d50::t_6d870ed112e53f 81
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "3c329e4e67a5edc257e0cd340101673b780cdcfa",
+  "prompts": {},
+  "sessions": {
+    "s_b19acd4aae4d50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "01ddce99-a00c-49f1-9f76-21f5af0490d8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Armin Zou <arminzou@outlook.com>"
+    }
+  }
+}
