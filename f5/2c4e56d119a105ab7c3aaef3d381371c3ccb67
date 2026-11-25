@@ -1,0 +1,19 @@
+src/Integrios.Admin/frontend/tests/e2e/browser.test.ts
+  s_b19acd4aae4d50::t_d58ddc5215d72a 288-289
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "f52c4e56d119a105ab7c3aaef3d381371c3ccb67",
+  "prompts": {},
+  "sessions": {
+    "s_b19acd4aae4d50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "01ddce99-a00c-49f1-9f76-21f5af0490d8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Armin Zou <arminzou@outlook.com>"
+    }
+  }
+}
