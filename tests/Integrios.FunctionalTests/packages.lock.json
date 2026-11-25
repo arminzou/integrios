@@ -1269,15 +1269,15 @@
       },
       "Microsoft.Extensions.Http": {
         "type": "Transitive",
-        "resolved": "10.0.15",
-        "contentHash": "ha8VdL1mvHkRUbRyXBfhMwCfbl02YQvCzZe72jQRFrvrRCbW2riFha52Vb84j8YpAcn/ld/B/2oQAsDj9gvbyg==",
+        "resolved": "10.0.0",
+        "contentHash": "r+mSvm/Ryc/iYcc9zcUG5VP9EBB8PL1rgVU6macEaYk45vmGRk9PntM3aynFKN6s3Q4WW36kedTycIctctpTUQ==",
         "dependencies": {
-          "Microsoft.Extensions.Configuration.Abstractions": "10.0.15",
-          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.15",
-          "Microsoft.Extensions.Diagnostics": "10.0.15",
-          "Microsoft.Extensions.Logging": "10.0.15",
-          "Microsoft.Extensions.Logging.Abstractions": "10.0.15",
-          "Microsoft.Extensions.Options": "10.0.15"
+          "Microsoft.Extensions.Configuration.Abstractions": "10.0.0",
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.0",
+          "Microsoft.Extensions.Diagnostics": "10.0.0",
+          "Microsoft.Extensions.Logging": "10.0.0",
+          "Microsoft.Extensions.Logging.Abstractions": "10.0.0",
+          "Microsoft.Extensions.Options": "10.0.0"
         }
       },
       "Microsoft.Extensions.Logging": {
@@ -1950,20 +1950,20 @@
       "integrios": {
         "type": "Project",
         "dependencies": {
-          "Integrios.Admin": "[0.12.0, )",
-          "Integrios.Ingestion": "[0.12.0, )",
-          "Integrios.Subscriber": "[0.12.0, )",
-          "Integrios.Worker": "[0.12.0, )"
+          "Integrios.Admin": "[0.13.0, )",
+          "Integrios.Ingestion": "[0.13.0, )",
+          "Integrios.Subscriber": "[0.13.0, )",
+          "Integrios.Worker": "[0.13.0, )"
         }
       },
       "integrios.admin": {
         "type": "Project",
         "dependencies": {
-          "Integrios.Application": "[0.12.0, )",
-          "Integrios.Domain": "[0.12.0, )",
-          "Integrios.Infrastructure": "[0.12.0, )",
-          "Integrios.Migrations.Postgres": "[0.12.0, )",
-          "Integrios.Migrations.SqlServer": "[0.12.0, )",
+          "Integrios.Application": "[0.13.0, )",
+          "Integrios.Domain": "[0.13.0, )",
+          "Integrios.Infrastructure": "[0.13.0, )",
+          "Integrios.Migrations.Postgres": "[0.13.0, )",
+          "Integrios.Migrations.SqlServer": "[0.13.0, )",
           "Microsoft.AspNetCore.Authentication.OpenIdConnect": "[10.0.15, )",
           "Microsoft.AspNetCore.OpenApi": "[10.0.15, )",
           "Microsoft.OpenApi": "[2.13.0, )"
@@ -1972,7 +1972,7 @@
       "integrios.application": {
         "type": "Project",
         "dependencies": {
-          "Integrios.Domain": "[0.12.0, )",
+          "Integrios.Domain": "[0.13.0, )",
           "MediatR": "[12.5.0, )",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.15, )",
           "Microsoft.Extensions.Diagnostics": "[10.0.15, )",
@@ -1982,8 +1982,8 @@
       "integrios.client": {
         "type": "Project",
         "dependencies": {
-          "Microsoft.Extensions.Hosting.Abstractions": "[10.0.15, )",
-          "Microsoft.Extensions.Http": "[10.0.15, )"
+          "Microsoft.Extensions.Hosting.Abstractions": "[10.0.0, )",
+          "Microsoft.Extensions.Http": "[10.0.0, )"
         }
       },
       "integrios.domain": {
@@ -1996,8 +1996,8 @@
           "Azure.Identity": "[1.21.0, )",
           "Azure.Messaging.ServiceBus": "[7.21.0, )",
           "Dapper": "[2.1.89, )",
-          "Integrios.Application": "[0.12.0, )",
-          "Integrios.Domain": "[0.12.0, )",
+          "Integrios.Application": "[0.13.0, )",
+          "Integrios.Domain": "[0.13.0, )",
           "Jsonata.Net.Native": "[3.0.0, )",
           "Microsoft.EntityFrameworkCore.SqlServer": "[10.0.15, )",
           "Microsoft.Extensions.Hosting.Systemd": "[10.0.15, )",
@@ -2018,9 +2018,9 @@
       "integrios.ingestion": {
         "type": "Project",
         "dependencies": {
-          "Integrios.Application": "[0.12.0, )",
-          "Integrios.Domain": "[0.12.0, )",
-          "Integrios.Infrastructure": "[0.12.0, )",
+          "Integrios.Application": "[0.13.0, )",
+          "Integrios.Domain": "[0.13.0, )",
+          "Integrios.Infrastructure": "[0.13.0, )",
           "Microsoft.AspNetCore.OpenApi": "[10.0.15, )",
           "Microsoft.OpenApi": "[2.13.0, )"
         }
@@ -2028,23 +2028,23 @@
       "integrios.migrations.postgres": {
         "type": "Project",
         "dependencies": {
-          "Integrios.Infrastructure": "[0.12.0, )",
+          "Integrios.Infrastructure": "[0.13.0, )",
           "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.3, )"
         }
       },
       "integrios.migrations.sqlserver": {
         "type": "Project",
         "dependencies": {
-          "Integrios.Infrastructure": "[0.12.0, )",
+          "Integrios.Infrastructure": "[0.13.0, )",
           "Microsoft.EntityFrameworkCore.SqlServer": "[10.0.15, )"
         }
       },
       "integrios.subscriber": {
         "type": "Project",
         "dependencies": {
-          "Integrios.Application": "[0.12.0, )",
-          "Integrios.Domain": "[0.12.0, )",
-          "Integrios.Infrastructure": "[0.12.0, )",
+          "Integrios.Application": "[0.13.0, )",
+          "Integrios.Domain": "[0.13.0, )",
+          "Integrios.Infrastructure": "[0.13.0, )",
           "Microsoft.AspNetCore.OpenApi": "[10.0.15, )",
           "Microsoft.OpenApi": "[2.13.0, )"
         }
@@ -2052,17 +2052,17 @@
       "integrios.tests.shared": {
         "type": "Project",
         "dependencies": {
-          "Integrios.Application": "[0.12.0, )",
-          "Integrios.Domain": "[0.12.0, )",
+          "Integrios.Application": "[0.13.0, )",
+          "Integrios.Domain": "[0.13.0, )",
           "Microsoft.AspNetCore.Mvc.Testing": "[10.0.15, )"
         }
       },
       "integrios.worker": {
         "type": "Project",
         "dependencies": {
-          "Integrios.Application": "[0.12.0, )",
-          "Integrios.Domain": "[0.12.0, )",
-          "Integrios.Infrastructure": "[0.12.0, )"
+          "Integrios.Application": "[0.13.0, )",
+          "Integrios.Domain": "[0.13.0, )",
+          "Integrios.Infrastructure": "[0.13.0, )"
         }
       }
     }
