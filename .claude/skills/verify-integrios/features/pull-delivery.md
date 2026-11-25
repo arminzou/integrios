@@ -49,7 +49,8 @@ Preconditions: `up` and `doctor` pass, and the run's env is loaded.
   pull entry by `destination_id` with `jq`; the endpoint has no Destination filter.
 - A consumer project needs `Microsoft.Extensions.Hosting` itself; the SDK depends only on the
   hosting abstractions.
-- The SDK package is unpublished. Reference `src/Integrios.Client/Integrios.Client.csproj`
-  from a project, or `dotnet pack` it to a local feed.
+- The SDK is published on nuget.org, but that package does not hold this checkout's changes.
+  Reference `src/Integrios.Client/Integrios.Client.csproj` from a project, or `dotnet pack` it to a
+  local feed.
 - Pull leases use `Integrios:Delivery:LeaseDuration` (2 minutes by default) and the SDK renews at a
   third of the remaining lease, so a renewal shows up about 40 seconds into a handler.

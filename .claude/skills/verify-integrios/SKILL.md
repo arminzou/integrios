@@ -91,7 +91,7 @@ with a `make up` stack:
 | Admin API and dashboard | 25150 (operational 25151) |
 | Ingestion | 25231 (operational 25232) |
 | Worker operational | 25299 |
-| Delivery API | 25241 (operational 25242) |
+| Subscriber (Delivery API) | 25241 (operational 25242) |
 
 Other worktrees may run Testcontainers or their own verification at the same time. For a second
 concurrent run, set both variables for every `control.sh` call of that run:

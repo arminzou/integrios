@@ -1,6 +1,6 @@
 # Runtime configuration reference
 
-Admin, Ingestion, Worker, and Delivery API use standard .NET configuration. Each role reads `appsettings.json`,
+Admin, Ingestion, Worker, and Subscriber (Delivery API) use standard .NET configuration. Each role reads `appsettings.json`,
 then `appsettings.<role>.json`, then `appsettings.<Environment>.json`, then
 `appsettings.<role>.<Environment>.json`, where the role is `ingestion`, `admin`, `worker`, or `subscriber`. The
 repository ships `appsettings.<role>.json` with non-secret defaults where present and
@@ -21,7 +21,7 @@ runtime keys below; see [the deployment example](https://github.com/arminzou/int
 | Configuration key | Environment variable | Reader | Default or required value | Valid values and effect |
 |---|---|---|---|---|
 | `Database:Provider` | `Database__Provider` | All four | `postgres` | `postgres` or `sqlserver` (case-insensitive). Selects the matching connection string. |
-| `OperationalPort` | `OperationalPort` | All four | `5232` Ingestion, `5151` Admin, `5299` Worker, `5242` Delivery API; the container image sets `5299` for every role | TCP port 1–65535 for `/health`, `/ready`, and `/metrics`. |
+| `OperationalPort` | `OperationalPort` | All four | `5232` Ingestion, `5151` Admin, `5299` Worker, `5242` Subscriber (Delivery API); the container image sets `5299` for every role | TCP port 1–65535 for `/health`, `/ready`, and `/metrics`. |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | same | All four | Unset: no trace export | If set, an absolute HTTP(S) URI. Metrics remain available on the operational port. |
 | `Integrios:PublicIngestionBaseUri` | `Integrios__PublicIngestionBaseUri` | Admin | Required; Development file uses `http://localhost:5231` | Absolute HTTP(S) origin, optionally with a path prefix; no user info, query, or fragment. HTTPS required outside Development. Used to show webhook callback URLs. |
 | `Integrios:Admin:TraceUrlTemplate` | `Integrios__Admin__TraceUrlTemplate` | Admin | Unset: show a copyable trace ID only | Absolute HTTP(S) URI, no user info, with `{trace_id}` exactly once. |
@@ -35,9 +35,9 @@ their detailed validation belongs to .NET or OpenTelemetry rather than Integrios
 | Setting / environment variable | Reader | Default or requirement |
 |---|---|---|
 | `DOTNET_ENVIRONMENT` | All four | .NET defaults to `Production`; the dev Compose stack sets `Development` and loads each role's `appsettings.<role>.Development.json`. |
-| `ASPNETCORE_URLS`, `ASPNETCORE_HTTP_PORTS`, `ASPNETCORE_HTTPS_PORTS` | Admin, Ingestion, Delivery API | Product listener; without one, Admin and Ingestion use `http://localhost:5000` and Delivery API uses `http://localhost:5241`, which only local Subscribers can reach. Set one, such as `http://0.0.0.0:5241`, to accept remote Subscribers. The operational listener uses its separate port. Worker serves only its operational listener. |
+| `ASPNETCORE_URLS`, `ASPNETCORE_HTTP_PORTS`, `ASPNETCORE_HTTPS_PORTS` | Admin, Ingestion, Subscriber (Delivery API) | Product listener; without one, Admin and Ingestion use `http://localhost:5000` and Delivery API uses `http://localhost:5241`, which only local Subscribers can reach. Set one, such as `http://0.0.0.0:5241`, to accept remote Subscribers. The operational listener uses its separate port. Worker serves only its operational listener. |
 | `Logging:LogLevel:*` / `Logging__LogLevel__*` | All four | Role-specific levels in `appsettings.<role>.json`; override individual categories through configuration. |
-| `AllowedHosts` | Admin, Ingestion, Delivery API | `*` in their `appsettings.<role>.json` files; restrict for an exposed deployment. |
+| `AllowedHosts` | Admin, Ingestion, Subscriber (Delivery API) | `*` in their `appsettings.<role>.json` files; restrict for an exposed deployment. |
 | `OTEL_TRACES_SAMPLER`, `OTEL_TRACES_SAMPLER_ARG` | All four | Standard trace sampling settings; see [observability](observability.md#traces). |
 | `OTEL_RESOURCE_ATTRIBUTES` | All four | Unset; adds deployment-owned trace and metric resource attributes. |
 | `ASPNETCORE_FORWARDEDHEADERS_ENABLED` | Admin behind a proxy | Set to `true` when forwarded HTTPS scheme is needed for dashboard sign-in. |
