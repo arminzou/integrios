@@ -4,6 +4,8 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Integrios.Application.Delivery;
+using Integrios.Application.PullDelivery;
 using Integrios.FunctionalTests.Worker;
 using Integrios.Subscriber;
 using Integrios.Tests.Shared;
@@ -159,6 +161,50 @@ public sealed class DeliveryProtocolTests : IClassFixture<WorkerRoutingFixture>,
         await Task.Delay(TimeSpan.FromSeconds(1.5));
 
         (await fixture.GetEventDeliveryAsync(deliveryId)).LifetimeAttemptCount.ShouldBe(0);
+    }
+
+    // SqlClient reports a command cancelled by the disconnect as a SqlException, not as a cancellation.
+    [Fact]
+    public async Task LongPoll_DisconnectDuringADatabaseCallLogsNoError()
+    {
+        var logs = new CapturingLoggerProvider();
+        using TestHostBuilder logged = host.WithServices(services =>
+        {
+            services.AddSingleton<ILoggerProvider>(logs);
+            services.AddScoped<IPullDeliveryQueue, CancelledAsProviderError>();
+        });
+        using HttpClient client = logged.CreateClient();
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", await fixture.SeedSubscriberKeyAsync(A));
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+
+        await Should.ThrowAsync<OperationCanceledException>(() => client.PostAsJsonAsync(
+            "/delivery/v1/deliveries:claim", new { max = 1, wait_seconds = 20 }, cancel.Token));
+        await Task.Delay(TimeSpan.FromMilliseconds(500));
+
+        logs.Records.ShouldNotContain(record => record.Level >= LogLevel.Error);
+    }
+
+    private sealed class CancelledAsProviderError : IPullDeliveryQueue
+    {
+        public async Task<EventDeliveryClaimResult?> ClaimNextAsync(Guid destinationId, CancellationToken cancellationToken)
+        {
+            try
+            {
+                await Task.Delay(Timeout.Infinite, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            throw new InvalidOperationException("The batch is aborted by an abort signal sent from the client.");
+        }
+
+        public Task<PullLeaseRenewalResult> RenewAsync(PullAttemptOwner owner, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<PullSettlementResult> SettleAsync(
+            PullAttemptOwner owner, PullSettlement settlement, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
     }
 
     [Fact]
